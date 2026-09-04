@@ -6,9 +6,10 @@ import {
   estimateLedger,
 } from '@senet/core';
 import type { DecodedVoucher, VoucherConfig } from '@senet/core';
-import { ServiceError, fetchLedger, submitRedeem } from './api.js';
-import type { RedeemReply } from './api.js';
+import { ServiceError, fetchLedger, fetchRedemption, submitRedeem } from './api.js';
+import type { RedeemReply, Redemption } from './api.js';
 import { CameraError, scanForSymbol } from './camera.js';
+import { CONFIRM_POLL_MS, CONFIRM_TIMEOUT_MS } from './config.js';
 import type { Scan } from './camera.js';
 import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
 import { outcomeText } from './outcomes.js';
@@ -84,6 +85,55 @@ function showResult(panel: HTMLElement, reply: RedeemReply): void {
     box.append(detail('Fee charged', xlm(reply.feeChargedStroops)));
   }
   fill(panel, box);
+  if (reply.outcome === 'SUCCESS') void confirmFromFeed(box, reply);
+}
+
+/**
+ * Wait for the chain to say that the contract paid.
+ *
+ * A submission that returns says the network accepted a transaction. Only the
+ * contract's own event says that the payment happened, and the screen once
+ * said `paid` on the strength of the first. This reads the second.
+ *
+ * The state is drawn from what the feed holds, and it is drawn again on every
+ * answer. Three states exist rather than two, and the third is the one that a
+ * screen usually forgets.
+ */
+async function confirmFromFeed(box: HTMLElement, reply: RedeemReply): Promise<void> {
+  const line = make('p', 'confirming', 'The network took the payment. Waiting for the chain to confirm it.');
+  box.append(line);
+
+  const until = Date.now() + CONFIRM_TIMEOUT_MS;
+  for (;;) {
+    let found: Redemption | null = null;
+    try {
+      found = await fetchRedemption(reply.voucherId);
+    } catch {
+      // A service that does not answer is not a payment that failed. The wait
+      // continues, and the bound below ends it.
+    }
+    if (found !== null) {
+      line.className = 'confirmed';
+      line.textContent = 'The chain confirms this payment.';
+      box.append(detail('Confirmed in ledger', String(found.ledger)));
+      // The hash comes from the event, and not from the submission. They agree
+      // on a healthy network, and the one that matters is the chain's.
+      box.append(detail('Confirmed hash', short(found.tx_hash), found.tx_hash));
+      return;
+    }
+    if (Date.now() >= until) {
+      // The submission succeeded, so this is not a failure and the screen must
+      // not call it one. The funds may well have moved. The merchant gets the
+      // transaction, which is what lets them settle it themselves.
+      line.className = 'confirming confirming-late';
+      line.textContent =
+        'The network took this payment and the chain has not confirmed it yet. ' +
+        'The payment may still be good. Check the transaction below, or ask ' +
+        'the payer to show the code again.';
+      return;
+    }
+    await new Promise((rest) => window.setTimeout(rest, CONFIRM_POLL_MS));
+  }
 }
 
 /**

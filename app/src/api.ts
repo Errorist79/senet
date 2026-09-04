@@ -226,3 +226,63 @@ export async function fetchRelease(): Promise<string | null> {
     return null;
   }
 }
+
+/** What the chain published about one redemption, as the feed holds it. */
+export interface Redemption {
+  readonly voucher_id: string;
+  readonly payer: string;
+  readonly recipient: string;
+  readonly amount: string;
+  readonly tx_hash: string;
+  readonly ledger: number;
+  readonly ledger_closed_at: string;
+  readonly event_id: string;
+}
+
+/**
+ * Ask the feed what the chain published for one voucher.
+ *
+ * The answer comes from the contract's own event, and not from the reply that
+ * the submission returned. A submission says that the network accepted a
+ * transaction. Only the event says that the contract paid.
+ */
+export async function fetchRedemption(voucherId: string): Promise<Redemption | null> {
+  const reply = await call(`/redemption?voucherId=${encodeURIComponent(voucherId)}`);
+  const found = reply['redemption'];
+  if (found === null || typeof found !== 'object' || Array.isArray(found)) return null;
+  const fields: Record<string, unknown> = { ...found };
+  const text = (key: string): string | null => {
+    const value = fields[key];
+    return typeof value === 'string' ? value : null;
+  };
+  const ledger = fields['ledger'];
+  const voucher = text('voucher_id');
+  const payer = text('payer');
+  const recipient = text('recipient');
+  const amount = text('amount');
+  const txHash = text('tx_hash');
+  const closedAt = text('ledger_closed_at');
+  const eventId = text('event_id');
+  if (
+    voucher === null ||
+    payer === null ||
+    recipient === null ||
+    amount === null ||
+    txHash === null ||
+    closedAt === null ||
+    eventId === null ||
+    typeof ledger !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    voucher_id: voucher,
+    payer,
+    recipient,
+    amount,
+    tx_hash: txHash,
+    ledger,
+    ledger_closed_at: closedAt,
+    event_id: eventId,
+  };
+}

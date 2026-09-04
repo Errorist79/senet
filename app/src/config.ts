@@ -55,3 +55,32 @@ export const RELEASE_PATH = '/release.json';
 
 /** How much of a commit a person reads, which is the usual short form. */
 export const BUILD_ID_LENGTH = 7;
+
+/**
+ * How often the merchant screen asks the feed whether the chain confirmed.
+ *
+ * A ledger closes about every five seconds, and the listener polls the chain
+ * every two. A confirmation therefore arrives within a few seconds of a
+ * submission. One second keeps the screen close behind that. A shorter
+ * interval asks the service a question that it cannot answer any faster.
+ */
+export const CONFIRM_POLL_MS = 1_000;
+
+/**
+ * How long the merchant screen waits for that confirmation.
+ *
+ * The redeem route already waits for the transaction result, so the payment
+ * sits in a ledger before the screen starts waiting at all. What remains is
+ * the listener noticing it, which takes up to one poll of two seconds plus
+ * the network. Two to five seconds is the ordinary case.
+ *
+ * Twenty seconds is four to ten times that. An ordinary payment therefore
+ * never reaches the end of the wait. Twenty seconds is also short enough that
+ * a check reaches the end on purpose. A state that no check can reach is a
+ * state that a person meets first.
+ *
+ * A merchant at a counter also learns nothing from a screen that says
+ * `waiting` for two minutes. A longer bound is worse for that person, as well
+ * as untestable.
+ */
+export const CONFIRM_TIMEOUT_MS = 20_000;
