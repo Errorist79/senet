@@ -133,11 +133,27 @@ npm run --silent new-keys --workspace @senet/server > .env
 chmod 600 .env
 ```
 
-The tool creates the channel accounts, a payer and a recipient. It asks
-friendbot to fund each account. It then waits until Horizon reports a balance,
-so a key that it prints is a key that works. It writes no file, and it can
-therefore never lose a key that a `.env` already holds. `CHANNEL_COUNT` sets the number of
-channel accounts, and the default is six.
+The tool creates every account role that the repository names:
+
+| Variable | Role |
+|---|---|
+| `FEEPAYER_CHANNELS` | The fee-payer's channel secrets. |
+| `PAYER_SECRET` | Signs every voucher. |
+| `SUBMITTER_SECRET` | Submits the evidence transactions and pays their fee. |
+| `MERCHANT_ADDRESS` | Receives a redemption. |
+| `SECOND_MERCHANT_ADDRESS` | Receives a refused attempt. |
+
+Two of these names carry a rule. A merchant receives funds and it signs
+nothing, so the file keeps an address and no secret. A secret for an account
+that never signs is a liability with no purpose. The payer's address is absent, because it
+derives from the secret. A copy of a derived value can disagree with its own
+source.
+
+The tool asks friendbot to fund each account. It then waits until Horizon
+reports a balance, so an account that it prints is an account that works. It
+writes no file, and it can therefore never lose a key that a `.env` already
+holds. `CHANNEL_COUNT` sets the number of channel accounts, and the default is
+six.
 
 ## Routes
 

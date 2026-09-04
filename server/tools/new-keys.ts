@@ -2,8 +2,9 @@
  * Generate and fund a fresh set of testnet keys, and print the `.env` lines.
  *
  * The service must not inherit keys from anywhere else. This tool is the whole
- * procedure. A developer with an empty host reaches a running service, and the
- * README is the only document that they read.
+ * procedure, and it creates every account role that the repository names. A
+ * developer with an empty host reaches a running service, and the README is
+ * the only document that they read.
  *
  * It prints to standard output and it writes no file, so it can never lose a
  * key that a `.env` already holds. Read what it prints, then paste it in.
@@ -69,14 +70,21 @@ async function main(): Promise<void> {
     channels.push(await account(`channel ${index + 1}`));
   }
   const payer = await account('payer');
-  const recipient = await account('recipient');
+  const submitter = await account('submitter');
+  const merchant = await account('merchant');
+  const secondMerchant = await account('merchant 2');
 
   console.error('');
   console.error('Paste the lines below into the .env file on the host.');
   console.log(`FEEPAYER_CHANNELS=${channels.map((key) => key.secret()).join(',')}`);
   console.log(`PAYER_SECRET=${payer.secret()}`);
-  console.log(`PAYER_PUBLIC=${payer.publicKey()}`);
-  console.log(`RECIPIENT=${recipient.publicKey()}`);
+  console.log(`SUBMITTER_SECRET=${submitter.secret()}`);
+  // A merchant receives funds and it signs nothing, so the file keeps its
+  // address. A secret for an account that never signs is a liability with no
+  // purpose. The payer's address is absent for a related reason, because it
+  // derives from the secret, and a copy can disagree with its own source.
+  console.log(`MERCHANT_ADDRESS=${merchant.publicKey()}`);
+  console.log(`SECOND_MERCHANT_ADDRESS=${secondMerchant.publicKey()}`);
 }
 
 await main();

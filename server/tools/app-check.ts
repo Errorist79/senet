@@ -14,7 +14,7 @@ import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { rpc } from '@stellar/stellar-sdk';
+import { Keypair, rpc } from '@stellar/stellar-sdk';
 import { LIFETIMES, ed25519Signer, randomNonce, randomVoucherId, signVoucher } from '@senet/core';
 import type { Voucher } from '@senet/core';
 import { launch } from 'puppeteer-core';
@@ -79,8 +79,9 @@ async function main(): Promise<void> {
   loadEnvFile();
   const config = readConfig();
   const payerSecret = required('PAYER_SECRET');
-  const payer = required('PAYER_PUBLIC');
-  const recipient = required('RECIPIENT');
+  // The address derives from the secret, so the environment never carries both.
+  const payer = Keypair.fromSecret(payerSecret).publicKey();
+  const merchant = required('MERCHANT_ADDRESS');
   const chromePath = required('CHROME_PATH');
   const outPath = process.argv[2] ?? resolve(process.cwd(), 'app-check.json');
   if (!existsSync(join(DIST, 'index.html'))) {
@@ -131,7 +132,7 @@ async function main(): Promise<void> {
       return registration.active !== null;
     });
     await page.type('#merchant-payload', entry.toXDR('base64'));
-    await page.type('#merchant-recipient', recipient);
+    await page.type('#merchant-recipient', merchant);
     await page.click('#merchant-submit');
     await page.waitForSelector('.result', { timeout: RESULT_TIMEOUT_MS });
 
@@ -171,7 +172,9 @@ async function main(): Promise<void> {
       voucherId: voucher.voucherId.toString(),
       amountStroops: voucher.amount.toString(),
       payer,
-      recipient,
+      // The merchant is the role, and the recipient is the contract argument
+      // that names it. The row keeps the chain's word for the value.
+      recipient: merchant,
       transactionHash: hash,
       screen: shown,
       explorerUrl,
