@@ -68,6 +68,27 @@ if [ ! -f "$RELEASE/app/dist/index.html" ]; then
   exit 1
 fi
 
+# Publish the commit that this release carries. A content search cannot tell a
+# release that lacks a change from a check that looks for the wrong string, and
+# two people grepping for different things reach opposite answers. An origin
+# that names its own commit settles that by answering rather than by inference.
+COMMIT=$(sed -n 's/.*"commit": "\(.*\)".*/\1/p' "$RELEASE/deploy/release.json")
+case "$COMMIT" in
+  '$Format:'*)
+    echo "the source is a checkout and not an export, so it names no commit" >&2
+    echo "export it with: git archive --format=tar HEAD" >&2
+    exit 1
+    ;;
+esac
+cat > "$RELEASE/app/dist/release.json" <<JSON
+{
+  "commit": "$COMMIT",
+  "release": "$STAMP",
+  "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+JSON
+echo "    release $STAMP carries commit $COMMIT"
+
 echo "==> installing the web server configuration"
 mkdir -p /etc/nginx/snippets
 install -m 0644 "$RELEASE/deploy/nginx-senet-common-headers.conf" \

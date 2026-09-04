@@ -1,0 +1,4 @@
+# `git archive` substitutes these placeholders as it writes the file, so an
+# exported tree carries the commit that produced it. A checkout carries the
+# placeholders instead, which is how a reader tells an export from a checkout.
+deploy/release.json export-subst

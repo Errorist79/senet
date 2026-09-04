@@ -17,6 +17,17 @@ import { RP_ID } from '@senet/server';
 // The typed errors, so the check asks the bundle for the vocabulary that the
 // library declares rather than for a list written out here.
 import * as core from '@senet/core';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * The identity of the release that this checker runs from.
+ *
+ * The service runs from one link and the web server serves another, so a
+ * release that this file sits inside is the one the service runs. Comparing it
+ * against the identity that the origin serves shows a skew between the two.
+ */
+const SERVICE_RELEASE = fileURLToPath(new URL('../app/dist/release.json', import.meta.url));
 
 /** The name that serves the application, when the caller names none. */
 const DEFAULT_ORIGIN = 'https://senet.hoodrun.io';
@@ -139,6 +150,25 @@ if (typeof config.rpId === 'string') {
     `the service serves the relying party ${config.rpId}, and the release declares ${RP_ID}`);
 }
 
+// The origin names the commit it serves. A content search cannot tell a release
+// that lacks a change from a check that looks for the wrong string, so a
+// deployment answers the question instead of leaving it to inference.
+const release = await readJson('/release.json');
+check(typeof release.commit === 'string' && /^[0-9a-f]{40}$/.test(release.commit),
+  `the origin names no commit, and it answered ${JSON.stringify(release.commit)}`);
+// The application and the service run from two links. A release identity that
+// the service directory carries, and one that the origin serves, disagree when
+// those links point at different releases.
+const servedByService = existsSync(SERVICE_RELEASE)
+  ? JSON.parse(readFileSync(SERVICE_RELEASE, 'utf8'))
+  : null;
+if (servedByService !== null) {
+  check(servedByService.commit === release.commit,
+    `the origin serves commit ${release.commit} and the service runs ${servedByService.commit}`);
+  check(servedByService.release === release.release,
+    `the origin serves release ${release.release} and the service runs ${servedByService.release}`);
+}
+
 // The merchant screen shows the name of a typed error, so the bundle has to
 // carry that vocabulary as text. A bundler renames a class, and a name taken
 // from the constructor then reaches a person as two meaningless letters. Every
@@ -161,7 +191,9 @@ const named = [...bundleText.matchAll(/rpId\s*:\s*["'`]([^"'`]+)["'`]/g)].map((f
 check(named.every((value) => value === host),
   `the bundle names a relying party other than ${host}: ${named.join(', ')}`);
 
-console.log(`\n  contract ${config.contractId}`);
+console.log(`\n  commit   ${release.commit ?? 'the origin names none'}`);
+console.log(`  release  ${release.release ?? 'unnamed'}, published ${release.publishedAt ?? 'at an unknown time'}`);
+console.log(`  contract ${config.contractId}`);
 console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
 console.log(`  errors     ${carried.length} of ${errorNames.length} typed names carried as text`);
 console.log(`  relying party ${RP_ID}, declared in the release`);
