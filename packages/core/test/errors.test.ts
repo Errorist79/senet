@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   AmountWindowError,
+  VOUCHER_ERROR_NAMES,
   CredentialTypeError,
   DeadlineMismatchError,
   ExpiryWindowError,
@@ -39,7 +40,10 @@ test('every error is a VoucherError and an Error', () => {
   }
 });
 
-test('every error names its own class', () => {
+test('every error states its own name as text', () => {
+  // The name is part of the contract, so it lives in the source rather than in
+  // the constructor. A bundler renames a class, and a name taken from the
+  // constructor would become a short meaningless one in a built application.
   assert.deepEqual(
     errors.map((error) => error.name),
     [
@@ -53,6 +57,24 @@ test('every error names its own class', () => {
       'SdkVersionError',
     ],
   );
+});
+
+test('the published list names every error that the library raises', () => {
+  for (const error of errors) {
+    assert.ok(
+      VOUCHER_ERROR_NAMES.some((name) => name === error.name),
+      `${error.name} is missing from the published list`,
+    );
+  }
+  assert.equal(new Set(VOUCHER_ERROR_NAMES).size, VOUCHER_ERROR_NAMES.length);
+});
+
+test('the list names the two errors that only the decoder raises', () => {
+  // These have no instance in the list above, because a payload reader raises
+  // them, and a consumer still has to know that they exist.
+  for (const name of ['RemainingLifeError', 'UriFormatError']) {
+    assert.ok(VOUCHER_ERROR_NAMES.some((one) => one === name));
+  }
 });
 
 test('every error carries a message that says what went wrong', () => {

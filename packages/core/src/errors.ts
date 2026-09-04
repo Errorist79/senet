@@ -180,3 +180,24 @@ export class SdkVersionError extends VoucherError {
     );
   }
 }
+
+/**
+ * The name of every error this library raises.
+ *
+ * A consumer reads this list to know what it must handle. A build reads it to
+ * check that the names survived. A bundler renames a class, so the name that a
+ * built application shows can differ from the name here. Looking in the
+ * artifact for these strings is the only way to know.
+ */
+export const VOUCHER_ERROR_NAMES = [
+  'VoucherFormatError',
+  'PayloadVersionError',
+  'NetworkMismatchError',
+  'CredentialTypeError',
+  'DeadlineMismatchError',
+  'ExpiryWindowError',
+  'AmountWindowError',
+  'RemainingLifeError',
+  'UriFormatError',
+  'SdkVersionError',
+] as const;
