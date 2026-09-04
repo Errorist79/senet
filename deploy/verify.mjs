@@ -13,7 +13,7 @@
 import { launch } from 'puppeteer-core';
 // The name that the deployed release declares. A commit is the only thing that
 // changes it, which is what makes it worth checking against the origin.
-import { DEFAULT_RP_ID } from '@senet/server';
+import { RP_ID } from '@senet/server';
 
 /** The name that serves the application, when the caller names none. */
 const DEFAULT_ORIGIN = 'https://senet.hoodrun.io';
@@ -107,25 +107,36 @@ check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no chann
 // name supplies the new name, the two agree, and the check passes while the
 // move goes unrecorded.
 const host = new URL(origin).hostname;
-check(DEFAULT_RP_ID === host,
-  `the deployed release declares the relying party ${DEFAULT_RP_ID}, and this origin is ${host}`);
+check(RP_ID === host,
+  `the deployed release declares the relying party ${RP_ID}, and this origin is ${host}`);
 
-// While the service still serves the name, it must agree with the constant.
-// A disagreement means an operator has overridden it somewhere.
+// The service serves the constant itself, and no environment value overrides
+// it, so this holds the two together rather than guarding an override.
 if (typeof config.rpId === 'string') {
-  check(config.rpId === DEFAULT_RP_ID,
-    `the service serves the relying party ${config.rpId}, and the release declares ${DEFAULT_RP_ID}`);
+  check(config.rpId === RP_ID,
+    `the service serves the relying party ${config.rpId}, and the release declares ${RP_ID}`);
 }
 
+// The merchant screen shows the name of a typed error, so the bundle has to
+// carry that vocabulary as text. A bundler renames a class, and a name taken
+// from the constructor then reaches a person as two meaningless letters. Every
+// unit test still passes, because Node minifies nothing, so the fault lives in
+// the artifact alone and only a check against the artifact finds it.
+const bundleText = await (await fetch(`${origin}/app.js`)).text();
+const errorNames = Object.keys(core).filter((name) => name.endsWith('Error'));
+check(errorNames.length > 0, 'the library declares no typed error, so this check reads nothing');
+const missing = errorNames.filter((name) => !bundleText.includes(name));
+check(missing.length === 0,
+  `the bundle carries no text for ${missing.length} of ${errorNames.length} typed errors: ${missing.join(', ')}`);
+
 // A literal in the bundle would be a second place where the name can drift.
-const bundle = await (await fetch(`${origin}/app.js`)).text();
-const named = [...bundle.matchAll(/rpId\s*:\s*["'`]([^"'`]+)["'`]/g)].map((found) => found[1]);
+const named = [...bundleText.matchAll(/rpId\s*:\s*["'`]([^"'`]+)["'`]/g)].map((found) => found[1]);
 check(named.every((value) => value === host),
   `the bundle names a relying party other than ${host}: ${named.join(', ')}`);
 
 console.log(`\n  contract ${config.contractId}`);
 console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
-console.log(`  relying party ${DEFAULT_RP_ID}, declared in the release`);
+console.log(`  relying party ${RP_ID}, declared in the release`);
 console.log('                the browser derives the real one from the origin');
 
 // The worker and the manifest decide whether a phone installs the application.
