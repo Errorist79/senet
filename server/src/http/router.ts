@@ -6,6 +6,7 @@ import { errorText } from '../outcomes.js';
 import { RequestBudget } from './budget.js';
 import { balanceRoute, configRoute, ledgerRoute, statusRoute } from './read.js';
 import { acceptRedemptionRoute, feedRoute } from './redemptions.js';
+import { payeeRoute } from './payee.js';
 import { deployRoute, fundRoute } from './account.js';
 import { redeemRoute } from './redeem.js';
 import {
@@ -49,6 +50,7 @@ const ROUTES: Readonly<Record<string, Route>> = {
   'POST /fund': (context, body) => fundRoute(context, body),
   'GET /redemption': (context, _body, url) => feedRoute(context, url),
   'POST /redemption': (context, body) => acceptRedemptionRoute(context, body),
+  'POST /payee-request': (context, body) => payeeRoute(context.config, body),
 };
 
 /**
