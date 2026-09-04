@@ -11,6 +11,10 @@
 // evidence is that a particular message arrived, not that a reader of it
 // reached particular conclusions.
 //
+// `--accept N` accepts the first N messages and refuses the rest with a 503.
+// A proof of the cursor needs a receiver that stops, because the property under
+// test is what the listener does when a delivery does not land.
+//
 // It is a capture tool for a measured run. It is not the merchant's endpoint
 // and it authenticates nobody.
 
@@ -32,7 +36,7 @@ const HOST = '127.0.0.1';
 const BODY_LIMIT_BYTES = 64 * 1024;
 
 function readArguments(argv) {
-  const options = { port: DEFAULT_PORT, dir: DEFAULT_DIR };
+  const options = { port: DEFAULT_PORT, dir: DEFAULT_DIR, acceptLimit: Infinity };
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     const value = argv[index + 1];
@@ -43,6 +47,7 @@ function readArguments(argv) {
     index += 1;
     if (flag === '--port') options.port = Number(value);
     else if (flag === '--dir') options.dir = value;
+    else if (flag === '--accept') options.acceptLimit = Number(value);
     else {
       console.error(`${flag} is not an option of this command`);
       process.exit(1);
@@ -101,6 +106,13 @@ let count = 0;
 
 const server = createServer(async (request, response) => {
   const receivedAt = new Date().toISOString();
+  // Only a POST carries a message. A caller that waits for this receiver to
+  // come up asks with a GET, and a readiness probe must never be counted as a
+  // delivery. A capture tool that records its own caller measures itself.
+  if (request.method !== 'POST') {
+    response.writeHead(204).end();
+    return;
+  }
   let body;
   try {
     body = await readBody(request);
@@ -126,6 +138,17 @@ const server = createServer(async (request, response) => {
     bodySha256: digest,
     body: body.toString('utf8'),
   };
+
+  // A receiver that refuses is what holds the listener in place, and a proof of
+  // the cursor needs that state on purpose. The capture is still written, so a
+  // refused message is on record as having been offered.
+  if (count >= options.acceptLimit) {
+    const refusedFile = path.join(options.dir, `refused-${digest.slice(0, 8)}.json`);
+    writeFileSync(refusedFile, `${JSON.stringify(delivery, null, 2)}\n`);
+    console.log(`${receivedAt}  REFUSED after ${options.acceptLimit} accepted  -> ${refusedFile}`);
+    response.writeHead(503).end();
+    return;
+  }
 
   const name = nameFor(body, digest, receivedAt);
   const file = path.join(options.dir, `${name}.json`);
