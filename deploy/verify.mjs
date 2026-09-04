@@ -11,6 +11,9 @@
 // variable the command runs every other check and says that it skipped one.
 
 import { launch } from 'puppeteer-core';
+// The name that the deployed release declares. A commit is the only thing that
+// changes it, which is what makes it worth checking against the origin.
+import { DEFAULT_RP_ID } from '@senet/server';
 
 /** The name that serves the application, when the caller names none. */
 const DEFAULT_ORIGIN = 'https://senet.hoodrun.io';
@@ -93,18 +96,28 @@ check(typeof config.contractId === 'string' && config.contractId.startsWith('C')
 const status = await readJson('/api/status');
 check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no channel account');
 
-// A passkey binds to the relying party that created it, so that identifier must
-// be the name itself. The application takes it from the service rather than from
-// its own bundle, so the served value is the one that decides, and a check that
-// reads the bundle alone proves nothing.
+// A passkey binds to the domain that created it. The browser derives that
+// domain from the origin which served the page, and nothing in the application
+// can change it. This check therefore reads a declaration and not a value that
+// the application uses, so it is an early warning and not a proof.
+//
+// It compares the origin against the constant that the deployed release
+// declares. A constant is worth checking because only a commit changes it. A
+// value that an operator supplies is worth much less: an operator who moves the
+// name supplies the new name, the two agree, and the check passes while the
+// move goes unrecorded.
 const host = new URL(origin).hostname;
-check(typeof config.rpId === 'string' && config.rpId.length > 0,
-  'the service names no relying party, so the application cannot make a passkey');
-check(config.rpId === host,
-  `the service names the relying party ${config.rpId}, and the origin is ${host}`);
+check(DEFAULT_RP_ID === host,
+  `the deployed release declares the relying party ${DEFAULT_RP_ID}, and this origin is ${host}`);
 
-// A literal in the bundle would override the served value, so it is a second
-// place where the identifier can drift.
+// While the service still serves the name, it must agree with the constant.
+// A disagreement means an operator has overridden it somewhere.
+if (typeof config.rpId === 'string') {
+  check(config.rpId === DEFAULT_RP_ID,
+    `the service serves the relying party ${config.rpId}, and the release declares ${DEFAULT_RP_ID}`);
+}
+
+// A literal in the bundle would be a second place where the name can drift.
 const bundle = await (await fetch(`${origin}/app.js`)).text();
 const named = [...bundle.matchAll(/rpId\s*:\s*["'`]([^"'`]+)["'`]/g)].map((found) => found[1]);
 check(named.every((value) => value === host),
@@ -112,7 +125,8 @@ check(named.every((value) => value === host),
 
 console.log(`\n  contract ${config.contractId}`);
 console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
-console.log(`  relying party ${config.rpId ?? '(the service names none)'}, from the service`);
+console.log(`  relying party ${DEFAULT_RP_ID}, declared in the release`);
+console.log('                the browser derives the real one from the origin');
 
 // The worker and the manifest decide whether a phone installs the application.
 // Only a browser answers that, so this check drives one.
