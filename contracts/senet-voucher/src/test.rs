@@ -334,8 +334,8 @@ fn set_limits_rejects_invalid_limits() {
 
 /// A lower cap applies to a voucher that the payer signed before the change.
 /// The contract reads the caps at redemption, so such a voucher pays nothing.
-/// A change of the caps therefore strands the vouchers that are in circulation,
-/// for a period as long as the longest lifetime that the application offers.
+/// A change of the caps therefore strands the vouchers that are in circulation.
+/// The period lasts as long as the longest lifetime that the application offers.
 #[test]
 fn a_lower_cap_strands_a_voucher_already_in_circulation() {
     let f = setup();
