@@ -25,12 +25,19 @@ export const TESTNET_WALLET_WASM_HASH =
   '502ea4e7bdb3ea99880941f1d35ceb67fb598692c0bb40f842ef9c9f17d58b58';
 
 /**
- * The WebAuthn relying party, which is the domain that a passkey belongs to.
+ * The name that this deployment serves under.
  *
- * A passkey binds to this name. A value taken from the address bar would drift
- * with the deployment and strand every account, so the service names it.
+ * The application names no relying party, because the browser derives one from
+ * the origin that served the page. This constant is the expectation that a
+ * release declares, and a check compares it against the origin.
+ *
+ * No environment variable overrides it, on purpose. A declaration works as a
+ * check only while it stays inconvenient to change. A service that demanded
+ * the value would receive the new name from the operator who moves it. The
+ * check would then compare that value against itself, and the move would pass
+ * unrecorded. Moving the name is a commit, and this is the line that changes.
  */
-export const DEFAULT_RP_ID = 'senet.hoodrun.io';
+export const RP_ID = 'senet.hoodrun.io';
 
 /** Everything that the service needs to run. */
 export interface ServerConfig {
@@ -107,7 +114,7 @@ export function readConfig(): ServerConfig {
     horizonUrl: optional('HORIZON_URL', TESTNET_HORIZON_URL),
     friendbotUrl: optional('FRIENDBOT_URL', TESTNET_FRIENDBOT_URL),
     walletWasmHash: optional('WALLET_WASM_HASH', TESTNET_WALLET_WASM_HASH),
-    rpId: optional('RP_ID', DEFAULT_RP_ID),
+    rpId: RP_ID,
     channelSecrets,
   };
 }

@@ -14,7 +14,7 @@ import {
 } from '@senet/core';
 import type { Voucher } from '@senet/core';
 import {
-  DEFAULT_RP_ID,
+  RP_ID,
   FeePayer,
   RATE_LIMIT_SPEND,
   TESTNET_FRIENDBOT_URL,
@@ -38,7 +38,7 @@ const config: ServerConfig = {
   horizonUrl: TESTNET_HORIZON_URL,
   friendbotUrl: TESTNET_FRIENDBOT_URL,
   walletWasmHash: TESTNET_WALLET_WASM_HASH,
-  rpId: DEFAULT_RP_ID,
+  rpId: RP_ID,
   channelSecrets: [Keypair.random().secret()],
 };
 

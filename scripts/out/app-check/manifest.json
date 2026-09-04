@@ -27,6 +27,22 @@
           "Fee charged": "0.0027364 XLM"
         }
       }
+    },
+    {
+      "name": "app-account-36e30977d043",
+      "hash": "36e30977d04362f0d11772851880ef25f3e1d87bed7187861adb099386e77739",
+      "note": "A person created a passkey account in a browser on the public name. The registration signed the deployment, the fee-payer service paid for it, and the account screen showed the account and its balance.",
+      "producer": "browser",
+      "screen": "account",
+      "shown": {
+        "title": "Your account",
+        "advice": "The passkey stays in this device. There is no seed phrase.",
+        "values": {
+          "Address": "CCRHXBOUUPKHBBEHABZN4EQ43MPWS3QSAGTJX76SCUAQXU6LT7GWIBIG",
+          "Created by": "36e30977d04362f0d11772851880ef25f3e1d87bed7187861adb099386e77739",
+          "Balance": "10000.0000000 XLM"
+        }
+      }
     }
   ]
 }

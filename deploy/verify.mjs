@@ -14,6 +14,9 @@ import { launch } from 'puppeteer-core';
 // The name that the deployed release declares. A commit is the only thing that
 // changes it, which is what makes it worth checking against the origin.
 import { RP_ID } from '@senet/server';
+// The typed errors, so the check asks the bundle for the vocabulary that the
+// library declares rather than for a list written out here.
+import * as core from '@senet/core';
 
 /** The name that serves the application, when the caller names none. */
 const DEFAULT_ORIGIN = 'https://senet.hoodrun.io';
