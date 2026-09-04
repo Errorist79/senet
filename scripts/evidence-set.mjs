@@ -367,12 +367,20 @@ export function deriveShownClaims(dir, manifest) {
  * field rather than passing as an absent one.
  */
 const DELIVERED_FIELDS = Object.freeze([
-  ['voucher_id', (redeem) => redeem.voucherId],
-  ['payer', (redeem) => redeem.payer],
-  ['recipient', (redeem) => redeem.recipient],
-  ['amount', (redeem) => redeem.amount],
-  ['expire_at', (redeem) => String(redeem.expireAt)],
+  // A voucher identifier is 64 bits and an amount is 128, and both pass the
+  // range that a JSON number holds exactly. The listener sends them as decimal
+  // text for that reason, so this check demands the text. A value that arrives
+  // as a number compares equal here while it is already corrupt, which is the
+  // one failure that a comparison of values alone cannot see.
+  ['voucher_id', 'string', (redeem) => redeem.voucherId],
+  ['amount', 'string', (redeem) => redeem.amount],
+  ['payer', 'any', (redeem) => redeem.payer],
+  ['recipient', 'any', (redeem) => redeem.recipient],
+  ['expire_at', 'any', (redeem) => String(redeem.expireAt)],
 ]);
+
+/** The shape of an event identifier, which is the deduplication key. */
+const EVENT_ID_SHAPE = /^\d{19}-\d{10}$/;
 
 /**
  * Compare one webhook message against the transaction that it reports.
@@ -415,11 +423,18 @@ export function compareDeliveryToChain(delivery, redeem, horizon, hash) {
     return { checked, problems: [...problems, `${hash} is not a redemption, so no message can report it`] };
   }
 
-  for (const [field, chainValue] of DELIVERED_FIELDS) {
+  for (const [field, wanted, chainValue] of DELIVERED_FIELDS) {
     checked += 1;
     const sent = message[field];
     if (sent === undefined) {
       problems.push(`the message names no ${field}`);
+      continue;
+    }
+    if (wanted === 'string' && typeof sent !== 'string') {
+      problems.push(
+        `the message sends ${field} as a ${typeof sent}, and a value of that width `
+        + 'loses digits as a number. It has to arrive as text.',
+      );
       continue;
     }
     const expected = chainValue(redeem);
@@ -429,10 +444,19 @@ export function compareDeliveryToChain(delivery, redeem, horizon, hash) {
   }
 
   checked += 1;
-  const reported = message.transaction ?? message.hash;
-  if (reported === undefined) problems.push('the message names no transaction');
+  const reported = message.tx_hash;
+  if (reported === undefined) problems.push('the message names no tx_hash');
   else if (String(reported) !== hash) {
-    problems.push(`the message reports transaction ${reported}, and the row cites ${hash}`);
+    problems.push(`the message reports tx_hash ${reported}, and the row cites ${hash}`);
+  }
+
+  // The deduplication key. A repeat of a delivery is expected under at-least-once
+  // delivery, and a reader can only drop the repeat if the key arrived with it.
+  checked += 1;
+  const eventId = message.event_id;
+  if (eventId === undefined) problems.push('the message names no event_id, so no reader can drop a repeat');
+  else if (typeof eventId !== 'string' || !EVENT_ID_SHAPE.test(eventId)) {
+    problems.push(`the message reports event_id ${eventId}, which is not an event identifier`);
   }
 
   if (horizon !== null && horizon !== undefined) {
@@ -440,6 +464,18 @@ export function compareDeliveryToChain(delivery, redeem, horizon, hash) {
     if (message.ledger === undefined) problems.push('the message names no ledger');
     else if (String(message.ledger) !== String(horizon.ledger)) {
       problems.push(`the message reports ledger ${message.ledger}, and the chain says ${horizon.ledger}`);
+    }
+
+    // The listener sends the close time as well, so the message can be checked
+    // against the chain without a second read of it later.
+    if (horizon.created_at !== null && message.ledger_closed_at !== undefined) {
+      checked += 1;
+      if (Date.parse(String(message.ledger_closed_at)) !== Date.parse(horizon.created_at)) {
+        problems.push(
+          `the message reports the close time as ${message.ledger_closed_at}, `
+          + `and the chain says ${horizon.created_at}`,
+        );
+      }
     }
 
     // The order is the one property here that a chain comparison cannot give.
