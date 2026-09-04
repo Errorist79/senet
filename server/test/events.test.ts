@@ -7,7 +7,9 @@ import { nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import type { rpc } from '@stellar/stellar-sdk';
 import {
   REDEEMED_TOPIC,
+  ledgerOfCursor,
   readListenerState,
+  runListener,
   writeStall,
   isCursorTooOld,
   pollOnce,
@@ -300,4 +302,43 @@ test('a truncated file still reports its age, which is the fact that matters', (
   const seen = readListenerState(path);
   assert.equal(seen.cursor, null);
   assert.equal(typeof seen.ageMs, 'number');
+});
+
+test('a cursor names the ledger that it reached', () => {
+  // Measured against the network: a cursor at the head reports the same
+  // ledger that the same response calls latestLedger. This cursor came from a
+  // real quiet poll whose latestLedger was 4507159.
+  assert.equal(ledgerOfCursor('0019358104797839359-4294967295'), 4507159);
+  assert.equal(ledgerOfCursor('not-a-cursor'), null);
+});
+
+test('an empty page does not end a catch up, because the head decides', async () => {
+  const path = statePath();
+  // Two empty pages that each advance ten thousand ledgers, then the events.
+  // The old rule stopped on the first of these and called it caught up.
+  const behind = (cursorLedger: number, events: readonly rpc.Api.EventResponse[]) => {
+    const held = { ...page(events, `${BigInt(cursorLedger) << 32n}-1`) };
+    return { ...held, latestLedger: 4507468 };
+  };
+  const delivered: string[] = [];
+  const { server } = feed([
+    behind(4477467, []),
+    behind(4487466, []),
+    behind(4507468, [event('e1', 1n, PAYER, MERCHANT)]),
+  ]);
+  const outcome = await runListener(
+    {
+      server,
+      contractId: 'C1',
+      statePath: path,
+      deliver: (m) => {
+        delivered.push(m.event_id);
+        return Promise.resolve(true);
+      },
+    },
+    'quiet',
+    4467468,
+  );
+  assert.equal(outcome.polls, 3);
+  assert.deepEqual(delivered, ['e1']);
 });

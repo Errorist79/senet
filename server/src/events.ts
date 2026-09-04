@@ -82,6 +82,15 @@ export interface PollResult {
   readonly cursor: string | null;
   /** The event that a receiver refused, when one did. */
   readonly stuckOn: string | null;
+  /**
+   * The ledger that this poll scanned as far as.
+   *
+   * One request scans a span of ledgers and answers. This value says how far
+   * the listener read. It says nothing about how many events it found.
+   */
+  readonly scannedTo: number | null;
+  /** The head of the chain, as the same response reported it. */
+  readonly latestLedger: number;
 }
 
 /** A receiver, which accepts a message or refuses it. */
@@ -164,6 +173,25 @@ export function isCursorTooOld(caught: unknown): boolean {
   if (caught === null || typeof caught !== 'object') return false;
   const fields: Record<string, unknown> = { ...caught };
   return fields['code'] === RPC_INVALID_REQUEST;
+}
+
+/**
+ * The ledger that a cursor names.
+ *
+ * A cursor is a transaction identifier and an event index, joined by a dash.
+ * The identifier packs the ledger sequence into its top 32 bits, so a shift
+ * recovers it. A measurement against the network confirms this. A cursor at
+ * the head reports the same ledger that the same response calls
+ * `latestLedger`.
+ *
+ * The listener needs this because an empty page does not mean the end of the
+ * feed. One request scans about ten thousand ledgers and then answers, so an
+ * empty page means only that nothing matched inside that span.
+ */
+export function ledgerOfCursor(cursor: string): number | null {
+  const head = cursor.split('-')[0];
+  if (head === undefined || !/^[0-9]+$/.test(head)) return null;
+  return Number(BigInt(head) >> 32n);
 }
 
 /** The listener's position on disk, or nothing when it never ran. */
@@ -287,6 +315,8 @@ export async function pollOnce(
         delivered,
         cursor: position,
         stuckOn: message.event_id,
+        scannedTo: position === null ? null : ledgerOfCursor(position),
+        latestLedger: page.latestLedger,
       };
     }
     if (message !== null) delivered += 1;
@@ -299,7 +329,14 @@ export async function pollOnce(
   // The batch finished, so the page's own cursor stands. An empty batch reaches
   // here too, which is what keeps the position moving through a quiet week.
   writePosition(parts.statePath, { cursor: page.cursor });
-  return { read: page.events.length, delivered, cursor: page.cursor, stuckOn: null };
+  return {
+    read: page.events.length,
+    delivered,
+    cursor: page.cursor,
+    stuckOn: null,
+    scannedTo: ledgerOfCursor(page.cursor),
+    latestLedger: page.latestLedger,
+  };
 }
 
 /**
@@ -365,6 +402,7 @@ export async function runListener(
   let delivered = 0;
   let refusals = 0;
   let wait = DELIVERY_BACKOFF_MS;
+  let target: number | null = null;
 
   for (;;) {
     const held = readPosition(parts.statePath);
@@ -387,9 +425,23 @@ export async function runListener(
 
     refusals = 0;
     wait = DELIVERY_BACKOFF_MS;
-    // An empty page means the feed holds nothing newer, which is what caught
-    // up means.
-    if (until === 'quiet' && result.read === 0) return { polls, delivered, stuckOn: null };
+
+    // Caught up means the listener read as far as the head of the chain. It
+    // does not mean that a page came back empty.
+    //
+    // One request scans about ten thousand ledgers and then answers. An empty
+    // page says only that nothing matched inside that span. A run that stopped
+    // on an empty page reported success from thirty thousand ledgers behind.
+    // Thirteen redemptions sat in that gap, and it delivered none of them.
+    // That is the worst failure of this mode. A person who follows the written
+    // path reads `caught up`, and then meets a screen that confirms nothing.
+    //
+    // The first poll sets the head. The chain keeps closing ledgers while this
+    // runs, so a target that moved would never arrive.
+    if (target === null) target = result.latestLedger;
+    if (until === 'quiet' && result.scannedTo !== null && result.scannedTo >= target) {
+      return { polls, delivered, stuckOn: null };
+    }
     await rest(until === 'quiet' ? 0 : EVENT_POLL_INTERVAL_MS);
   }
 }
