@@ -66,6 +66,20 @@ function showScreen(name: ScreenName): void {
  * swap at that moment ends the payment, and it destroys the only evidence of
  * the payment. The person picks the moment instead.
  */
+/**
+ * Whether the person asked for the restart.
+ *
+ * A worker takes control twice for two different reasons. The first time is
+ * the first visit, where the worker claims a page that no worker controlled,
+ * and the page is already the newest build. The second time is a restart that
+ * the person accepted. Only the second one reloads.
+ *
+ * An earlier version reloaded on both. That reload landed in the middle of the
+ * passkey ceremony on a first visit, and it made the account screen do nothing
+ * at all.
+ */
+let acceptedRestart = false;
+
 function offerUpdate(waiting: ServiceWorker): void {
   const bar = element('update-bar', HTMLDivElement);
   const restart = element('update-restart', HTMLButtonElement);
@@ -75,6 +89,7 @@ function offerUpdate(waiting: ServiceWorker): void {
     () => {
       restart.disabled = true;
       restart.textContent = 'Restarting';
+      acceptedRestart = true;
       waiting.postMessage(SKIP_WAITING);
     },
     { once: true },
@@ -91,13 +106,11 @@ function offerUpdate(waiting: ServiceWorker): void {
 function installWorker(): void {
   if (!('serviceWorker' in navigator)) return;
 
-  // The reload happens once, when the worker that the person accepted takes
-  // over. Without the guard a browser that changes controller again reloads
-  // the page under the person's hands.
-  let restarting = false;
+  // The page reloads only for a restart that the person accepted, and only
+  // once. Any other change of controller leaves the screen alone.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (restarting) return;
-    restarting = true;
+    if (!acceptedRestart) return;
+    acceptedRestart = false;
     window.location.reload();
   });
 

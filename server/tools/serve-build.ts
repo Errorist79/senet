@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -44,4 +45,34 @@ export function serveBuiltApplication(
     'Service-Worker-Allowed': '/',
   });
   createReadStream(chosen).pipe(response);
+}
+
+/**
+ * Put the application and the service on one loopback origin.
+ *
+ * A browser derives a relying party from the origin, so a check that needs a
+ * passkey serves on `localhost` and gets `localhost`. A check that drives the
+ * public name proves the relying party that people really use, and it needs
+ * none of this.
+ */
+export async function serveApplication(
+  dist: string,
+  answer: (request: IncomingMessage, response: ServerResponse) => void,
+): Promise<{ origin: string; close: () => void }> {
+  if (!existsSync(join(dist, 'index.html'))) {
+    throw new Error(`${dist} holds no build. Run the application build first.`);
+  }
+  const service = createServer((request, response) => {
+    if ((request.url ?? '/').startsWith('/api/')) answer(request, response);
+    else serveBuiltApplication(dist, request, response);
+  });
+  await new Promise<void>((listening) => {
+    service.listen(0, '127.0.0.1', listening);
+  });
+  const address = service.address();
+  if (address === null || typeof address === 'string') throw new Error('the service took no port');
+  return {
+    origin: `http://localhost:${address.port}`,
+    close: () => service.close(),
+  };
 }

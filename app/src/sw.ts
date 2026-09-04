@@ -78,20 +78,21 @@ scope.addEventListener('fetch', (event) => {
   if (url.origin !== scope.location.origin) return;
   if (url.pathname.startsWith(LIVE_PREFIX)) return;
 
+  // Every lookup names this build's cache. A search across all the caches can
+  // answer from an earlier build, which is the fault that this worker exists
+  // to end. A worker serves the files of its own build, or it serves none.
   event.respondWith(
-    caches.match(event.request).then(async (hit) => {
+    caches.open(CACHE).then(async (cache) => {
+      const hit = await cache.match(event.request);
       if (hit !== undefined) return hit;
       try {
         const response = await fetch(event.request);
-        if (response.ok) {
-          const cache = await caches.open(CACHE);
-          await cache.put(event.request, response.clone());
-        }
+        if (response.ok) await cache.put(event.request, response.clone());
         return response;
       } catch {
         // The device is offline and the cache does not hold this path. The
         // shell is the only page, so it answers every navigation.
-        const shell = await caches.match('/index.html');
+        const shell = await cache.match('/index.html');
         if (shell !== undefined) return shell;
         return new Response('offline', { status: 503, statusText: 'offline' });
       }

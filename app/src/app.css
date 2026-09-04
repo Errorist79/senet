@@ -467,3 +467,15 @@ body {
   opacity: 0.5;
   cursor: progress;
 }
+
+.account-signin {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.account-signin-note {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 14px;
+}

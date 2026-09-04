@@ -1,7 +1,8 @@
 import { ServiceError, fetchBalance, fundAddress } from './api.js';
 import { showDeviceFact } from './banner.js';
 import { detail, element, fill, make, short, xlm } from './dom.js';
-import { createAccount, restoreAccount } from './passkey.js';
+import { PasskeyKitError, PasskeyKitErrorCode } from 'passkey-kit';
+import { createAccount, restoreAccount, signInAccount } from './passkey.js';
 import { clearAccount, getAccount, getChain } from './store.js';
 import type { StoredAccount } from './store.js';
 
@@ -20,6 +21,31 @@ function reason(caught: unknown): string {
   return 'the application could not finish that step';
 }
 
+/**
+ * Why a sign in did not find an account, in words a person can act on.
+ *
+ * The kit's own messages describe a credential and a derivation. A person who
+ * reinstalled the application needs to know whether to try another passkey,
+ * create an account, or come back with a network.
+ */
+function signInReason(caught: unknown): string {
+  if (caught instanceof PasskeyKitError) {
+    if (caught.code === PasskeyKitErrorCode.WALLET_NOT_FOUND) {
+      return (
+        'That passkey holds no account on this name. Create an account, or ' +
+        'try the passkey that you made here.'
+      );
+    }
+    if (caught.code === PasskeyKitErrorCode.WALLET_OWNERSHIP_MISMATCH) {
+      return 'That passkey is not a signer on the account that it points to.';
+    }
+    if (caught.code === PasskeyKitErrorCode.WEBAUTHN_CANCELLED) {
+      return 'Your device did not confirm the passkey.';
+    }
+  }
+  return reason(caught);
+}
+
 /** Show one failure, in the same shape that every screen uses. */
 function showProblem(panel: HTMLElement, message: string): void {
   const box = make('div', 'result result-bad');
@@ -33,6 +59,8 @@ export function startAccountScreen(): void {
   const create = element('account-create', HTMLButtonElement);
   const name = element('account-name', HTMLInputElement);
   const form = element('account-form', HTMLFormElement);
+  const signIn = element('account-signin', HTMLButtonElement);
+  const signInBox = element('account-signin-box', HTMLDivElement);
 
   /**
    * Whether this account belongs to the name that serves the page.
@@ -48,6 +76,7 @@ export function startAccountScreen(): void {
   /** Draw the account, and read what it holds when the network answers. */
   async function show(account: StoredAccount): Promise<void> {
     form.hidden = true;
+    signInBox.hidden = true;
     const wrongName = !belongsHere(account);
     const box = make('div', `result result-${wrongName ? 'wait' : 'good'}`);
     box.append(
@@ -86,6 +115,7 @@ export function startAccountScreen(): void {
         clearAccount();
         showDeviceFact();
         form.hidden = false;
+        signInBox.hidden = false;
         fill(panel);
       });
       box.append(forget);
@@ -158,6 +188,33 @@ export function startAccountScreen(): void {
       showProblem(panel, reason(caught));
     } finally {
       create.disabled = false;
+    }
+  }
+
+  signIn.addEventListener('click', () => void recover());
+
+  /**
+   * Find the account that a passkey already holds.
+   *
+   * A device that lost its storage still has the passkey, and the account
+   * still holds its funds on chain. This asks the authenticator, and the
+   * network confirms the answer.
+   */
+  async function recover(): Promise<void> {
+    const chain = getChain();
+    if (chain === null) {
+      showProblem(panel, 'The service did not answer, so this device cannot sign in yet.');
+      return;
+    }
+    signIn.disabled = true;
+    fill(panel, make('p', 'waiting', 'Your device is asking you to choose a passkey.'));
+    try {
+      await show(await signInAccount(chain));
+      showDeviceFact();
+    } catch (caught) {
+      showProblem(panel, signInReason(caught));
+    } finally {
+      signIn.disabled = false;
     }
   }
 

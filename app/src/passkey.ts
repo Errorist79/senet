@@ -100,6 +100,37 @@ export async function createAccount(
 }
 
 /**
+ * Sign in with a passkey that already holds an account.
+ *
+ * A person who removes the application from a home screen loses everything
+ * that this device stored. The passkey stays in the authenticator, and the
+ * account keeps its funds on chain. The device loses only the record of the
+ * link between them, and this function rebuilds that record.
+ *
+ * The kit asks the authenticator which passkey to use. It then derives the
+ * account address from that credential and confirms the contract on chain. It
+ * refuses unless the credential is a live signer on that account. Nothing here
+ * needs a stored value, and the person types nothing.
+ *
+ * The origin is a fact rather than a guess. A passkey binds to the name that
+ * created it, so a ceremony that succeeds under this name proves that the
+ * passkey belongs to it.
+ */
+export async function signInAccount(chain: StoredChain): Promise<StoredAccount> {
+  const connected = await getKit(chain).connectWallet();
+  const account: StoredAccount = {
+    keyId: connected.keyIdBase64,
+    contractId: connected.contractId,
+    // The transaction that deployed the account is not recoverable from a
+    // credential, and no screen needs it. The address is what a person needs.
+    deployHash: null,
+    origin: window.location.origin,
+  };
+  setAccount(account);
+  return account;
+}
+
+/**
  * The signer that the library asks for.
  *
  * The library never assumes how a payer signs. This is the passkey side of
