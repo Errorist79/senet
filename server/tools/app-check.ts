@@ -154,10 +154,14 @@ async function main(): Promise<void> {
     if (shown === null) throw new Error('the screen showed no result');
 
     const outcome = shown.values['Outcome'] ?? '';
-    const hash = await page.evaluate(() => {
+    // The screen shortens a hash for a person to read, and the link carries the
+    // whole one. The record keeps the whole hash as its own field, because an
+    // archive row must not hide a chain fact inside a URL.
+    const explorerUrl = await page.evaluate(() => {
       const link = document.querySelector('.detail-link');
       return link instanceof HTMLAnchorElement ? link.href : null;
     });
+    const hash = explorerUrl === null ? null : (explorerUrl.split('/').pop() ?? null);
     const record = {
       ranAt: new Date().toISOString(),
       origin,
@@ -168,8 +172,9 @@ async function main(): Promise<void> {
       amountStroops: voucher.amount.toString(),
       payer,
       recipient,
+      transactionHash: hash,
       screen: shown,
-      explorerUrl: hash,
+      explorerUrl,
     };
     mkdirSync(dirname(outPath), { recursive: true });
     writeFileSync(outPath, `${JSON.stringify(record, null, 2)}\n`);
@@ -177,7 +182,7 @@ async function main(): Promise<void> {
     console.log(`worker     ${workerReady ? 'active' : 'not active'}`);
     console.log(`screen     ${shown.title}: ${shown.advice}`);
     console.log(`outcome    ${outcome}`);
-    console.log(`explorer   ${hash ?? 'none'}`);
+    console.log(`hash       ${hash ?? 'none'}`);
     console.log(`record written to ${outPath}`);
     if (outcome !== 'SUCCESS') process.exitCode = 1;
   } finally {

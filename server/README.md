@@ -82,6 +82,13 @@ read at start turns a mismatch that nobody would see into a refusal to start.
 The service also refuses to start when the contract does not answer. A contract
 that the service cannot read is a contract that it cannot serve.
 
+Two contracts on testnet prove that the check refuses rather than passes.
+`CBI2QQYQAFE6UVTTPG47JAQYZ2QTYFMFGXQLXSKCRS5E3NSI5GZMLOZU` carries the same
+code as the live contract, and it holds a ceiling of 720 ledgers instead of
+8640. It exists only to fail this check, and no part of Senet uses it. The
+native token contract has no `limits` function at all, and it proves the other
+branch.
+
 ## The retry rule
 
 The nonce and the sequence number are two separate single-use resources, so a
