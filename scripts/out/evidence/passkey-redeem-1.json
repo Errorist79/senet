@@ -4,7 +4,7 @@
   "note": "A contract account signs with a secp256r1 passkey signature that its own __check_auth verifies. The recipient differs from the payer.",
   "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
   "producer": "device",
-  "archivedAt": "2026-09-04T08:48:07.628Z",
+  "archivedAt": "2026-09-04T22:48:47.951Z",
   "rpc": {
     "status": "SUCCESS",
     "ledger": 4442216,

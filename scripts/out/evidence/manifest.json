@@ -1,67 +1,79 @@
 {
   "network": "Test SDF Network ; September 2015",
   "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
-  "producedAt": "2026-09-04T08:48:03.410Z",
+  "producedAt": "2026-09-04T22:48:43.467Z",
   "rows": [
     {
       "name": "1a-success",
-      "hash": "e85173608ed50ca2cf240c11946cb6c027138a5fad0c54c6c2b3c07807605512",
+      "hash": "4ba566adfa5750985438bd5d0ba89ff9803f9b8665b2d2d2d1a71794b42b16ba",
       "note": "One account signs the entry and a second account submits it. The party that submits selects the recipient after the signature exists.",
       "producer": "script"
     },
     {
       "name": "1b-double-spend-failed",
-      "hash": "6dfaf35c6665f80ece410d70f1f377635f67d0a4e48659a2d2de36938529f29c",
+      "hash": "e32631f4a9bdc967023110776afb8bf2e5be48b0e03f949cb86c7e4e878ddcbe",
       "note": "The network refuses a second submission of the same signed entry, because it consumed the nonce.",
       "producer": "script"
     },
     {
       "name": "1c-expired-host-signature-failed",
-      "hash": "7ab2c1be348466abcfceea863820beebb19dc1d24cf666b92573a0ee91e6f8c9",
+      "hash": "b320d1c5a6b8329832cf671d960f029ea6ff797bc4bdeab81d82901fce3ac656",
       "note": "The network refuses an entry whose signature expiration ledger is in the past.",
       "producer": "script"
     },
     {
       "name": "8-void-success",
-      "hash": "11fe883f9437cc45b4c2b1ab9f77da92b485ec4cc7098baa1cc6267e19b7182b",
+      "hash": "d47af140f93a67a8b792a22a34602fd60021605f485148a978a1fdfbdba438ce",
       "note": "The payer voids the voucher and redeems it to their own address. The nonce is consumed and the balance does not change.",
       "producer": "script"
     },
     {
       "name": "8-after-void-failed",
-      "hash": "830e4830ca4e8eb0a00eff6e302176b83bcf62b9ce37878fa4b1a3ee2d61504c",
+      "hash": "ebe822d04bd7b2defdefc6beeb9ac418f1ee0cb159354efad73a78e182fe7799",
       "note": "The network refuses a redemption of a voucher that the payer voided.",
       "producer": "script"
     },
     {
       "name": "task3-handbuilt",
-      "hash": "2ef2e638945bc5cb65ea8b096f5ac66ff0e6dd8c03dc8a016e200f73ac0b9a95",
+      "hash": "adb48b11c3282d1f253b4b89cbf9578a37fcf182a8b85b946ed671121ac8f8df",
       "note": "A client that never called simulation built this voucher. The redemption succeeds.",
       "producer": "script"
     },
     {
       "name": "lifetime-5m",
-      "hash": "2961f8778bb4bf61968869ca00a31acea6b0cc79ad2ecb82cc9a93d71cb4f7a3",
+      "hash": "632a0cfa85e62837f428c22647ca48698137fb006a5218b971ea371ac043e009",
       "note": "A voucher with a lifetime of 60 ledgers, about 5 minutes.",
       "producer": "script"
     },
     {
       "name": "lifetime-15m",
-      "hash": "08cb755d4ba755a20689f47a6c5191190f9a6b0a6e0daadf19e2473a934c276d",
+      "hash": "db54f1054f43b58493082496d5a87720a88e083882408e8c983080a7c5d7f55d",
       "note": "A voucher with a lifetime of 180 ledgers, about 15 minutes. This lifetime is the default.",
       "producer": "script"
     },
     {
       "name": "lifetime-1h",
-      "hash": "a3495b59f6da83ae90ff8ecc99f4ae3c04d2dba0afe2ddc58e5c9a1e56a317d1",
+      "hash": "24509875021a266e74d5ae7c01cc109fb95a9bdb0cb1e8d413a15c0671b72a96",
       "note": "A voucher with a lifetime of 720 ledgers, about 1 hour.",
       "producer": "script"
     },
     {
       "name": "lifetime-12h",
-      "hash": "ef10593024ee6de3ea567d324ac617d72711799e721bf7e9dfc6ab4f4997200e",
+      "hash": "356c148baf880bfc001800c20b04d697bfa196de0cb6a7b468fdbcbd64d797bf",
       "note": "A voucher with a lifetime of 8,640 ledgers, about 12 hours. This lifetime equals the cap of the contract.",
       "producer": "script"
+    },
+    {
+      "name": "sep7-payment",
+      "hash": "12e4f143fa50f7666165a956c4e9f14a049ee126b9dc2e4d8860d22a361ffb47",
+      "note": "A merchant published a signed request and a payer answered it. This is the payee-presented direction, which the voucher rows reverse.",
+      "producer": "script",
+      "request": {
+        "uri": "web+stellar:pay?destination=GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52&amount=0.5000000&origin_domain=senet.hoodrun.io&signature=tD9DQkevYzaeY5VuBiRxS1B33KK9WrANoDHs11KafvzfehyZ22oLl9K9KmKQMCJIRSxxkXjX8HFetnJv4yMiAQ%3D%3D",
+        "originDomain": "senet.hoodrun.io",
+        "signingKey": "GBJLKISD3BJG7CTDFB4XSJ7AZT5RVKR4YC22ODE4POXIUHMIFI6WRJG5",
+        "tomlUrl": "https://senet.hoodrun.io/.well-known/stellar.toml"
+      }
     },
     {
       "name": "passkey-redeem-1",
