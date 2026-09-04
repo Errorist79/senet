@@ -63,3 +63,18 @@ export function xlm(stroops: string): string {
 export function short(value: string): string {
   return value.length <= 16 ? value : `${value.slice(0, 8)}…${value.slice(-8)}`;
 }
+
+/**
+ * A count of ledgers, as a person reads it.
+ *
+ * A ledger closes about every five seconds, so a count of ledgers is a
+ * duration. The text stays vague on purpose, because the number is an estimate.
+ */
+export function lifeLeft(ledgers: number, secondsPerLedger: number): string {
+  if (ledgers <= 0) return 'expired';
+  const seconds = Math.round(ledgers * secondsPerLedger);
+  if (seconds < 90) return `about ${seconds} seconds left`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `about ${minutes} minutes left`;
+  return `about ${Math.round(minutes / 60)} hours left`;
+}

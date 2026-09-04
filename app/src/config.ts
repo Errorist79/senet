@@ -31,3 +31,12 @@ export const LEDGER_REFRESH_MS = 12_000;
 
 /** How long the application waits for one service reply, in milliseconds. */
 export const REQUEST_TIMEOUT_MS = 130_000;
+
+/**
+ * Camera frames that the scanner decodes each second.
+ *
+ * A decode costs real work on a phone. A camera at a screen also holds still
+ * for far longer than a tenth of a second. Ten reads per second finds a code
+ * as fast as a person aims, and it leaves the device cool.
+ */
+export const SCAN_FPS = 10;

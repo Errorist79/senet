@@ -6,16 +6,27 @@
  * parsing text.
  */
 
-/** The base class of every error this library raises. */
+/**
+ * The base class of every error this library raises.
+ *
+ * Each class states its own name rather than taking it from the constructor.
+ * A bundler renames a class. A name read from the constructor therefore turns
+ * into a short meaningless one in a built application. The vocabulary that a
+ * consumer branches on then stops existing where it matters most.
+ */
 export class VoucherError extends Error {
-  constructor(message: string) {
+  constructor(name: string, message: string) {
     super(message);
-    this.name = new.target.name;
+    this.name = name;
   }
 }
 
 /** The bytes or the entry do not hold a voucher of the expected shape. */
-export class VoucherFormatError extends VoucherError {}
+export class VoucherFormatError extends VoucherError {
+  constructor(message: string) {
+    super('VoucherFormatError', message);
+  }
+}
 
 /** The payload starts with a version byte this reader does not know. */
 export class PayloadVersionError extends VoucherError {
@@ -24,6 +35,7 @@ export class PayloadVersionError extends VoucherError {
     readonly expected: number,
   ) {
     super(
+      'PayloadVersionError',
       `the payload declares version ${found} and this reader accepts version ` +
         `${expected}. Update the reader, or ask the payer for a version ` +
         `${expected} voucher.`,
@@ -39,6 +51,7 @@ export class NetworkMismatchError extends VoucherError {
     readonly expectedNetwork: string,
   ) {
     super(
+      'NetworkMismatchError',
       `the payload names network ${found} and this reader is configured for ` +
         `${expected} (${expectedNetwork}). The voucher belongs to another network.`,
     );
@@ -60,6 +73,7 @@ export class CredentialTypeError extends VoucherError {
     readonly expectedEnvelopeType: number,
   ) {
     super(
+      'CredentialTypeError',
       `the entry carries credential discriminant ${discriminant} and envelope ` +
         `type ${envelopeType}, and CAP-71 address binding needs discriminant ` +
         `${expectedDiscriminant} with envelope type ${expectedEnvelopeType}. ` +
@@ -82,6 +96,7 @@ export class DeadlineMismatchError extends VoucherError {
     readonly expireAt: number,
   ) {
     super(
+      'DeadlineMismatchError',
       `signature_expiration_ledger is ${signatureExpirationLedger} and expire_at ` +
         `is ${expireAt}. The voucher would live ` +
         `${Math.min(signatureExpirationLedger, expireAt)} ledgers, not the number ` +
@@ -97,6 +112,7 @@ export class ExpiryWindowError extends VoucherError {
     readonly maxLifetimeLedgers: number,
   ) {
     super(
+      'ExpiryWindowError',
       `the voucher asks for ${lifetimeLedgers} ledgers of lifetime and the ` +
         `contract accepts 1 to ${maxLifetimeLedgers}. The contract would refuse ` +
         `the redeem after the payer signed it.`,
@@ -111,6 +127,7 @@ export class AmountWindowError extends VoucherError {
     readonly maxAmount: bigint,
   ) {
     super(
+      'AmountWindowError',
       `the voucher carries ${amount} stroops and the contract accepts 1 to ` +
         `${maxAmount}. The contract would refuse the redeem after the payer ` +
         `signed it.`,
@@ -131,6 +148,7 @@ export class RemainingLifeError extends VoucherError {
     readonly required: number,
   ) {
     super(
+      'RemainingLifeError',
       `the voucher has ${remaining} ledgers of life left and a payment needs ` +
         `${required}. It would expire between the scan and the payment, which ` +
         `looks the same as a bad voucher. Ask the payer for a new one.`,
@@ -139,7 +157,11 @@ export class RemainingLifeError extends VoucherError {
 }
 
 /** A SEP-7 request does not hold the shape that the standard names. */
-export class UriFormatError extends VoucherError {}
+export class UriFormatError extends VoucherError {
+  constructor(message: string) {
+    super('UriFormatError', message);
+  }
+}
 
 /** The installed `@stellar/stellar-sdk` is not the version this code reads. */
 export class SdkVersionError extends VoucherError {
@@ -149,6 +171,7 @@ export class SdkVersionError extends VoucherError {
     readonly expectedMinorMin: number,
   ) {
     super(
+      'SdkVersionError',
       `@stellar/stellar-sdk ${found} is installed and this code needs ` +
         `${expectedMajor}.${expectedMinorMin} or a later ${expectedMajor}.x. ` +
         `Major ${expectedMajor + 1} changes XDR attribute access from a method ` +

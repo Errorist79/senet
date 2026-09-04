@@ -36,7 +36,7 @@ export class ContractLimitsUnreadableError extends Error {
       `the service could not read the limits of contract ${contractId}: ${detail}. ` +
         `Check that this network carries the contract, and that it holds its limits.`,
     );
-    this.name = new.target.name;
+    this.name = 'ContractLimitsUnreadableError';
   }
 }
 
@@ -53,7 +53,7 @@ export class ContractLimitsMismatchError extends Error {
         `${expected}. A payer would sign a voucher that the contract then refuses. ` +
         `Deploy a contract that matches, or change the limit that this build holds.`,
     );
-    this.name = new.target.name;
+    this.name = 'ContractLimitsMismatchError';
   }
 }
 

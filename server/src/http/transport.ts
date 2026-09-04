@@ -18,7 +18,7 @@ export class RequestError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = new.target.name;
+    this.name = 'RequestError';
   }
 }
 
