@@ -41,12 +41,12 @@ async function main(): Promise<void> {
 
   // A first start with no position reads from the configured ledger, or from
   // the present. It never reads the whole chain.
-  const held = readPosition(listener.statePath);
+  const held = readPosition(config.listenerStatePath);
   const firstLedger = listener.startLedger ?? (await server.getLatestLedger()).sequence;
 
   console.log(`contract   ${config.voucher.contractId}`);
   console.log(`webhook    ${listener.webhookUrl}`);
-  console.log(`state      ${listener.statePath}`);
+  console.log(`state      ${config.listenerStatePath}`);
   console.log(`from       ${held === null ? `ledger ${firstLedger}` : `cursor ${held.cursor}`}`);
   console.log(`mode       ${until}`);
 
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     {
       server,
       contractId: config.voucher.contractId,
-      statePath: listener.statePath,
+      statePath: config.listenerStatePath,
       deliver: postToWebhook(listener.webhookUrl),
     },
     until,

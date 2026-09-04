@@ -1,5 +1,5 @@
-import { renameSync, writeFileSync } from 'node:fs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import type { Stats } from 'node:fs';
 import { Address, scValToNative } from '@stellar/stellar-sdk';
 import type { rpc, xdr } from '@stellar/stellar-sdk';
 import {
@@ -392,4 +392,49 @@ export async function runListener(
     if (until === 'quiet' && result.read === 0) return { polls, delivered, stuckOn: null };
     await rest(until === 'quiet' ? 0 : EVENT_POLL_INTERVAL_MS);
   }
+}
+
+/** What the state file says, for a reader that watches rather than resumes. */
+export interface ListenerState {
+  readonly cursor: string | null;
+  /** The event that a receiver refuses, when the listener is stuck on one. */
+  readonly stuckOn: string | null;
+  /** How long ago the listener wrote the file, in milliseconds. */
+  readonly ageMs: number | null;
+}
+
+/**
+ * Read the state file as an observer, and not as a listener that resumes.
+ *
+ * The age comes from the file's own modification time, which the kernel
+ * recorded. It does not come from a stamp inside the file. A stamp is a claim
+ * that a process makes about itself. A process whose writer is stuck could
+ * still refresh a stamp that it holds in memory.
+ *
+ * A file that no listener wrote gives nothing in every field, and a reader
+ * reports that as a listener that never ran.
+ */
+export function readListenerState(path: string): ListenerState {
+  let stat: Stats;
+  try {
+    stat = statSync(path);
+  } catch {
+    return { cursor: null, stuckOn: null, ageMs: null };
+  }
+  let held: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      held = { ...parsed };
+    }
+  } catch {
+    // A truncated file still has an age, which is the fact that matters most.
+  }
+  const cursor = held['cursor'];
+  const stuckOn = held['stuckOn'];
+  return {
+    cursor: typeof cursor === 'string' ? cursor : null,
+    stuckOn: typeof stuckOn === 'string' ? stuckOn : null,
+    ageMs: Math.max(0, Date.now() - stat.mtimeMs),
+  };
 }

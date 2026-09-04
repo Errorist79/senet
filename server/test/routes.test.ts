@@ -38,6 +38,7 @@ const config: ServerConfig = {
   horizonUrl: TESTNET_HORIZON_URL,
   friendbotUrl: TESTNET_FRIENDBOT_URL,
   walletWasmHash: TESTNET_WALLET_WASM_HASH,
+  listenerStatePath: '/nonexistent/listener.json',
   rpId: RP_ID,
   channelSecrets: [Keypair.random().secret()],
 };

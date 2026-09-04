@@ -7,6 +7,7 @@ import { nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import type { rpc } from '@stellar/stellar-sdk';
 import {
   REDEEMED_TOPIC,
+  readListenerState,
   writeStall,
   isCursorTooOld,
   pollOnce,
@@ -270,4 +271,33 @@ test('a first start with no position asks from the configured ledger', async () 
   assert.equal(asked[0], 'start');
   assert.deepEqual(readPosition(path), { cursor: 'first-cursor' });
   assert.equal(readFileSync(path, 'utf8').trim(), '{"cursor":"first-cursor"}');
+});
+
+test('the observer reads a running listener, a stuck one and one that never ran', () => {
+  const missing = join(work, 'no-listener-here.json');
+  const never = readListenerState(missing);
+  assert.deepEqual(never, { cursor: null, stuckOn: null, ageMs: null });
+
+  const running = statePath();
+  writePosition(running, { cursor: 'c-9' });
+  const seen = readListenerState(running);
+  assert.equal(seen.cursor, 'c-9');
+  assert.equal(seen.stuckOn, null);
+  // The age comes from the file, so a fresh write reads as fresh.
+  assert.equal(typeof seen.ageMs, 'number');
+  assert.ok((seen.ageMs ?? Number.MAX_SAFE_INTEGER) < 5_000);
+
+  const stuck = statePath();
+  writeStall(stuck, 'c-9', 'e7');
+  const blocked = readListenerState(stuck);
+  assert.equal(blocked.cursor, 'c-9');
+  assert.equal(blocked.stuckOn, 'e7');
+});
+
+test('a truncated file still reports its age, which is the fact that matters', () => {
+  const path = statePath();
+  writeFileSync(path, '{"cursor":"c-1');
+  const seen = readListenerState(path);
+  assert.equal(seen.cursor, null);
+  assert.equal(typeof seen.ageMs, 'number');
 });

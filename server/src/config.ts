@@ -52,6 +52,14 @@ export interface ServerConfig {
   readonly rpId: string;
   /** One funded secret key per channel account. */
   readonly channelSecrets: readonly string[];
+  /**
+   * Where the listener keeps its position.
+   *
+   * Both processes read this from one place. The listener writes the file and
+   * the status route reads it. A second definition of the path would let the
+   * two disagree about which file is the truth.
+   */
+  readonly listenerStatePath: string;
 }
 
 /**
@@ -116,6 +124,7 @@ export function readConfig(): ServerConfig {
     walletWasmHash: optional('WALLET_WASM_HASH', TESTNET_WALLET_WASM_HASH),
     rpId: RP_ID,
     channelSecrets,
+    listenerStatePath: optional('LISTENER_STATE_FILE', './listener.json'),
   };
 }
 
@@ -123,14 +132,6 @@ export function readConfig(): ServerConfig {
 export interface ListenerConfig {
   /** Where one redemption message goes. */
   readonly webhookUrl: string;
-  /**
-   * Where the listener keeps its position.
-   *
-   * The file sits outside a release, because a deployment replaces a release
-   * and would take the position with it. A checkout with no deployment keeps
-   * it in the working directory.
-   */
-  readonly statePath: string;
   /**
    * The ledger that a first start reads from, when no position exists.
    *
@@ -150,7 +151,6 @@ export function readListenerConfig(): ListenerConfig {
   }
   return {
     webhookUrl: required('WEBHOOK_URL'),
-    statePath: optional('LISTENER_STATE_FILE', './listener.json'),
     startLedger: parsed,
   };
 }

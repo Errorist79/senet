@@ -1,6 +1,8 @@
 import { networkTag } from '@senet/core';
 import { MIN_CHANNEL_BALANCE_STROOPS } from '../constants.js';
 import { readBalance } from '../balance.js';
+import { readListenerState } from '../events.js';
+import type { ListenerState } from '../events.js';
 import type { RouteContext } from './router.js';
 import { requireParameter } from './transport.js';
 
@@ -49,6 +51,14 @@ export interface StatusReply {
   readonly minChannelBalanceStroops: string;
   readonly maxTtlLedgers: number | null;
   readonly maxAmountStroops: string | null;
+  /**
+   * What the listener's own file says.
+   *
+   * The file is the truth and this is a view of it. The service keeps no idea
+   * of the listener's state. A second idea can disagree with the file while
+   * both look healthy, which is worse than either one alone.
+   */
+  readonly listener: ListenerState;
 }
 
 /**
@@ -120,5 +130,6 @@ export async function statusRoute(context: RouteContext): Promise<StatusReply> {
     minChannelBalanceStroops: MIN_CHANNEL_BALANCE_STROOPS.toString(),
     maxTtlLedgers: limits === null ? null : limits.maxTtlLedgers,
     maxAmountStroops: limits === null ? null : limits.maxAmountStroops.toString(),
+    listener: readListenerState(context.config.listenerStatePath),
   };
 }
