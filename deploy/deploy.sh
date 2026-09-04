@@ -19,13 +19,22 @@
 #   /opt/senet/service            the release that the service runs from
 #   /opt/senet/live               the files that the web server serves
 #   /opt/senet/.env               the keys, which no deployment replaces
+#   /opt/senet/state              the listener's cursor, which no deployment touches
 #
-# The order of the two swaps is the point. The service goes first and the
-# application second. The application therefore never asks for a value that the
-# service it talks to does not serve yet. The application reads its chain
-# settings from `/api/config` at start. An application that arrives first
-# therefore meets a service that answers without them, and account creation
-# fails while the page still looks healthy.
+# The order of the three steps is the point, and each one depends on the one
+# before it.
+#
+# The service goes first. The application reads its chain settings from
+# `/api/config` at start, so an application that arrived first would meet a
+# service that answers without them, and account creation would fail while the
+# page still looked healthy.
+#
+# The listener goes second. It posts each redemption to the service, so the
+# service has to answer before it starts.
+#
+# The application goes last. The merchant screen confirms from the feed that
+# the listener fills, so an application that arrived first would show a screen
+# with nothing behind it.
 #
 # Each swap renames a link, which the kernel does in one step, so no request
 # ever sees half a release.
@@ -34,6 +43,7 @@ set -euo pipefail
 SOURCE=${1:-$(pwd)}
 TARGET=/opt/senet
 UNIT=senet-api.service
+LISTENER_UNIT=senet-listener.service
 KEEP=3
 
 if [ ! -f "$SOURCE/package.json" ]; then
@@ -51,6 +61,17 @@ chmod 600 "$TARGET/.env"
 # `--delete` and the prune at the end removes old releases outright. A cursor
 # inside a release would not survive its own deployment.
 mkdir -p "$TARGET/state"
+
+# The listener needs somewhere to post. Without it the merchant screen confirms
+# nothing, and a deployment that swapped anyway would serve an application whose
+# central promise is quietly missing. That is worth refusing rather than
+# reporting, so the check runs before anything moves.
+if ! grep -q '^WEBHOOK_URL=.' "$TARGET/.env"; then
+  echo "$TARGET/.env names no WEBHOOK_URL, so the listener has nowhere to post" >&2
+  echo "the merchant screen confirms from that feed, so nothing is swapped" >&2
+  echo "add: WEBHOOK_URL=http://127.0.0.1:8791/api/redemption" >&2
+  exit 1
+fi
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 RELEASE="$TARGET/releases/$STAMP"
@@ -130,7 +151,27 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 
-echo "==> the application second"
+# The listener sits between the two. It posts to the service, so the service has
+# to answer first. The application reads the feed that the listener fills, so an
+# application that arrived first would show a merchant screen with nothing
+# behind it.
+echo "==> the listener second"
+install -m 0644 "$RELEASE/deploy/$LISTENER_UNIT" "/etc/systemd/system/$LISTENER_UNIT"
+systemctl daemon-reload
+systemctl enable "$LISTENER_UNIT" >/dev/null
+# A listener held down by the aged-out status stays down until a person acts. A
+# deployment is a person acting, so this clears that state and starts it again.
+systemctl reset-failed "$LISTENER_UNIT" 2>/dev/null || true
+systemctl restart "$LISTENER_UNIT"
+sleep 2
+if ! systemctl is-active --quiet "$LISTENER_UNIT"; then
+  echo "the listener did not start, so the application stays on the older release" >&2
+  echo "read: journalctl -u $LISTENER_UNIT -n 50" >&2
+  exit 1
+fi
+echo "    the listener runs from $STAMP"
+
+echo "==> the application third"
 swap "$RELEASE/app/dist" "$TARGET/live"
 systemctl reload nginx
 echo "    the web server serves $STAMP"
