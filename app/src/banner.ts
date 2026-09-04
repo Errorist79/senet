@@ -1,8 +1,9 @@
+import { BUILD_ID_LENGTH } from './config.js';
 import { element, short } from './dom.js';
 import { getAccount, getLedger } from './store.js';
 
 /**
- * The three facts along the bottom of every screen.
+ * The four facts along the bottom of every screen.
  *
  * They stay apart on purpose. A device with an account and no network can
  * still mint. A device with a network and no account can do nothing. One
@@ -63,4 +64,20 @@ export function showLedgerFact(): void {
     `ledger ${seen.sequence}, ${seconds} ${seconds === 1 ? 'second' : 'seconds'} old`,
     age > STALE_LEDGER_MS ? 'stale' : 'ready',
   );
+}
+
+/**
+ * Say which build this is.
+ *
+ * A person who presses a button that changes the application needs to see the
+ * change with their own eyes. This is the string that changes. It carries the
+ * same form as the identity that the origin publishes, so a person compares the
+ * two without a translation.
+ */
+export function showBuildFact(commit: string | null): void {
+  if (commit === null) {
+    setFact('fact-build', 'build unknown', 'unknown');
+    return;
+  }
+  setFact('fact-build', `build ${commit.slice(0, BUILD_ID_LENGTH)}`, 'ready');
 }

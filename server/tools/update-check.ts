@@ -26,6 +26,12 @@
  * - does the application refuse to swap itself without permission?
  * - does it offer the person the new version?
  * - does the restart deliver the new build?
+ * - does the button say what to do when the handover does not happen?
+ *
+ * The last one exists because a person pressed a button that did nothing. A
+ * check runs the handover on a browser that performs it, so it can never meet
+ * that failure by accident. This one therefore serves a worker that ignores the
+ * message, which is the same silence from the page's side.
  *
  *   CHROME_PATH=/path/to/chrome npm run update-check --workspace @senet/server
  */
@@ -46,6 +52,16 @@ const NEXT_TITLE = 'Senet next';
 /** What the first build calls itself. */
 const FIRST_TITLE = 'Senet';
 
+/** The commits that the served builds claim, so the footer has one to show. */
+const FIRST_COMMIT = 'aaaaaaa1111111111111111111111111111111111';
+const NEXT_COMMIT = 'bbbbbbb2222222222222222222222222222222222';
+
+/** Publish a build identity, as the real deployment does. */
+function writeRelease(dir: string, commit: string): void {
+  const identity = { commit, release: '20260101T000000Z', publishedAt: '2026-01-01T00:00:00Z' };
+  writeFileSync(join(dir, 'release.json'), `${JSON.stringify(identity, null, 2)}\n`);
+}
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(HERE, '..', '..', '..', 'app', 'dist');
 
@@ -65,7 +81,7 @@ function required(name: string): string {
  * itself differently. The worker's identity changes with it, because a worker
  * that carries the same bytes is the fault that this check exists for.
  */
-function copyAsNextBuild(from: string, to: string): string {
+function copyAsNextBuild(from: string, to: string, deaf = false): string {
   cpSync(from, to, { recursive: true });
 
   const workerPath = join(to, 'sw.js');
@@ -74,7 +90,17 @@ function copyAsNextBuild(from: string, to: string): string {
   if (identity === null) {
     throw new Error('the worker carries no build identity, so no release can reach a person');
   }
-  writeFileSync(workerPath, worker.replace(identity[0], `${identity[0]}-next`));
+  let written = worker.replace(identity[0], `${identity[0]}${deaf ? '-deaf' : '-next'}`);
+  if (deaf) {
+    // A worker that never hands over, which is what the phone showed. The
+    // handover is the only part that this removes.
+    const handover = /\w+\.skipWaiting\(\)/.exec(written);
+    if (handover === null) {
+      throw new Error('the worker calls no skipWaiting, so this check cannot silence it');
+    }
+    written = written.replace(handover[0], 'void 0');
+  }
+  writeFileSync(workerPath, written);
 
   const pagePath = join(to, 'index.html');
   const page = readFileSync(pagePath, 'utf8');
@@ -94,10 +120,16 @@ async function main(): Promise<void> {
   const work = mkdtempSync(join(tmpdir(), 'senet-update-'));
   const firstBuild = join(work, 'first');
   const next = join(work, 'next');
+  const deaf = join(work, 'deaf');
   cpSync(DIST, firstBuild, { recursive: true });
+  writeRelease(firstBuild, FIRST_COMMIT);
   const identity = copyAsNextBuild(DIST, next);
+  writeRelease(next, NEXT_COMMIT);
+  copyAsNextBuild(DIST, deaf, true);
+  writeRelease(deaf, NEXT_COMMIT);
   console.log(`first      ${identity}`);
   console.log(`next       ${identity}-next`);
+  console.log(`deaf       ${identity}-deaf, a build that never hands over`);
 
   // The served directory changes under the browser, which is what a deployment
   // does to a phone that is already running the application.
@@ -164,6 +196,12 @@ async function main(): Promise<void> {
       });
       console.log('offered    the application says a new version is ready');
 
+      const shownBefore = await buildFact(page);
+      console.log(`identity   the footer shows ${shownBefore}`);
+      if (!shownBefore.includes(FIRST_COMMIT.slice(0, 7))) {
+        throw new Error(`the footer names ${shownBefore}, and the first build is running`);
+      }
+
       const heldTitle = await page.title();
       if (heldTitle !== FIRST_TITLE) {
         throw new Error(
@@ -184,14 +222,63 @@ async function main(): Promise<void> {
       if (barAfter === false) {
         throw new Error('the application offers an update that it took a moment ago');
       }
+      // The result the person reads. A report of a restart is worth less than
+      // a string on their own screen that changes when they act.
+      await page.waitForFunction(
+        (wanted: string) =>
+          (document.getElementById('fact-build')?.textContent ?? '').includes(wanted),
+        { timeout: STEP_TIMEOUT_MS },
+        NEXT_COMMIT.slice(0, 7),
+      );
+      console.log(`identity   the footer now shows ${await buildFact(page)}`);
       console.log('a returning person reaches the newer build, and chooses when');
     } finally {
       await second.close();
+    }
+
+    // The handover fails, and the application must still say what works.
+    served = deaf;
+    const third = await start();
+    try {
+      const page = await third.newPage();
+      await page.goto(origin, { waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('update-bar')?.hidden === false, {
+        timeout: STEP_TIMEOUT_MS,
+      });
+      await page.click('#update-restart');
+      await page.waitForFunction(
+        () => (document.getElementById('update-text')?.textContent ?? '').includes('App Switcher'),
+        { timeout: STEP_TIMEOUT_MS },
+      );
+      const said = await page.evaluate(
+        () => document.getElementById('update-text')?.textContent ?? '',
+      );
+      console.log(`advised    ${said.trim()}`);
+      const stillOffers = await page.evaluate(
+        () => document.getElementById('update-restart')?.hidden ?? true,
+      );
+      if (stillOffers === false) {
+        throw new Error('the application still offers a button that does nothing');
+      }
+      console.log('the button never stays dead, and the advice always works');
+    } finally {
+      await third.close();
     }
   } finally {
     service.close();
     rmSync(work, { recursive: true, force: true });
   }
+}
+
+/** The build identity that the footer shows, as a person reads it. */
+async function buildFact(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof launch>>['newPage']>>,
+): Promise<string> {
+  await page.waitForFunction(
+    () => !(document.getElementById('fact-build')?.textContent ?? '').includes('unknown'),
+    { timeout: STEP_TIMEOUT_MS },
+  );
+  return page.evaluate(() => document.getElementById('fact-build')?.textContent ?? '');
 }
 
 await main();

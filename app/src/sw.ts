@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { SKIP_WAITING } from './config.js';
+import { RELEASE_PATH, SKIP_WAITING } from './config.js';
 
 /**
  * The service worker.
@@ -55,7 +55,21 @@ const scope = workerScope();
  * instead, and this worker waits until they take it.
  */
 scope.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
+  event.waitUntil(
+    caches.open(CACHE).then(async (cache) => {
+      await cache.addAll(SHELL);
+      // The identity of this build, taken at the same moment as the files it
+      // describes. A page that reads it over the network later reads whatever
+      // the origin serves then, which names a build that nobody is running.
+      //
+      // This stays outside `addAll` on purpose. A deployment that publishes no
+      // identity must still get a worker, and `addAll` refuses the whole set
+      // when one file is missing.
+      await cache.add(RELEASE_PATH).catch(() => {
+        // The footer says that the build is unknown, and everything else works.
+      });
+    }),
+  );
 });
 
 /** The person chose the moment. Take over now. */

@@ -50,3 +50,27 @@ export const SCAN_FPS = 10;
  * answer to it.
  */
 export const SKIP_WAITING = 'senet.skip-waiting';
+
+/**
+ * How long the application waits for a restart to finish, in milliseconds.
+ *
+ * A worker that takes over changes the controller in well under a second. This
+ * wait is long enough that a slow device never reads the fallback by mistake.
+ * It is also short enough that a person does not sit in front of a screen that
+ * says nothing.
+ */
+export const RESTART_TIMEOUT_MS = 6_000;
+
+/**
+ * Where the deployment states which build it serves.
+ *
+ * The application shows this on the screen, so a person compares the phone
+ * against the origin without a translation between two forms. The worker holds
+ * the answer in the same cache as the rest of the build. The identity therefore
+ * names the build that a person runs, and not the build that the origin now
+ * serves.
+ */
+export const RELEASE_PATH = '/release.json';
+
+/** How much of a commit a person reads, which is the usual short form. */
+export const BUILD_ID_LENGTH = 7;

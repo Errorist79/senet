@@ -1,4 +1,4 @@
-import { API_BASE, REQUEST_TIMEOUT_MS } from './config.js';
+import { API_BASE, RELEASE_PATH, REQUEST_TIMEOUT_MS } from './config.js';
 
 /**
  * The client for the service.
@@ -203,4 +203,26 @@ export async function submitRedeem(entryXdr: string, recipient: string): Promise
     recipient: text(fields, 'recipient'),
     detail: textOrNothing(fields, 'detail') ?? '',
   };
+}
+
+/**
+ * Which build this application is, as the deployment named it.
+ *
+ * The answer comes from the origin and not from the service. It describes the
+ * files that a person runs, and not the chain that they run against. A
+ * deployment that publishes no identity gives nothing, and the screen says so
+ * rather than inventing a name.
+ */
+export async function fetchRelease(): Promise<string | null> {
+  try {
+    const response = await fetch(RELEASE_PATH);
+    if (!response.ok) return null;
+    const parsed: unknown = await response.json();
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const fields: Record<string, unknown> = { ...parsed };
+    const commit = fields['commit'];
+    return typeof commit === 'string' && commit !== '' ? commit : null;
+  } catch {
+    return null;
+  }
 }

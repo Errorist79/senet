@@ -1,8 +1,8 @@
-import { fetchConfig, fetchLedger } from './api.js';
+import { fetchConfig, fetchLedger, fetchRelease } from './api.js';
 import { startAccountScreen } from './account.js';
 import { startCameraReport } from './camera-report.js';
-import { showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
-import { LEDGER_REFRESH_MS, SKIP_WAITING } from './config.js';
+import { showBuildFact, showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
+import { LEDGER_REFRESH_MS, RESTART_TIMEOUT_MS, SKIP_WAITING } from './config.js';
 import { element } from './dom.js';
 import { startMerchantScreen } from './merchant.js';
 import { startPayerScreen } from './payer.js';
@@ -80,20 +80,65 @@ function showScreen(name: ScreenName): void {
  */
 let acceptedRestart = false;
 
-function offerUpdate(waiting: ServiceWorker): void {
+/**
+ * What a person does when the handover does not happen.
+ *
+ * A relaunch always works. A new worker waits only while a client of the
+ * earlier worker stays open. An application that a person closes leaves no
+ * client, so the new worker takes over on its own at the next start. This text
+ * therefore states a certainty rather than another thing to try.
+ */
+const RELAUNCH_ADVICE =
+  'Close Senet from the App Switcher, then open it again. That always works.';
+
+/**
+ * Ask the registration which worker waits, at this moment.
+ *
+ * The worker that the bar named can disappear before a person presses. A phone
+ * freezes an application on the home screen, and it ends the workers of that
+ * application. A reference that this page captured minutes ago can then point
+ * at nothing. A send to nothing throws nothing, and a person reads that as a
+ * dead button.
+ */
+async function workerInWaiting(): Promise<ServiceWorker | null> {
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (registration === undefined) return null;
+  return registration.waiting ?? registration.installing;
+}
+
+function offerUpdate(): void {
   const bar = element('update-bar', HTMLDivElement);
+  const text = element('update-text', HTMLParagraphElement);
   const restart = element('update-restart', HTMLButtonElement);
   bar.hidden = false;
+
   restart.addEventListener(
     'click',
     () => {
       restart.disabled = true;
       restart.textContent = 'Restarting';
       acceptedRestart = true;
-      waiting.postMessage(SKIP_WAITING);
+      void takeTheNewVersion(text, restart);
     },
     { once: true },
   );
+}
+
+/** Take the version that waits, and say what to do when it does not arrive. */
+async function takeTheNewVersion(
+  text: HTMLParagraphElement,
+  restart: HTMLButtonElement,
+): Promise<void> {
+  const waiting = await workerInWaiting();
+  if (waiting !== null) waiting.postMessage(SKIP_WAITING);
+
+  // The page reloads when the worker takes over, so this timer only ever
+  // finishes when the handover did not happen.
+  window.setTimeout(() => {
+    acceptedRestart = false;
+    text.textContent = RELAUNCH_ADVICE;
+    restart.hidden = true;
+  }, RESTART_TIMEOUT_MS);
 }
 
 /**
@@ -119,7 +164,7 @@ function installWorker(): void {
     .then((registration) => {
       // A worker can already be waiting from an earlier visit. Nothing fires
       // for that one, so the application asks.
-      if (registration.waiting !== null) offerUpdate(registration.waiting);
+      if (registration.waiting !== null) offerUpdate();
 
       registration.addEventListener('updatefound', () => {
         const arriving = registration.installing;
@@ -129,7 +174,7 @@ function installWorker(): void {
           // no permission. Only a worker that displaces another one does.
           if (arriving.state !== 'installed') return;
           if (navigator.serviceWorker.controller === null) return;
-          offerUpdate(arriving);
+          offerUpdate();
         });
       });
 
@@ -200,6 +245,10 @@ async function start(): Promise<void> {
   // The first screen appeared before a screen registered its own refresh.
   const opened = window.location.hash.replace('#', '');
   if (isScreen(opened)) refreshers.get(opened)?.();
+
+  // The build identity is a fact about the files that this device runs, so it
+  // comes from the origin rather than from the service.
+  showBuildFact(await fetchRelease());
 
   await readLedger();
   window.setInterval(() => void readLedger(), LEDGER_REFRESH_MS);
