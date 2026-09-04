@@ -1,0 +1,151 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+  "producedAt": "2026-09-04T22:58:54.885Z",
+  "rows": [
+    {
+      "name": "confirm-1a-success",
+      "hash": "4ba566adfa5750985438bd5d0ba89ff9803f9b8665b2d2d2d1a71794b42b16ba",
+      "note": "The listener read this redemption from the chain and posted it. The merchant screen confirms from this feed rather than from the reply to its own submission. It reports the evidence row 1a-success.",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-09-04T22:58:54.502Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "393"
+        },
+        "bodySha256": "80569ec48bec1b6d68f1325e01a2240f42b03cd983bb63a8e1d0325c477452d5",
+        "body": "{\"voucher_id\":\"8843760215628627424\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":4507875,\"tx_hash\":\"4ba566adfa5750985438bd5d0ba89ff9803f9b8665b2d2d2d1a71794b42b16ba\",\"ledger\":4507697,\"ledger_closed_at\":\"2026-09-04T22:47:52Z\",\"event_id\":\"0019360411195301888-0000000002\"}"
+      }
+    },
+    {
+      "name": "confirm-8-void-success",
+      "hash": "d47af140f93a67a8b792a22a34602fd60021605f485148a978a1fdfbdba438ce",
+      "note": "The listener read this redemption from the chain and posted it. The merchant screen confirms from this feed rather than from the reply to its own submission. It reports the evidence row 8-void-success.",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-09-04T22:58:54.505Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "394"
+        },
+        "bodySha256": "5928a1e18b5594b6da6de517c197429f9bb238e8942f0125ac1a0de47781fdc3",
+        "body": "{\"voucher_id\":\"12327630867979288072\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"amount\":\"5000000\",\"expire_at\":4507879,\"tx_hash\":\"d47af140f93a67a8b792a22a34602fd60021605f485148a978a1fdfbdba438ce\",\"ledger\":4507700,\"ledger_closed_at\":\"2026-09-04T22:48:07Z\",\"event_id\":\"0019360424080236544-0000000002\"}"
+      }
+    },
+    {
+      "name": "confirm-lifetime-12h",
+      "hash": "356c148baf880bfc001800c20b04d697bfa196de0cb6a7b468fdbcbd64d797bf",
+      "note": "The listener read this redemption from the chain and posted it. The merchant screen confirms from this feed rather than from the reply to its own submission. It reports the evidence row lifetime-12h.",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-09-04T22:58:54.519Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "393"
+        },
+        "bodySha256": "df21c60128dcb356aa7fc95f9128e168b64edc2c7c432a8ae5a1dc74114aec6d",
+        "body": "{\"voucher_id\":\"8551140715209067128\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":4516345,\"tx_hash\":\"356c148baf880bfc001800c20b04d697bfa196de0cb6a7b468fdbcbd64d797bf\",\"ledger\":4507706,\"ledger_closed_at\":\"2026-09-04T22:48:37Z\",\"event_id\":\"0019360449850007552-0000000002\"}"
+      }
+    },
+    {
+      "name": "confirm-lifetime-15m",
+      "hash": "db54f1054f43b58493082496d5a87720a88e083882408e8c983080a7c5d7f55d",
+      "note": "The listener read this redemption from the chain and posted it. The merchant screen confirms from this feed rather than from the reply to its own submission. It reports the evidence row lifetime-15m.",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-09-04T22:58:54.513Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "393"
+        },
+        "bodySha256": "fa49faa240699c3c4867e70fc7694a3be2906a0f04829c76ac1abe0e06f38f2c",
+        "body": "{\"voucher_id\":\"5363224452291366637\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":4507883,\"tx_hash\":\"db54f1054f43b58493082496d5a87720a88e083882408e8c983080a7c5d7f55d\",\"ledger\":4507704,\"ledger_closed_at\":\"2026-09-04T22:48:27Z\",\"event_id\":\"0019360441260097536-0000000002\"}"
+      }
+    },
+    {
+      "name": "confirm-lifetime-1h",
+      "hash": "24509875021a266e74d5ae7c01cc109fb95a9bdb0cb1e8d413a15c0671b72a96",
+      "note": "The listener read this redemption from the chain and posted it. The merchant screen confirms from this feed rather than from the reply to its own submission. It reports the evidence row lifetime-1h.",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-09-04T22:58:54.516Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "394"
+        },
+        "bodySha256": "02a61331b67bf6071d0664e6afb1ab2791d8eeb03a1b26a4d8ff162d7193c375",
+        "body": "{\"voucher_id\":\"11334627402068798464\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":4508424,\"tx_hash\":\"24509875021a266e74d5ae7c01cc109fb95a9bdb0cb1e8d413a15c0671b72a96\",\"ledger\":4507705,\"ledger_closed_at\":\"2026-09-04T22:48:32Z\",\"event_id\":\"0019360445555064832-0000000002\"}"
+      }
+    },
+    {
+      "name": "confirm-lifetime-5m",
+      "hash": "632a0cfa85e62837f428c22647ca48698137fb006a5218b971ea371ac043e009",
+      "note": "The listener read this redemption from the chain and posted it. The merchant screen confirms from this feed rather than from the reply to its own submission. It reports the evidence row lifetime-5m.",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-09-04T22:58:54.511Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "392"
+        },
+        "bodySha256": "663f62c09be33629d457b37ae3f2710f2c0185fde0445bd969247ce7689f387e",
+        "body": "{\"voucher_id\":\"975317178151725041\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":4507762,\"tx_hash\":\"632a0cfa85e62837f428c22647ca48698137fb006a5218b971ea371ac043e009\",\"ledger\":4507703,\"ledger_closed_at\":\"2026-09-04T22:48:22Z\",\"event_id\":\"0019360436965105664-0000000002\"}"
+      }
+    }
+  ]
+}

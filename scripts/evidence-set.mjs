@@ -26,6 +26,7 @@ export const EVIDENCE_DIR = path.join(OUT_DIR, 'evidence');
 export const LOAD_CHECK_DIR = path.join(OUT_DIR, 'load-check');
 export const APP_CHECK_DIR = path.join(OUT_DIR, 'app-check');
 export const DEVICE_CHECK_DIR = path.join(OUT_DIR, 'device-check');
+export const CONFIRM_CHECK_DIR = path.join(OUT_DIR, 'confirm-check');
 export const RPC_URL = process.env.RPC_URL ?? TESTNET_RPC_URL;
 export const HORIZON_URL = process.env.HORIZON_URL ?? TESTNET_HORIZON_URL;
 

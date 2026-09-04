@@ -37,6 +37,7 @@ const DEVICE_COMMAND = 'scripts/archive-device-row.mjs';
 /** The producers, and how to ask each one what it makes. */
 const PRODUCERS = Object.freeze([
   { command: 'scripts/run-evidence.mjs', tree: path.join('scripts', 'out', 'evidence') },
+  { command: 'scripts/run-confirmation.mjs', tree: path.join('scripts', 'out', 'confirm-check') },
 ]);
 
 let failures = 0;
