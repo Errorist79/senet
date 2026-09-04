@@ -1,0 +1,24 @@
+{
+  "name": "@senet/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Senet fee-payer service",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "types": "./dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
+    "load-check": "npm run build && node dist/tools/load-check.js"
+  },
+  "dependencies": {
+    "@senet/core": "0.1.0",
+    "@stellar/stellar-sdk": "16.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1"
+  }
+}
