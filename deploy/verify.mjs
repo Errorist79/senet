@@ -34,6 +34,25 @@ const PATHS = [
   '/icon.svg', '/.well-known/stellar.toml', '/api/config', '/a/path/that/the/shell/catches',
 ];
 
+/** A common phone viewport. The session runs on phones, not on a desktop. */
+const PHONE = Object.freeze({ width: 390, height: 844 });
+
+/** Elements that every screen carries, which must never need a sideways scroll. */
+const ALWAYS_ON_SCREEN = Object.freeze([
+  ['the ledger reading', '#ledger'],
+  ['the pay button', '#nav-payer'],
+  ['the account fact', '#fact-device'],
+  ['the service fact', '#fact-service'],
+  ['the ledger fact', '#fact-ledger'],
+]);
+
+/** What the measurement session photographs. A voucher creates all three. */
+const SESSION_ELEMENTS = Object.freeze([
+  ['the size line', '.code-size'],
+  ['the level control', '.levels'],
+  ['the code', 'canvas.code'],
+]);
+
 const origin = process.argv[2] ?? DEFAULT_ORIGIN;
 const problems = [];
 let checks = 0;
@@ -206,6 +225,70 @@ if (chromePath === undefined || chromePath === '') {
       check(manifest[field] !== undefined, `the manifest names no ${field}`);
     }
     check(Array.isArray(manifest.icons) && manifest.icons.length > 0, 'the manifest holds no icon');
+    // Geometry, which reading text cannot answer. A line that falls out of frame
+    // renders correct text in a place that nobody can photograph, so the check
+    // measures where each element sits rather than what it says.
+    await page.setViewport(PHONE);
+    await page.goto(origin, { waitUntil: 'load' });
+    const frame = await page.evaluate((selectors) => {
+      const seen = {};
+      for (const [label, selector] of selectors) {
+        const node = document.querySelector(selector);
+        if (node === null) {
+          seen[label] = null;
+          continue;
+        }
+        const box = node.getBoundingClientRect();
+        seen[label] = {
+          top: box.top, bottom: box.bottom, left: box.left, right: box.right,
+          width: box.width, height: box.height,
+        };
+      }
+      return {
+        seen,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        pageWidth: document.documentElement.scrollWidth,
+      };
+    }, [...ALWAYS_ON_SCREEN, ...SESSION_ELEMENTS]);
+
+    // A page that scrolls sideways on a phone is a fault on every screen of it.
+    check(frame.pageWidth <= frame.width + 1,
+      `the page is ${frame.pageWidth} wide inside a viewport of ${frame.width}, so it scrolls sideways`);
+
+    for (const [label] of ALWAYS_ON_SCREEN) {
+      const box = frame.seen[label];
+      if (box === null) {
+        check(false, `${label} is absent from the page`);
+        continue;
+      }
+      check(box.width > 0 && box.height > 0, `${label} renders with no size`);
+      check(box.left >= 0 && box.right <= frame.width + 1,
+        `${label} sits from ${Math.round(box.left)} to ${Math.round(box.right)}, outside a viewport of ${frame.width}`);
+    }
+
+    // The session photographs these three together, and they exist only after a
+    // person mints a voucher. A check that cannot reach them says so.
+    const shown = SESSION_ELEMENTS.filter(([label]) => frame.seen[label] !== null);
+    if (shown.length === 0) {
+      console.log(`\n  SKIPPED the geometry of ${SESSION_ELEMENTS.length} elements that a`
+        + ' voucher creates, because this check makes no account');
+    } else {
+      const boxes = shown.map(([label]) => frame.seen[label]);
+      const top = Math.min(...boxes.map((box) => box.top));
+      const bottom = Math.max(...boxes.map((box) => box.bottom));
+      check(bottom - top <= frame.height,
+        `the code, its size line and its control span ${Math.round(bottom - top)} pixels, `
+        + `and the viewport is ${frame.height}, so a photograph cannot hold them together`);
+      for (const [label] of shown) {
+        const box = frame.seen[label];
+        check(box.left >= 0 && box.right <= frame.width + 1,
+          `${label} sits outside a viewport of ${frame.width}`);
+      }
+    }
+    console.log(`\n  phone ${PHONE.width} by ${PHONE.height}: page ${frame.pageWidth} wide, `
+      + `${ALWAYS_ON_SCREEN.length} elements measured`);
+
     console.log(`\n  secure context ${state.secure}`);
     console.log(`  worker active  ${state.active}, scope ${state.scope}`);
     console.log(`  manifest       ${manifest.name}, ${manifest.display}, ${(manifest.icons ?? []).length} icon`);
