@@ -53,10 +53,12 @@ export function nativeTokenId(network: string): string {
 /**
  * The voucher contract deployed on testnet.
  *
- * A redeploy replaces this value, and it is the one place that holds it.
+ * A redeploy replaces this value, and it is the one place that holds it. The
+ * deployed contract accepts at most 8640 ledgers of lifetime, which is the
+ * value that `CONTRACT_MAX_TTL_LEDGERS` carries.
  */
 export const TESTNET_CONTRACT_ID =
-  'CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN';
+  'CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY';
 
 /** The configuration that the application, the service and the tests use. */
 export const TESTNET_CONFIG: VoucherConfig = Object.freeze({

@@ -9,4 +9,5 @@ export * from './config.js';
 export * from './outcomes.js';
 export * from './horizon.js';
 export * from './channels.js';
+export * from './limits.js';
 export * from './feepayer.js';

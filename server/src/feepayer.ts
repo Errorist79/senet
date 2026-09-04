@@ -18,6 +18,8 @@ import {
   POLL_ATTEMPTS,
   POLL_INTERVAL_MS,
 } from './constants.js';
+import { assertContractLimits, readContractLimits } from './limits.js';
+import type { ContractLimits } from './limits.js';
 import { classify, errorText } from './outcomes.js';
 import type { Classification, Outcome, Stage } from './outcomes.js';
 
@@ -120,6 +122,8 @@ export class FeePayer {
 
   private readonly server: rpc.Server;
 
+  private limits: ContractLimits | null = null;
+
   constructor(private readonly config: ServerConfig) {
     this.server = new rpc.Server(config.rpcUrl);
     this.pool = new ChannelPool(
@@ -129,10 +133,24 @@ export class FeePayer {
     );
   }
 
-  /** Read every channel's sequence number, once, before the first request. */
+  /**
+   * Prepare the service, and refuse to start when something does not agree.
+   *
+   * The service reads each channel's sequence number once. It also reads the
+   * contract's stored limits and compares the lifetime ceiling with its own. A
+   * payer must never sign a voucher that the contract then refuses.
+   */
   async start(): Promise<this> {
+    const limits = await readContractLimits(this.server, this.config);
+    assertContractLimits(this.config.voucher.contractId, limits);
+    this.limits = limits;
     await Promise.all(this.pool.all.map((channel) => channel.load()));
     return this;
+  }
+
+  /** The limits that the deployed contract enforces, read once at start. */
+  get contractLimits(): ContractLimits | null {
+    return this.limits;
   }
 
   get addresses(): string[] {

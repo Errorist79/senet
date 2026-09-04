@@ -10,6 +10,7 @@ import {
   retryable,
 } from '../src/index.js';
 import type { RedeemResult, Stage } from '../src/index.js';
+import { TESTNET_CONTRACT_ID, nativeTokenId } from '@senet/core';
 
 /** The whole bid that one redeem declared on testnet, in stroops. */
 const MEASURED_REDEEM_BID_STROOPS = 47_743n;
@@ -132,18 +133,19 @@ test('the configuration takes the testnet defaults', () => {
 });
 
 test('the configuration takes an operator override', () => {
+  // A redeploy changes the contract, and an operator names the new one here
+  // without a code change. The value is any contract other than the default.
+  const redeployed = nativeTokenId(Networks.TESTNET);
   withEnv(
     {
       FEEPAYER_CHANNELS: Keypair.random().secret(),
-      CONTRACT_ID: 'CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN',
+      CONTRACT_ID: redeployed,
       RPC_URL: 'https://rpc.example.test',
     },
     () => {
       const config = readConfig();
-      assert.equal(
-        config.voucher.contractId,
-        'CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN',
-      );
+      assert.notEqual(redeployed, TESTNET_CONTRACT_ID);
+      assert.equal(config.voucher.contractId, redeployed);
       assert.equal(config.rpcUrl, 'https://rpc.example.test');
     },
   );

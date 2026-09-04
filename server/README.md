@@ -68,6 +68,20 @@ never a guess. A protocol release can add a code that the classifier does not
 know. A rise in `UNKNOWN` is therefore the signal to read the diagnostic
 events.
 
+## The check at start
+
+The service reads the contract's stored limits once, before it serves any
+request. It compares the lifetime ceiling with the one that this build offers.
+The two numbers must agree.
+
+The library refuses a lifetime above its own ceiling before the payer signs.
+That check is worth nothing when the deployed contract holds a different
+number, and contract code cannot tell the library which number it holds. One
+read at start turns a mismatch that nobody would see into a refusal to start.
+
+The service also refuses to start when the contract does not answer. A contract
+that the service cannot read is a contract that it cannot serve.
+
 ## The retry rule
 
 The nonce and the sequence number are two separate single-use resources, so a
@@ -120,15 +134,16 @@ ENV_FILE=/path/to/.env npm run load-check --workspace @senet/server -- out.json
 ```
 
 A run on 2026-09-04 against contract
-`CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN`, with six channels,
-redeemed 20 vouchers in sequence and 5 at the same time. All 25 succeeded and
-no attempt needed a retry.
+`CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY`, with six channels,
+redeemed 20 vouchers in sequence and 5 at the same time. All 25 succeeded, and
+no attempt needed a second try.
 
 | Batch | Channels used | Median | Declared fee | Fee charged |
 |---|---|---|---|---|
-| sequential, 20 | 1 | 5,037 ms | 47,746 to 61,803 stroops | 27,368 to 39,592 stroops |
-| concurrent, 5 | 5 | 5,073 ms | 47,746 to 61,803 stroops | 27,368 to 39,592 stroops |
+| sequential, 20 | 1 | 5,027 ms | 47,742 stroops | 27,364 stroops |
+| concurrent, 5 | 5 | 5,011 ms | 47,742 stroops | 27,364 stroops |
 
-The five concurrent redemptions took five different channels, which is the
-exclusivity rule at work. They finished inside one median ledger time, which is
-the throughput rule at work.
+Two rules show in these numbers. The five concurrent redemptions took five
+different channels, and one ledger carried all five. The 20 sequential
+redemptions reused one channel, one per ledger, at the measured mean close
+time.
