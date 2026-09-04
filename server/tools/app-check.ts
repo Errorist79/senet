@@ -10,15 +10,15 @@
  *     npm run app-check --workspace @senet/server -- out.json
  */
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Keypair, rpc } from '@stellar/stellar-sdk';
 import { LIFETIMES, ed25519Signer, randomNonce, randomVoucherId, signVoucher } from '@senet/core';
 import type { Voucher } from '@senet/core';
 import { launch } from 'puppeteer-core';
 import { FeePayer, createApiHandler, loadEnvFile, readConfig } from '../src/index.js';
+import { serveBuiltApplication } from './serve-build.js';
 
 /** The amount of the voucher, in stroops. One tenth of an XLM. */
 const AMOUNT_STROOPS = 1_000_000n;
@@ -28,16 +28,6 @@ const LIFETIME_LEDGERS = LIFETIMES['15m'];
 
 /** How long the check waits for the screen to show a result. */
 const RESULT_TIMEOUT_MS = 150_000;
-
-/** The files that the built application publishes, and their media types. */
-const TYPES: Readonly<Record<string, string>> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.map': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.webmanifest': 'application/manifest+json',
-};
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(HERE, '..', '..', '..', 'app', 'dist');
@@ -49,30 +39,6 @@ function required(name: string): string {
     throw new Error(`${name} is not set, and the check needs it`);
   }
   return value;
-}
-
-/**
- * Serve one file out of the built application.
- *
- * The path comes from the browser, so the reader refuses anything that leaves
- * the build directory. A path that names no file becomes the shell, because
- * the application is one page.
- */
-function serveFile(request: IncomingMessage, response: ServerResponse): void {
-  const path = new URL(request.url ?? '/', 'http://localhost').pathname;
-  const wanted = path === '/' ? '/index.html' : path;
-  const file = resolve(join(DIST, wanted));
-  const safe = file.startsWith(`${DIST}/`) && existsSync(file) && statSync(file).isFile();
-  // A path that names no file becomes the shell, which is what the web server
-  // in front of the real deployment also does.
-  const chosen = safe ? file : join(DIST, 'index.html');
-  const dot = chosen.lastIndexOf('.');
-  response.writeHead(200, {
-    'Content-Type': TYPES[chosen.slice(dot)] ?? 'application/octet-stream',
-    'Cache-Control': 'no-store',
-    'Service-Worker-Allowed': '/',
-  });
-  createReadStream(chosen).pipe(response);
 }
 
 async function main(): Promise<void> {
@@ -95,7 +61,7 @@ async function main(): Promise<void> {
   const answer = createApiHandler({ config, feePayer, server });
   const api = createServer((request, response) => {
     if ((request.url ?? '/').startsWith('/api/')) answer(request, response);
-    else serveFile(request, response);
+    else serveBuiltApplication(DIST, request, response);
   });
   await new Promise<void>((listening) => {
     api.listen(0, '127.0.0.1', listening);

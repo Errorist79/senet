@@ -13,7 +13,8 @@ import type { ServerConfig } from './config.js';
 import {
   INCLUSION_FEE_STROOPS,
   MAX_ATTEMPTS,
-  MAX_FEE_STROOPS,
+  MAX_DEPLOY_FEE_STROOPS,
+  MAX_REDEEM_FEE_STROOPS,
   MIN_CHANNEL_BALANCE_STROOPS,
   POLL_ATTEMPTS,
   POLL_INTERVAL_MS,
@@ -226,6 +227,7 @@ export class FeePayer {
         )
         .setTimeout(TX_TIMEOUT_SECONDS)
         .build(),
+      MAX_REDEEM_FEE_STROOPS,
     );
     return { ...result, voucher };
   }
@@ -249,11 +251,15 @@ export class FeePayer {
         .addOperation(Operation.invokeHostFunction({ func: hostFunction, auth: [...auth] }))
         .setTimeout(TX_TIMEOUT_SECONDS)
         .build(),
+      MAX_DEPLOY_FEE_STROOPS,
     );
   }
 
   /** Hold one channel, and try again only where a retry cannot spend twice. */
-  private async withChannel(build: (channel: Channel) => Transaction): Promise<SubmitResult> {
+  private async withChannel(
+    build: (channel: Channel) => Transaction,
+    maxFeeStroops: bigint,
+  ): Promise<SubmitResult> {
     if (!(await this.hasFundedChannel())) {
       return {
         ...EMPTY,
@@ -285,7 +291,7 @@ export class FeePayer {
         detail: 'no attempt ran',
       };
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-        const result = await this.attempt(channel, build);
+        const result = await this.attempt(channel, build, maxFeeStroops);
         last = {
           ...result,
           attempt,
@@ -307,6 +313,7 @@ export class FeePayer {
   private async attempt(
     channel: Channel,
     build: (channel: Channel) => Transaction,
+    maxFeeStroops: bigint,
   ): Promise<SubmitResult> {
     const raw = build(channel);
 
@@ -325,7 +332,7 @@ export class FeePayer {
 
     const prepared = rpc.assembleTransaction(raw, simulation).build();
     const declaredFeeStroops = BigInt(prepared.fee);
-    if (declaredFeeStroops > MAX_FEE_STROOPS) {
+    if (declaredFeeStroops > maxFeeStroops) {
       return {
         ...EMPTY,
         outcome: 'FEE_ABOVE_CEILING',
@@ -333,8 +340,8 @@ export class FeePayer {
         declaredFeeStroops: declaredFeeStroops.toString(),
         detail:
           `simulation declared ${declaredFeeStroops} stroops and the service pays ` +
-          `at most ${MAX_FEE_STROOPS}. The call asks for more resources than a ` +
-          `redeem needs.`,
+          `at most ${maxFeeStroops} for this work. The call asks for more resources ` +
+          `than it should need.`,
       };
     }
     prepared.sign(channel.keypair);

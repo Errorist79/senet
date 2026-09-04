@@ -168,10 +168,10 @@ export async function submitDeploy(request: {
   };
 }
 
-/** Ask the test network to fund an address. */
-export async function fundAddress(address: string): Promise<boolean> {
+/** Ask the test network to fund an address, and wait for the funds. */
+export async function fundAddress(address: string): Promise<string | null> {
   const fields = await call('/fund', { address });
-  return fields['funded'] === true;
+  return textOrNothing(fields, 'balanceStroops');
 }
 
 /** Read what one address holds. */

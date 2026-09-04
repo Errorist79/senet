@@ -18,32 +18,22 @@ import {
   TESTNET_HORIZON_URL,
   accountBalanceStroops,
   friendbotFund,
+  waitForFunds,
 } from '../src/index.js';
 
 /** Channel accounts to generate when the operator names no count. */
 const DEFAULT_CHANNEL_COUNT = 6;
 
-/** How many times the tool asks Horizon whether an account exists. */
-const CONFIRM_ATTEMPTS = 10;
-
-/** How long the tool waits between two of those questions, in milliseconds. */
-const CONFIRM_INTERVAL_MS = 1000;
-
-/** Wait until Horizon reports a balance, so the caller knows the key works. */
-async function confirm(address: string): Promise<bigint> {
-  for (let attempt = 1; attempt <= CONFIRM_ATTEMPTS; attempt += 1) {
-    const balance = await accountBalanceStroops(TESTNET_HORIZON_URL, address);
-    if (balance !== null) return balance;
-    await new Promise((wake) => setTimeout(wake, CONFIRM_INTERVAL_MS));
-  }
-  throw new Error(`${address} carries no balance after friendbot funded it`);
-}
-
 /** Generate one funded account. */
 async function account(role: string): Promise<Keypair> {
   const keypair = Keypair.random();
   await friendbotFund(TESTNET_FRIENDBOT_URL, keypair.publicKey());
-  const balance = await confirm(keypair.publicKey());
+  const balance = await waitForFunds(() =>
+    accountBalanceStroops(TESTNET_HORIZON_URL, keypair.publicKey()),
+  );
+  if (balance === null) {
+    throw new Error(`${keypair.publicKey()} carries no balance after the funding`);
+  }
   console.error(`${role.padEnd(10)} ${keypair.publicKey()} ${balance} stroops`);
   return keypair;
 }

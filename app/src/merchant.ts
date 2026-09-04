@@ -32,11 +32,11 @@ function showResult(panel: HTMLElement, reply: RedeemReply): void {
     detail('Outcome', reply.outcome),
     detail('Amount', xlm(reply.amountStroops)),
     detail('Voucher', reply.voucherId),
-    detail('Payer', short(reply.payer)),
-    detail('Recipient', short(reply.recipient)),
+    detail('Payer', short(reply.payer), reply.payer),
+    detail('Recipient', short(reply.recipient), reply.recipient),
   );
   if (reply.hash !== null) {
-    const row = detail('Transaction', short(reply.hash));
+    const row = detail('Transaction', short(reply.hash), reply.hash);
     const link = make('a', 'detail-link', 'open');
     if (link instanceof HTMLAnchorElement) {
       link.href = `https://stellar.expert/explorer/testnet/tx/${reply.hash}`;

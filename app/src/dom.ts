@@ -30,10 +30,18 @@ export function make(
   return node;
 }
 
-/** One labelled value in a list of details. */
-export function detail(label: string, value: string): HTMLElement {
+/**
+ * One labelled value in a list of details.
+ *
+ * A long identifier reads better shortened, so the row shows the short form
+ * and keeps the whole value in `data-full`. A person reads the first, and
+ * anything that copies or checks the value reads the second.
+ */
+export function detail(label: string, value: string, full = value): HTMLElement {
   const row = make('div', 'detail');
-  row.append(make('span', 'detail-label', label), make('span', 'detail-value', value));
+  const shown = make('span', 'detail-value', value);
+  if (full !== value) shown.dataset['full'] = full;
+  row.append(make('span', 'detail-label', label), shown);
   return row;
 }
 

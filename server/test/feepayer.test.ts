@@ -4,7 +4,8 @@ import { Keypair, Networks } from '@stellar/stellar-sdk';
 import {
   INCLUSION_FEE_STROOPS,
   MAX_ATTEMPTS,
-  MAX_FEE_STROOPS,
+  MAX_DEPLOY_FEE_STROOPS,
+  MAX_REDEEM_FEE_STROOPS,
   MIN_CHANNEL_BALANCE_STROOPS,
   readConfig,
   retryable,
@@ -14,6 +15,9 @@ import { TESTNET_CONTRACT_ID, nativeTokenId } from '@senet/core';
 
 /** The whole bid that one redeem declared on testnet, in stroops. */
 const MEASURED_REDEEM_BID_STROOPS = 47_743n;
+
+/** The whole bid that one account deployment declared on testnet. */
+const MEASURED_DEPLOY_BID_STROOPS = 1_268_372n;
 
 /** A result with only the two fields that the retry rule reads. */
 function resultOf(outcome: SubmitResult['outcome'], stage: Stage): SubmitResult {
@@ -85,11 +89,22 @@ test('the attempt count leaves room for one retry and stays small', () => {
   assert.ok(MAX_ATTEMPTS <= 5);
 });
 
-test('the fee ceiling sits above a redeem and below the channel floor', () => {
+test('the redeem ceiling sits above a redeem and below the channel floor', () => {
   // A ceiling under the measured bid would refuse every redeem. A ceiling at
   // or above the floor would let one request empty a channel account.
-  assert.ok(MAX_FEE_STROOPS > MEASURED_REDEEM_BID_STROOPS);
-  assert.ok(MAX_FEE_STROOPS < MIN_CHANNEL_BALANCE_STROOPS);
+  assert.ok(MAX_REDEEM_FEE_STROOPS > MEASURED_REDEEM_BID_STROOPS);
+  assert.ok(MAX_REDEEM_FEE_STROOPS < MIN_CHANNEL_BALANCE_STROOPS);
+});
+
+test('the deploy ceiling sits above a deployment and below the channel floor', () => {
+  // A deployment writes a contract instance, so it costs far more than a call
+  // against a contract that already exists.
+  assert.ok(MAX_DEPLOY_FEE_STROOPS > MEASURED_DEPLOY_BID_STROOPS);
+  assert.ok(MAX_DEPLOY_FEE_STROOPS < MIN_CHANNEL_BALANCE_STROOPS);
+});
+
+test('a redeem never spends what a deployment costs', () => {
+  assert.ok(MAX_REDEEM_FEE_STROOPS < MAX_DEPLOY_FEE_STROOPS);
 });
 
 test('the inclusion fee is a part of the measured bid', () => {

@@ -1,5 +1,6 @@
 import { xdr } from '@stellar/stellar-sdk';
 import type { SubmitResult } from '../feepayer.js';
+import { readBalance, waitForFunds } from '../balance.js';
 import { friendbotFund } from '../horizon.js';
 import type { RouteContext } from './router.js';
 import { badRequest, requireString } from './transport.js';
@@ -12,7 +13,12 @@ export interface DeployReply extends SubmitResult {
 /** What a funding request produced. */
 export interface FundReply {
   readonly address: string;
-  readonly funded: boolean;
+  /** Whether the funding service created the address on this request. */
+  readonly created: boolean;
+  /** What the address holds once the funds reached a ledger, in stroops. */
+  readonly balanceStroops: string | null;
+  /** How long the service waited for the funds, in milliseconds. */
+  readonly waitedMs: number;
 }
 
 /**
@@ -58,6 +64,11 @@ export async function deployRoute(
 /**
  * Ask the test network to fund an address.
  *
+ * The route answers once the funds reach a ledger, and not once the request
+ * goes out. The funding service replies as soon as it submits. A caller that
+ * read the balance at that moment would read it from before the funds arrive.
+ * It would then tell a person that their new account holds nothing.
+ *
  * This exists because the network under test hands out funds on request. A
  * network that does not do so needs another way to fund a new account, and
  * this route is the one place that changes.
@@ -67,5 +78,18 @@ export async function fundRoute(
   body: Record<string, unknown>,
 ): Promise<FundReply> {
   const address = requireString(body, 'address');
-  return { address, funded: await friendbotFund(context.config.friendbotUrl, address) };
+  const started = Date.now();
+  const created = await friendbotFund(context.config.friendbotUrl, address);
+  const held = await waitForFunds(async () => {
+    const balance = await readBalance(context.config, context.server, address);
+    return balance.stroops;
+  });
+  const waitedMs = Date.now() - started;
+  console.log(`funded ${address} created=${created} held=${held ?? 'none'} in ${waitedMs}ms`);
+  return {
+    address,
+    created,
+    balanceStroops: held === null ? null : held.toString(),
+    waitedMs,
+  };
 }

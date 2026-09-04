@@ -40,9 +40,11 @@ export function startAccountScreen(): void {
     box.append(
       make('h2', 'result-title', 'Your account'),
       make('p', 'result-advice', 'The passkey stays in this device. There is no seed phrase.'),
-      detail('Address', short(account.contractId)),
+      detail('Address', short(account.contractId), account.contractId),
     );
-    if (account.deployHash !== null) box.append(detail('Created by', short(account.deployHash)));
+    if (account.deployHash !== null) {
+      box.append(detail('Created by', short(account.deployHash), account.deployHash));
+    }
     const balance = make('div', 'detail');
     balance.append(make('span', 'detail-label', 'Balance'), make('span', 'detail-value', 'reading'));
     box.append(balance);
@@ -51,7 +53,7 @@ export function startAccountScreen(): void {
     if (fund instanceof HTMLButtonElement) {
       fund.type = 'button';
       fund.addEventListener('click', () => {
-        void addFunds(account, fund);
+        void addFunds(account, fund, balance);
       });
       box.append(fund);
     }
@@ -71,25 +73,41 @@ export function startAccountScreen(): void {
     await refreshBalance(account, balance);
   }
 
-  /** Read the balance and write it into the row that shows it. */
-  async function refreshBalance(account: StoredAccount, row: HTMLElement): Promise<void> {
+  /** Write one balance into the row that shows it. */
+  function writeBalance(row: HTMLElement, stroops: string | null): void {
     const value = row.querySelector('.detail-value');
     if (value === null) return;
+    value.textContent = stroops === null ? 'nothing yet' : xlm(stroops);
+  }
+
+  /** Read the balance and write it into the row that shows it. */
+  async function refreshBalance(account: StoredAccount, row: HTMLElement): Promise<void> {
     try {
-      const balance = await fetchBalance(account.contractId);
-      value.textContent =
-        balance.balanceStroops === null ? 'nothing yet' : xlm(balance.balanceStroops);
+      writeBalance(row, (await fetchBalance(account.contractId)).balanceStroops);
     } catch {
-      value.textContent = 'unknown, the service did not answer';
+      const value = row.querySelector('.detail-value');
+      if (value !== null) value.textContent = 'unknown, the service did not answer';
     }
   }
 
-  /** Ask the network for test funds, then read the balance again. */
-  async function addFunds(account: StoredAccount, button: HTMLButtonElement): Promise<void> {
+  /**
+   * Ask the network for test funds.
+   *
+   * The row says what happens while the funds reach a ledger. The old number
+   * stays true for a few seconds and then stops being true. The service waits
+   * for the funds and reports what the address holds, so the screen writes that
+   * answer instead of a second read.
+   */
+  async function addFunds(
+    account: StoredAccount,
+    button: HTMLButtonElement,
+    row: HTMLElement,
+  ): Promise<void> {
     button.disabled = true;
+    const value = row.querySelector('.detail-value');
+    if (value !== null) value.textContent = 'adding funds';
     try {
-      await fundAddress(account.contractId);
-      await show(account);
+      writeBalance(row, await fundAddress(account.contractId));
     } catch (caught) {
       showProblem(panel, reason(caught));
     } finally {

@@ -9,6 +9,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { TX_TIMEOUT_SECONDS } from '@senet/core';
 import type { ServerConfig } from './config.js';
+import { FUND_CONFIRM_ATTEMPTS, FUND_CONFIRM_INTERVAL_MS } from './constants.js';
 import { accountBalanceStroops } from './horizon.js';
 import { errorText } from './outcomes.js';
 
@@ -96,4 +97,26 @@ async function tokenBalanceStroops(
   if (typeof value === 'bigint') return value;
   if (typeof value === 'number' && Number.isSafeInteger(value)) return BigInt(value);
   return null;
+}
+
+/**
+ * Wait until a reader reports a balance above zero.
+ *
+ * The funding service answers as soon as it submits, and the transaction
+ * reaches a ledger a few seconds later. A caller that reads at once reads the
+ * balance from before the funds arrive. It then reports nothing to a person
+ * who just added funds. This waits instead, and it gives up in the end.
+ */
+export async function waitForFunds(
+  read: () => Promise<bigint | null>,
+  attempts = FUND_CONFIRM_ATTEMPTS,
+  intervalMs = FUND_CONFIRM_INTERVAL_MS,
+): Promise<bigint | null> {
+  let seen: bigint | null = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    seen = await read();
+    if (seen !== null && seen > 0n) return seen;
+    await new Promise((wake) => setTimeout(wake, intervalMs));
+  }
+  return seen;
 }
