@@ -28,6 +28,38 @@ export interface Shown {
 }
 
 /**
+ * One webhook message, as a receiver got it.
+ *
+ * Every value inside the message body is a chain fact, so the archive rule
+ * would normally exclude all of it. The body stays here for one reason: the
+ * claim is not what the message says, it is that the message arrived. The body
+ * is the delivered artifact rather than a copy of a chain value.
+ *
+ * What this proves and what it does not. A later check parses the body, reads
+ * the same transaction from the network and compares every field, then checks
+ * that the message arrived after the ledger closed. A body that disagrees with
+ * the chain fails, and so does one that claims to arrive before the event it
+ * describes existed. That is consistency and ordering against a source that we
+ * did not write.
+ *
+ * It is not authenticity. Nobody can tell a captured message from a composed
+ * one by looking at the bytes, and this archive does not pretend otherwise.
+ */
+export interface Delivery {
+  /** When the receiver read the message. */
+  readonly receivedAt: string;
+  /** The request line, which says what the listener sent and where. */
+  readonly method: string;
+  readonly path: string;
+  /** The headers that the listener set, which the chain never carries. */
+  readonly headers?: Readonly<Record<string, string>>;
+  /** The digest of the exact bytes, so a later edit of the body shows. */
+  readonly bodySha256: string;
+  /** The body, byte for byte as it arrived. */
+  readonly body: string;
+}
+
+/**
  * One row of a manifest.
  *
  * A row needs three fields only: a name, a hash, and one sentence that says
@@ -52,6 +84,8 @@ export interface Row {
   readonly screen?: string;
   /** What a person read on that screen. */
   readonly shown?: Shown;
+  /** The webhook message that the listener posted for this transaction. */
+  readonly delivery?: Delivery;
   /** Which batch of a load check the row belongs to. */
   readonly batch?: string;
   /** The number of the attempt that produced the row. The first attempt is one. */

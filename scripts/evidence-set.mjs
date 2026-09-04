@@ -9,6 +9,7 @@
 // rows, one row for one property. `scripts/out/load-check/` holds a run that
 // measures throughput and fee across many redemptions.
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -135,18 +136,35 @@ export async function describeRedeem(hash) {
     return { ...described, functionName: null, redeem: null };
   }
   const result = await rpcTransaction(hash);
-  const transaction = xdr.TransactionEnvelope.fromXDR(result.envelopeXdr, 'base64').v1().tx();
-  const invocation = transaction.operations()[0].body().invokeHostFunctionOp()
-    .hostFunction().invokeContract();
-  const name = invocation.functionName().toString();
-  const args = invocation.args().map((argument) => scValToNative(argument));
-  if (name !== 'redeem' || args.length !== 5) {
-    return { ...described, functionName: name, redeem: null };
+  const decoded = redeemFromEnvelope(result.envelopeXdr);
+  return { ...described, functionName: decoded.functionName, redeem: decoded.redeem };
+}
+
+/**
+ * Read the terms of a redemption out of one transaction envelope.
+ *
+ * A live reader takes the envelope from the RPC server, and a check over the
+ * archive takes the same envelope from the archived row. Both decode it here,
+ * so a check that runs after the RPC forgets a ledger reads exactly what the
+ * live reader read.
+ *
+ * The contract takes `redeem(payer, amount, voucher_id, expire_at, recipient)`,
+ * so the arguments arrive in that order.
+ */
+export function redeemFromEnvelope(envelopeXdr) {
+  if (!envelopeXdr) return { functionName: null, redeem: null };
+  const transaction = xdr.TransactionEnvelope.fromXDR(envelopeXdr, 'base64').v1().tx();
+  const operation = transaction.operations()[0].body().invokeHostFunctionOp();
+  if (operation.hostFunction().switch().name !== 'hostFunctionTypeInvokeContract') {
+    return { functionName: null, redeem: null };
   }
+  const invocation = operation.hostFunction().invokeContract();
+  const functionName = invocation.functionName().toString();
+  const args = invocation.args().map((argument) => scValToNative(argument));
+  if (functionName !== 'redeem' || args.length !== 5) return { functionName, redeem: null };
   const [payer, amount, voucherId, expireAt, recipient] = args;
   return {
-    ...described,
-    functionName: name,
+    functionName,
     redeem: {
       payer: String(payer),
       amount: String(amount),
@@ -287,14 +305,6 @@ function namesTheSame(shown, full) {
 }
 
 /**
- * Compare the figures that a screen showed against the chain.
- *
- * A figure on a screen is a claim about the application, and not a fact about
- * the network. This check turns each one into a fact, or it names the row where
- * the two disagree. It reads the archive alone, so it still works after a
- * testnet reset.
- */
-/**
  * Compare the figures that a screen showed against one Horizon summary.
  *
  * The preview of a new row and the check over the whole archive both call this.
@@ -343,6 +353,127 @@ export function deriveShownClaims(dir, manifest) {
     if (values === undefined) continue;
     const archived = readArchivedRow(dir, row.name);
     const found = compareShownToChain(values, archived.horizon, row.hash);
+    checked += found.checked;
+    for (const problem of found.problems) problems.push(`${row.name}: ${problem}`);
+  }
+  return { checked, problems };
+}
+
+/**
+ * The fields that the listener posts, and the chain value that each must equal.
+ *
+ * The listener names them, so a change to its message changes this table and
+ * nothing else. A field that the message stops sending fails as a missing
+ * field rather than passing as an absent one.
+ */
+const DELIVERED_FIELDS = Object.freeze([
+  ['voucher_id', (redeem) => redeem.voucherId],
+  ['payer', (redeem) => redeem.payer],
+  ['recipient', (redeem) => redeem.recipient],
+  ['amount', (redeem) => redeem.amount],
+  ['expire_at', (redeem) => String(redeem.expireAt)],
+]);
+
+/**
+ * Compare one webhook message against the transaction that it reports.
+ *
+ * The claim in a delivery row is that the listener posted this message for this
+ * redemption. This check tests the two properties that a captured message can
+ * carry: every field agrees with a chain that we did not write, and the message
+ * arrived after the ledger that carries the event closed.
+ *
+ * It does not test authenticity, and it must not be read as testing it. A
+ * composed message that agrees with the chain passes. What fails is a message
+ * that reports a redemption differently from the network, one whose bytes
+ * changed after capture, and one that claims to arrive before its own event.
+ */
+export function compareDeliveryToChain(delivery, redeem, horizon, hash) {
+  const problems = [];
+  let checked = 0;
+
+  checked += 1;
+  const digest = createHash('sha256').update(delivery.body, 'utf8').digest('hex');
+  if (digest !== delivery.bodySha256) {
+    problems.push(`the body digest is ${delivery.bodySha256} and its bytes hash to ${digest}`);
+    // Every check below reads the body, and the bytes are not the ones that the
+    // receiver stored, so nothing below would mean what it says.
+    return { checked, problems };
+  }
+
+  let message;
+  try {
+    message = JSON.parse(delivery.body);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { checked, problems: [...problems, `the delivered body is not JSON: ${detail}`] };
+  }
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) {
+    return { checked, problems: [...problems, 'the delivered body is not a message object'] };
+  }
+
+  if (redeem === null) {
+    return { checked, problems: [...problems, `${hash} is not a redemption, so no message can report it`] };
+  }
+
+  for (const [field, chainValue] of DELIVERED_FIELDS) {
+    checked += 1;
+    const sent = message[field];
+    if (sent === undefined) {
+      problems.push(`the message names no ${field}`);
+      continue;
+    }
+    const expected = chainValue(redeem);
+    if (String(sent) !== expected) {
+      problems.push(`the message reports ${field} as ${sent}, and the chain says ${expected}`);
+    }
+  }
+
+  checked += 1;
+  const reported = message.transaction ?? message.hash;
+  if (reported === undefined) problems.push('the message names no transaction');
+  else if (String(reported) !== hash) {
+    problems.push(`the message reports transaction ${reported}, and the row cites ${hash}`);
+  }
+
+  if (horizon !== null && horizon !== undefined) {
+    checked += 1;
+    if (message.ledger === undefined) problems.push('the message names no ledger');
+    else if (String(message.ledger) !== String(horizon.ledger)) {
+      problems.push(`the message reports ledger ${message.ledger}, and the chain says ${horizon.ledger}`);
+    }
+
+    // The order is the one property here that a chain comparison cannot give.
+    // A message cannot arrive before the ledger that carries its event closed.
+    if (horizon.created_at !== null) {
+      checked += 1;
+      const closed = Date.parse(horizon.created_at);
+      const arrived = Date.parse(delivery.receivedAt);
+      if (Number.isNaN(arrived)) problems.push(`${delivery.receivedAt} is not a time`);
+      else if (arrived < closed) {
+        problems.push(
+          `the message arrived at ${delivery.receivedAt}, before its ledger closed at ${horizon.created_at}`,
+        );
+      }
+    }
+  }
+
+  return { checked, problems };
+}
+
+/**
+ * Check every delivery in one tree against the chain.
+ *
+ * It reads the archive alone, so it still answers after a testnet reset and
+ * after the RPC forgets the ledger.
+ */
+export function deriveDeliveryClaims(dir, manifest) {
+  const problems = [];
+  let checked = 0;
+  for (const row of manifest.rows) {
+    if (row.delivery === undefined) continue;
+    const archived = readArchivedRow(dir, row.name);
+    const { redeem } = redeemFromEnvelope(archived.rpc.envelopeXdr);
+    const found = compareDeliveryToChain(row.delivery, redeem, archived.horizon, row.hash);
     checked += found.checked;
     for (const problem of found.problems) problems.push(`${row.name}: ${problem}`);
   }
