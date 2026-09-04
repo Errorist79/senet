@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 
+import { SKIP_WAITING } from './config.js';
+
 /**
  * The service worker.
  *
@@ -9,8 +11,23 @@
  * ledger is worse than no answer.
  */
 
+/**
+ * What the shell files hash to, which the build writes in here.
+ *
+ * A browser compares the bytes of this file to decide whether a worker is new.
+ * An earlier version named no build, so every release compiled to the same
+ * bytes. No release was ever new, and the cache served the first build for
+ * ever. One path then remained to a newer build: a person deletes the
+ * application, and loses the account with it.
+ *
+ * The value is the hash of the shell files themselves. The worker therefore
+ * changes when the application changes, and it stays the same when a release
+ * carries no change to what a person runs.
+ */
+declare const SHELL_BUILD: string;
+
 /** The cache name. A change here drops every earlier file at the next start. */
-const CACHE = 'senet-shell-1';
+const CACHE = `senet-shell-${SHELL_BUILD}`;
 
 /** The files that the application needs to open. */
 const SHELL = ['/', '/index.html', '/app.js', '/app.css', '/manifest.webmanifest'];
@@ -28,13 +45,22 @@ function workerScope(): ServiceWorkerGlobalScope {
 
 const scope = workerScope();
 
+/**
+ * Take the shell, and then wait.
+ *
+ * The worker does not take over on its own. A person can hold a minted voucher
+ * on the screen, or wait for a merchant's submission to answer. A swap at that
+ * moment ends a payment in progress, and the screen that the swap destroys is
+ * the person's only evidence of it. The application offers the person a restart
+ * instead, and this worker waits until they take it.
+ */
 scope.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(SHELL))
-      .then(() => scope.skipWaiting()),
-  );
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
+});
+
+/** The person chose the moment. Take over now. */
+scope.addEventListener('message', (event) => {
+  if (event.data === SKIP_WAITING) void scope.skipWaiting();
 });
 
 scope.addEventListener('activate', (event) => {

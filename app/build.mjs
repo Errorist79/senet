@@ -3,6 +3,7 @@
 // The web server publishes `dist` and it names four files: index.html, app.js,
 // app.css and sw.js. These names never change, because the cache rules in the
 // web server configuration depend on them.
+import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,20 @@ await build({
   logLevel: 'info',
 });
 
+for (const name of COPIED) cpSync(join(SOURCE, name), join(DIST, name));
+
+// What a person actually runs, as one value.
+//
+// A browser compares the bytes of sw.js to decide whether a worker is new. The
+// worker names this hash, so it changes when the application changes and stays
+// the same when a release carries no change. Without it, every release compiled
+// to the same worker and no release was ever new. One path then remained to a
+// newer build: a person deletes the application, and loses the account with it.
+const SHELL_FILES = ['app.js', 'app.css', 'index.html'];
+const shell = createHash('sha256');
+for (const name of SHELL_FILES) shell.update(readFileSync(join(DIST, name)));
+const SHELL_BUILD = shell.digest('hex').slice(0, 16);
+
 // The worker is its own entry point. It must sit at the root of the origin,
 // because a worker controls only the paths under its own directory.
 await build({
@@ -42,10 +57,18 @@ await build({
   format: 'iife',
   target: TARGETS,
   minify: true,
+  define: { SHELL_BUILD: JSON.stringify(SHELL_BUILD) },
   logLevel: 'info',
 });
 
-for (const name of COPIED) cpSync(join(SOURCE, name), join(DIST, name));
+// A worker that does not carry the identity cannot report itself as new, and
+// the fault is silent: the application keeps working and never updates again.
+const worker = readFileSync(join(DIST, 'sw.js'), 'utf8');
+if (!worker.includes(SHELL_BUILD)) {
+  throw new Error(
+    `the worker carries no build identity, so no release after this one can ever reach a person`,
+  );
+}
 
 // The errors that a screen can put in front of a person. The library raises
 // others, and the bundler drops a class that this application never reaches.
@@ -78,4 +101,4 @@ if (lost.length > 0) {
   );
 }
 
-console.log(`built ${DIST}, with ${SHOWN_BY_THE_SCREENS.length} error names intact`);
+console.log(`built ${DIST}, shell ${SHELL_BUILD}, with ${SHOWN_BY_THE_SCREENS.length} error names intact`);

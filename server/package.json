@@ -20,7 +20,8 @@
     "payer-check": "npm run build && node dist/tools/payer-check.js",
     "size-check": "npm run build && node dist/tools/size-check.js",
     "origin-check": "npm run build && node dist/tools/origin-check.js",
-    "report-check": "npm run build && node dist/tools/report-check.js"
+    "report-check": "npm run build && node dist/tools/report-check.js",
+    "update-check": "npm run build && node dist/tools/update-check.js"
   },
   "dependencies": {
     "@senet/core": "0.1.0",

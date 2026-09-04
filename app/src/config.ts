@@ -41,3 +41,12 @@ export const REQUEST_TIMEOUT_MS = 130_000;
  * as fast as a person aims, and it leaves the device cool.
  */
 export const SCAN_FPS = 10;
+
+/**
+ * What the application says to a worker that waits.
+ *
+ * A new worker installs and then waits. A payment application must not replace
+ * itself while a payment is in progress. This message carries the person's
+ * answer to it.
+ */
+export const SKIP_WAITING = 'senet.skip-waiting';

@@ -2,7 +2,7 @@ import { fetchConfig, fetchLedger } from './api.js';
 import { startAccountScreen } from './account.js';
 import { startCameraReport } from './camera-report.js';
 import { showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
-import { LEDGER_REFRESH_MS } from './config.js';
+import { LEDGER_REFRESH_MS, SKIP_WAITING } from './config.js';
 import { element } from './dom.js';
 import { startMerchantScreen } from './merchant.js';
 import { startPayerScreen } from './payer.js';
@@ -58,12 +58,75 @@ function showScreen(name: ScreenName): void {
   window.location.hash = name;
 }
 
-/** Register the worker that makes the application open with no network. */
+/**
+ * Offer the new version, and restart when the person takes it.
+ *
+ * The worker installs and waits. It does not take over on its own. A person
+ * can hold a minted voucher on the screen, or wait for a payment to answer. A
+ * swap at that moment ends the payment, and it destroys the only evidence of
+ * the payment. The person picks the moment instead.
+ */
+function offerUpdate(waiting: ServiceWorker): void {
+  const bar = element('update-bar', HTMLDivElement);
+  const restart = element('update-restart', HTMLButtonElement);
+  bar.hidden = false;
+  restart.addEventListener(
+    'click',
+    () => {
+      restart.disabled = true;
+      restart.textContent = 'Restarting';
+      waiting.postMessage(SKIP_WAITING);
+    },
+    { once: true },
+  );
+}
+
+/**
+ * Register the worker, and watch for a newer one.
+ *
+ * A browser looks for a new worker when the page navigates. An application on
+ * a home screen resumes without a navigation, so it can run for days and never
+ * look. This asks whenever the application comes back to the front.
+ */
 function installWorker(): void {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
-    // The application runs without the worker. Only the offline start needs it.
+
+  // The reload happens once, when the worker that the person accepted takes
+  // over. Without the guard a browser that changes controller again reloads
+  // the page under the person's hands.
+  let restarting = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (restarting) return;
+    restarting = true;
+    window.location.reload();
   });
+
+  navigator.serviceWorker
+    .register('/sw.js', { scope: '/' })
+    .then((registration) => {
+      // A worker can already be waiting from an earlier visit. Nothing fires
+      // for that one, so the application asks.
+      if (registration.waiting !== null) offerUpdate(registration.waiting);
+
+      registration.addEventListener('updatefound', () => {
+        const arriving = registration.installing;
+        if (arriving === null) return;
+        arriving.addEventListener('statechange', () => {
+          // A first install controls nothing and replaces nothing, so it needs
+          // no permission. Only a worker that displaces another one does.
+          if (arriving.state !== 'installed') return;
+          if (navigator.serviceWorker.controller === null) return;
+          offerUpdate(arriving);
+        });
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') void registration.update();
+      });
+    })
+    .catch(() => {
+      // The application runs without the worker. Only the offline start needs it.
+    });
 }
 
 /**
