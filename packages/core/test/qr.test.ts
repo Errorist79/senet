@@ -34,8 +34,9 @@ const ERROR_CORRECTION = 'M';
  * says not to compare that data against a template. Chrome adds it to some
  * assertions and not to others, and the field measures 108 bytes.
  *
- * Both figures are for the production name. A shorter name gives a smaller
- * entry, because the client data carries the origin as text.
+ * A run on the production name, `senet.hoodrun.io`, gave both figures. A
+ * shorter name gives a smaller entry, because the client data carries the
+ * origin as text.
  */
 const PASSKEY_ENTRY_BYTES = 792;
 
