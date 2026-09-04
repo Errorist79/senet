@@ -7,6 +7,7 @@ import { nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import type { rpc } from '@stellar/stellar-sdk';
 import {
   REDEEMED_TOPIC,
+  writeStall,
   isCursorTooOld,
   pollOnce,
   readPosition,
@@ -188,6 +189,43 @@ test('a refused delivery moves nothing past it, and repeats no accepted event', 
   );
   assert.equal(after3.asked[0], 'e2');
   assert.deepEqual(readPosition(path), { cursor: 'page-end' });
+});
+
+test('a stuck listener keeps writing, so its file is fresh and not stale', async () => {
+  const path = statePath();
+  writePosition(path, { cursor: 'c-0' });
+  const events = [event('e1', 1n, PAYER, MERCHANT)];
+  const { server } = feed([page(events, 'page-end')]);
+  const result = await pollOnce(
+    { server, contractId: 'C1', statePath: path, deliver: () => Promise.resolve(false) },
+    { cursor: 'c-0' },
+  );
+  assert.equal(result.stuckOn, 'e1');
+  // The position did not move, and the file says which event blocks the feed.
+  const written: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  assert.deepEqual(written, { cursor: 'c-0', stuckOn: 'e1' });
+  // A reader that resumes still resumes from the unmoved cursor.
+  assert.deepEqual(readPosition(path), { cursor: 'c-0' });
+});
+
+test('a refusal on a first run leaves the stuck event and no cursor', () => {
+  const path = statePath();
+  writeStall(path, null, 'e1');
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), { stuckOn: 'e1' });
+  // No cursor means a resume from the configured ledger, which is correct
+  // because nothing was ever delivered.
+  assert.equal(readPosition(path), null);
+});
+
+test('a batch that succeeds clears the stuck event, because it writes no such field', async () => {
+  const path = statePath();
+  writeStall(path, 'c-0', 'e1');
+  const { server } = feed([page([], 'quiet')]);
+  await pollOnce(
+    { server, contractId: 'C1', statePath: path, deliver: () => Promise.resolve(true) },
+    { cursor: 'c-0' },
+  );
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), { cursor: 'quiet' });
 });
 
 test('a delivered event is never read again after a restart', async () => {

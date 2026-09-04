@@ -78,7 +78,8 @@ export interface Position {
 export interface PollResult {
   readonly read: number;
   readonly delivered: number;
-  readonly cursor: string;
+  /** Where the listener stands, which is nothing before its first delivery. */
+  readonly cursor: string | null;
   /** The event that a receiver refused, when one did. */
   readonly stuckOn: string | null;
 }
@@ -186,7 +187,7 @@ export function readPosition(path: string): Position | null {
 }
 
 /**
- * Write the position, so that a crash leaves either the old one or the new one.
+ * Write the state file, so that a crash leaves either the old one or the new.
  *
  * A plain write can stop halfway and leave a truncated file. A truncated
  * cursor and a corrupt cursor look the same to a reader. Both send the
@@ -194,10 +195,39 @@ export function readPosition(path: string): Position | null {
  * The write therefore lands in a temporary file, and the rename replaces the
  * old file in one step.
  */
-export function writePosition(path: string, position: Position): void {
+function writeState(path: string, state: object): void {
   const temporary = `${path}.writing`;
-  writeFileSync(temporary, `${JSON.stringify(position)}\n`);
+  writeFileSync(temporary, `${JSON.stringify(state)}\n`);
   renameSync(temporary, path);
+}
+
+/** Write the position that the listener reached. */
+export function writePosition(path: string, position: Position): void {
+  // No stuck field, which is how a reader learns that nothing is stuck. The
+  // clearing needs no separate step and nobody has to remember it.
+  writeState(path, { cursor: position.cursor });
+}
+
+/**
+ * Write that a receiver refused an event. The position does not move.
+ *
+ * The cursor stays where it was, so this changes nothing about delivery. What
+ * it buys is a distinction that a reader cannot otherwise make.
+ *
+ * A stuck listener rewrites this file on every retry, so the file stays fresh
+ * while nothing moves. A stopped listener writes nothing, so its file goes
+ * stale. Without this write both look the same: a frozen file and a growing
+ * lag. A reader would then report that the listener is not running, while the
+ * listener runs and the receiver is the broken part. An operator would go to
+ * the wrong process while redemptions pile up behind the refusal.
+ *
+ * A refusal on the first event of a first run has no cursor to keep, and the
+ * file then carries the stuck event alone. A reader that finds no cursor
+ * resumes from the configured ledger, which is correct, because nothing was
+ * ever delivered.
+ */
+export function writeStall(path: string, cursor: string | null, stuckOn: string): void {
+  writeState(path, cursor === null ? { stuckOn } : { cursor, stuckOn });
 }
 
 /** What one listener needs to run. */
@@ -249,10 +279,13 @@ export async function pollOnce(
   for (const event of page.events) {
     const message = readRedemption(event);
     if (message !== null && !(await parts.deliver(message))) {
+      // The position does not move. The file is rewritten anyway, so that a
+      // reader can tell a listener that is stuck from one that has stopped.
+      writeStall(parts.statePath, position, message.event_id);
       return {
         read: page.events.length,
         delivered,
-        cursor: position ?? '',
+        cursor: position,
         stuckOn: message.event_id,
       };
     }
