@@ -19,9 +19,14 @@ let kit: PasskeyKit | null = null;
 /**
  * Build the kit, once.
  *
- * The relying party comes from the service rather than from the address bar.
- * A passkey binds to the name that created it. A value that drifts with the
- * address would therefore strand every account that people already hold.
+ * The application names no relying party, so the browser takes the one that
+ * served the page. A name that the application carried could differ from the
+ * name in the address bar. A browser refuses a registration outright when the
+ * two disagree, and a derived name cannot disagree with itself.
+ *
+ * A passkey still binds to the name that created it, so a deployment that
+ * moves to another name leaves those accounts behind. The deployment is what
+ * holds the name steady, and the application is not.
  */
 export function getKit(chain: StoredChain): PasskeyKit {
   if (kit === null) {
@@ -29,7 +34,6 @@ export function getKit(chain: StoredChain): PasskeyKit {
       rpcUrl: chain.rpcUrl,
       networkPassphrase: chain.network,
       walletWasmHash: chain.walletWasmHash,
-      rpId: chain.rpId,
     });
   }
   return kit;

@@ -35,7 +35,6 @@ export interface StoredChain {
   readonly tokenId: string;
   readonly rpcUrl: string;
   readonly walletWasmHash: string;
-  readonly rpId: string;
 }
 
 /** Read one stored value, or nothing when it is absent or no longer fits. */
@@ -115,8 +114,8 @@ export function setLedger(ledger: StoredLedger): void {
 /**
  * The chain identities that the service reported.
  *
- * The application keeps them because a payer mints with no network. The
- * signer needs the relying party and the account code at that moment.
+ * The application keeps them because a payer mints with no network. The signer
+ * needs the account code at that moment.
  */
 export function getChain(): StoredChain | null {
   const fields = read(STORAGE.chain);
@@ -126,18 +125,16 @@ export function getChain(): StoredChain | null {
   const tokenId = text(fields, 'tokenId');
   const rpcUrl = text(fields, 'rpcUrl');
   const walletWasmHash = text(fields, 'walletWasmHash');
-  const rpId = text(fields, 'rpId');
   if (
     network === null ||
     contractId === null ||
     tokenId === null ||
     rpcUrl === null ||
-    walletWasmHash === null ||
-    rpId === null
+    walletWasmHash === null
   ) {
     return null;
   }
-  return { network, contractId, tokenId, rpcUrl, walletWasmHash, rpId };
+  return { network, contractId, tokenId, rpcUrl, walletWasmHash };
 }
 
 export function setChain(chain: StoredChain): void {

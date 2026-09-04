@@ -27,7 +27,6 @@ export interface ChainConfig {
   readonly tokenId: string;
   readonly rpcUrl: string;
   readonly walletWasmHash: string;
-  readonly rpId: string;
 }
 
 /** What one account deployment produced. */
@@ -150,7 +149,6 @@ export async function fetchConfig(): Promise<ChainConfig> {
     tokenId: text(fields, 'tokenId'),
     rpcUrl: text(fields, 'rpcUrl'),
     walletWasmHash: text(fields, 'walletWasmHash'),
-    rpId: text(fields, 'rpId'),
   };
 }
 

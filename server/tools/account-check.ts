@@ -6,12 +6,17 @@
  * runs the same WebAuthn path that a phone runs, so the registration, the
  * deployment and the balance are real; only the fingerprint is not.
  *
- * A passkey binds to the relying party, and a relying party is a domain and
- * not an address. This check therefore serves on `localhost` and names
- * `localhost`. The deployment on the public name proves the real one.
+ * A relying party is a domain and not an address, and the browser derives it
+ * from the origin. This check therefore serves on `localhost`, where the
+ * browser derives `localhost`. Only a run against the public name proves the
+ * relying party that people really use.
+ *
+ * `ORIGIN` drives a deployment that already runs, on its own name, which is
+ * the only way to prove the real relying party. Without it the check serves
+ * the build itself on `localhost`.
  *
  *   ENV_FILE=/path/to/.env CHROME_PATH=/path/to/chrome \
- *     npm run account-check --workspace @senet/server -- out.json
+ *     ORIGIN=https://example.test npm run account-check --workspace @senet/server -- out.json
  */
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -40,17 +45,12 @@ function required(name: string): string {
   return value;
 }
 
-async function main(): Promise<void> {
-  loadEnvFile();
-  // A relying party is a domain, and this check serves on the loopback name.
-  process.env['RP_ID'] = LOOPBACK_RP_ID;
+/** Serve the build and the service on one loopback origin, for a local check. */
+async function serveLocally(): Promise<{ origin: string; close: () => void }> {
   const config = readConfig();
-  const chromePath = required('CHROME_PATH');
-  const outPath = process.argv[2] ?? resolve(process.cwd(), 'account-check.json');
   if (!existsSync(join(DIST, 'index.html'))) {
     throw new Error(`${DIST} holds no build. Run the application build first.`);
   }
-
   const server = new rpc.Server(config.rpcUrl);
   const feePayer = await new FeePayer(config).start();
   const answer = createApiHandler({ config, feePayer, server });
@@ -63,9 +63,21 @@ async function main(): Promise<void> {
   });
   const address = service.address();
   if (address === null || typeof address === 'string') throw new Error('the service took no port');
-  const origin = `http://${LOOPBACK_RP_ID}:${address.port}`;
+  return {
+    origin: `http://${LOOPBACK_RP_ID}:${address.port}`,
+    close: () => service.close(),
+  };
+}
+
+async function main(): Promise<void> {
+  loadEnvFile();
+  const chromePath = required('CHROME_PATH');
+  const outPath = process.argv[2] ?? resolve(process.cwd(), 'account-check.json');
+  const named = process.env['ORIGIN'];
+  const served = named === undefined || named === '' ? await serveLocally() : null;
+  const origin = served?.origin ?? named ?? '';
+  const service = { close: () => served?.close() };
   console.log(`origin     ${origin}`);
-  console.log(`wallet     ${config.walletWasmHash}`);
 
   const browser = await launch({
     executablePath: chromePath,
@@ -131,9 +143,7 @@ async function main(): Promise<void> {
     const record = {
       ranAt: new Date().toISOString(),
       origin,
-      relyingParty: LOOPBACK_RP_ID,
-      network: config.voucher.network,
-      walletWasmHash: config.walletWasmHash,
+      relyingParty: new URL(origin).hostname,
       screen: funded,
       note: 'A virtual authenticator ran the WebAuthn ceremony. Everything on chain is real.',
     };

@@ -13,7 +13,14 @@ export interface ConfigReply {
   readonly rpcUrl: string;
   /** The smart account code that a new passkey account runs. */
   readonly walletWasmHash: string;
-  /** The domain that a passkey binds to. */
+  /**
+   * The domain that this deployment serves under.
+   *
+   * The application names no relying party, because the browser derives one
+   * from the origin that served the page. This value tells an operator which
+   * name the deployment expects, so a mismatch is visible before a person
+   * finds it as a refused registration.
+   */
   readonly rpId: string;
 }
 

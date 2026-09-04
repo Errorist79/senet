@@ -44,8 +44,8 @@ function installWorker(): void {
 /**
  * Read the chain identities, and remember them.
  *
- * A payer mints with no network. The signer needs the relying party and the
- * account code to do that, so the application keeps the last answer.
+ * A payer mints with no network. The signer needs the account code to do
+ * that, so the application keeps the last answer.
  */
 async function loadChain(): Promise<void> {
   const banner = element('chain', HTMLParagraphElement);
@@ -57,7 +57,6 @@ async function loadChain(): Promise<void> {
       tokenId: chain.tokenId,
       rpcUrl: chain.rpcUrl,
       walletWasmHash: chain.walletWasmHash,
-      rpId: chain.rpId,
     });
     banner.textContent = `${chain.network} · contract ${short(chain.contractId)}`;
     banner.dataset['state'] = 'ready';
