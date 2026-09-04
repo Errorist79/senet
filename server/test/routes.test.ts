@@ -40,6 +40,7 @@ const config: ServerConfig = {
   walletWasmHash: TESTNET_WALLET_WASM_HASH,
   listenerStatePath: '/nonexistent/listener.json',
   redemptionStorePath: '/nonexistent/redemptions.json',
+  sep7SigningSecret: 'SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB',
   rpId: RP_ID,
   channelSecrets: [Keypair.random().secret()],
 };

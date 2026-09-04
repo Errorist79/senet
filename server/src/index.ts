@@ -13,6 +13,7 @@ export * from './channels.js';
 export * from './limits.js';
 export * from './events.js';
 export * from './redemptions.js';
+export * from './sep7.js';
 export * from './feepayer.js';
 export * from './http/transport.js';
 export * from './http/budget.js';

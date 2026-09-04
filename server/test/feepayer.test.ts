@@ -131,6 +131,7 @@ test('the configuration takes the testnet defaults', () => {
   withEnv(
     {
       FEEPAYER_CHANNELS: Keypair.random().secret(),
+      SEP7_SIGNING_SECRET: Keypair.random().secret(),
       NETWORK_PASSPHRASE: undefined,
       CONTRACT_ID: undefined,
       TOKEN_ID: undefined,
@@ -154,6 +155,7 @@ test('the configuration takes an operator override', () => {
   withEnv(
     {
       FEEPAYER_CHANNELS: Keypair.random().secret(),
+      SEP7_SIGNING_SECRET: Keypair.random().secret(),
       CONTRACT_ID: redeployed,
       RPC_URL: 'https://rpc.example.test',
     },

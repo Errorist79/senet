@@ -68,6 +68,15 @@ export interface ServerConfig {
    * receiver never accepted.
    */
   readonly redemptionStorePath: string;
+  /**
+   * Signs the payee-presented payment requests that this domain produces.
+   *
+   * The public key of this secret must be the one that the domain publishes.
+   * A wallet checks a signature against the published key. A service that
+   * holds another key produces requests that fail in a wallet, and that fail
+   * nowhere else.
+   */
+  readonly sep7SigningSecret: string;
 }
 
 /**
@@ -134,6 +143,7 @@ export function readConfig(): ServerConfig {
     channelSecrets,
     listenerStatePath: optional('LISTENER_STATE_FILE', './listener.json'),
     redemptionStorePath: optional('REDEMPTION_STORE_FILE', './redemptions.json'),
+    sep7SigningSecret: required('SEP7_SIGNING_SECRET'),
   };
 }
 
