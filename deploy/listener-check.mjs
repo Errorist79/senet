@@ -98,16 +98,20 @@ function readState(path) {
     return { problem: `${path} holds ${JSON.stringify(parsed)}, which is not a state object` };
   }
   const { cursor, stuckOn } = parsed;
-  if (typeof cursor !== 'string') return { problem: `${path} names no cursor` };
+  const stuck = typeof stuckOn === 'string' ? stuckOn : null;
+  // A listener that is refused before it delivers anything has no cursor to
+  // store, so it stores the stuck event alone. That file is not malformed. It
+  // is the state this check exists to name, and a reader that demanded a
+  // cursor would report the shape of the file instead of the fault.
+  if (typeof cursor !== 'string') {
+    if (stuck === null) return { problem: `${path} names no cursor and no stall` };
+    return { cursor: null, stuckOn: stuck, changedAtMs: statSync(path).mtimeMs };
+  }
   // The age comes from the modification time of the file and not from a time
   // written inside it. The listener writes the position and nothing else, and
   // a stamp that a process writes about itself is a claim, while the time the
   // kernel recorded for the write is a fact.
-  return {
-    cursor,
-    stuckOn: typeof stuckOn === 'string' ? stuckOn : null,
-    changedAtMs: statSync(path).mtimeMs,
-  };
+  return { cursor, stuckOn: stuck, changedAtMs: statSync(path).mtimeMs };
 }
 
 async function health(rpcUrl) {
@@ -161,6 +165,17 @@ const state = readState(statePath);
 if (state.problem !== undefined) {
   console.log(`  FAIL  ${state.problem}`);
   console.log('\n1 check failed. The listener has no usable cursor.');
+  process.exit(1);
+}
+
+// A listener that has delivered nothing has no cursor, and the rest of this
+// report measures a cursor. The stall is still worth naming on its own, so the
+// check names it and stops rather than measuring what is not there.
+if (state.cursor === null) {
+  check(false, `the listener cannot deliver event ${state.stuckOn}, and it has delivered nothing yet`);
+  console.log('\n  the listener is running and no message has ever reached the receiver.');
+  console.log('  Repair the receiver. The listener resumes at that event on its own.');
+  console.log('\n1 check failed');
   process.exit(1);
 }
 
