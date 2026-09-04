@@ -93,17 +93,26 @@ check(typeof config.contractId === 'string' && config.contractId.startsWith('C')
 const status = await readJson('/api/status');
 check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no channel account');
 
-// A passkey binds to the origin that created it, so the identifier must be the
-// name itself and nothing else.
+// A passkey binds to the relying party that created it, so that identifier must
+// be the name itself. The application takes it from the service rather than from
+// its own bundle, so the served value is the one that decides, and a check that
+// reads the bundle alone proves nothing.
 const host = new URL(origin).hostname;
+check(typeof config.rpId === 'string' && config.rpId.length > 0,
+  'the service names no relying party, so the application cannot make a passkey');
+check(config.rpId === host,
+  `the service names the relying party ${config.rpId}, and the origin is ${host}`);
+
+// A literal in the bundle would override the served value, so it is a second
+// place where the identifier can drift.
 const bundle = await (await fetch(`${origin}/app.js`)).text();
 const named = [...bundle.matchAll(/rpId\s*:\s*["'`]([^"'`]+)["'`]/g)].map((found) => found[1]);
 check(named.every((value) => value === host),
-  `the application names a relying party other than ${host}: ${named.join(', ')}`);
+  `the bundle names a relying party other than ${host}: ${named.join(', ')}`);
 
 console.log(`\n  contract ${config.contractId}`);
 console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
-console.log(`  relying party ${named.length === 0 ? `${host}, from the origin` : named.join(', ')}`);
+console.log(`  relying party ${config.rpId ?? '(the service names none)'}, from the service`);
 
 // The worker and the manifest decide whether a phone installs the application.
 // Only a browser answers that, so this check drives one.
