@@ -57,9 +57,10 @@ export function showLedgerFact(): void {
     return;
   }
   const age = Date.now() - seen.seenAtMs;
+  const seconds = Math.round(age / 1000);
   setFact(
     'fact-ledger',
-    `ledger ${seen.sequence}, ${Math.round(age / 1000)} seconds old`,
+    `ledger ${seen.sequence}, ${seconds} ${seconds === 1 ? 'second' : 'seconds'} old`,
     age > STALE_LEDGER_MS ? 'stale' : 'ready',
   );
 }

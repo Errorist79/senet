@@ -155,6 +155,30 @@ async function main(): Promise<void> {
     });
     await page.screenshot({ path: join(shots, 'payer-2-code.png') });
 
+    // The session compares the two error correction levels, so the check draws
+    // both and records what each one shows.
+    const levels: Record<string, string> = { M: codeSize };
+    const others = await page.$$('#payer-panel .levels-button');
+    for (const button of others) {
+      const label = await button.evaluate((one) => one.textContent ?? '');
+      if (label !== 'Level L') continue;
+      await button.click();
+      const shown = await page.evaluate(
+        () => document.querySelector('#payer-panel .code-size')?.textContent ?? '',
+      );
+      levels['L'] = shown;
+      console.log(`level L    ${shown}`);
+      await page.evaluate(() => {
+        document.querySelector('#payer-panel .result')?.scrollIntoView({ block: 'start' });
+      });
+      await page.screenshot({ path: join(shots, 'payer-2-code-level-l.png') });
+    }
+    // The voucher goes back to the level that the product ships.
+    for (const button of await page.$$('#payer-panel .levels-button')) {
+      const label = await button.evaluate((one) => one.textContent ?? '');
+      if (label === 'Level M') await button.click();
+    }
+
     // The void, which pays the voucher back to the payer's own account.
     await page.click('#payer-list .link-button:last-of-type');
     await page.waitForSelector('#payer-panel .result-good, #payer-panel .result-bad', {
@@ -177,9 +201,15 @@ async function main(): Promise<void> {
       account: account.values['Address'] ?? null,
       minted,
       codeSize,
+      levels,
       voided,
       transactionHash: hash,
-      screenshots: ['payer-1-account.png', 'payer-2-code.png', 'payer-3-void.png'],
+      screenshots: [
+        'payer-1-account.png',
+        'payer-2-code.png',
+        'payer-2-code-level-l.png',
+        'payer-3-void.png',
+      ],
     };
     mkdirSync(dirname(outPath), { recursive: true });
     writeFileSync(outPath, `${JSON.stringify(record, null, 2)}\n`);

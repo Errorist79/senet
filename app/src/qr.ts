@@ -17,8 +17,11 @@ import qrcode from 'qrcode-generator';
  * - The decoder must hand back the bytes. `jsqr` does, as `binaryData`.
  */
 
+/** The error correction levels that this build can draw. */
+export type ErrorCorrection = 'M' | 'L';
+
 /** The error correction level that a voucher code uses. */
-export const ERROR_CORRECTION = 'M';
+export const ERROR_CORRECTION: ErrorCorrection = 'M';
 
 /** The quiet zone around a symbol, in modules. The standard asks for four. */
 const QUIET_MODULES = 4;
@@ -49,14 +52,17 @@ export interface Symbol_ {
  * travel through a latin1 string that maps one character to one byte, and the
  * replacement hands them back unchanged.
  */
-export function encodeBytes(bytes: Uint8Array): Symbol_ {
+export function encodeBytes(
+  bytes: Uint8Array,
+  level: ErrorCorrection = ERROR_CORRECTION,
+): Symbol_ {
   qrcode.stringToBytes = (text: string) =>
     Array.from(text, (character) => character.charCodeAt(0) & 0xff);
   let latin1 = '';
   for (const byte of bytes) latin1 += String.fromCharCode(byte);
 
   // Type 0 selects the smallest version that holds the payload.
-  const symbol = qrcode(0, ERROR_CORRECTION);
+  const symbol = qrcode(0, level);
   symbol.addData(latin1, 'Byte');
   symbol.make();
   const moduleCount = symbol.getModuleCount();
