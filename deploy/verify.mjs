@@ -45,6 +45,14 @@ const PATHS = [
   '/icon.svg', '/.well-known/stellar.toml', '/api/config', '/a/path/that/the/shell/catches',
 ];
 
+/**
+ * How long the listener's cursor may go unwritten before this check fails.
+ *
+ * Ten minutes, which matches the check that reads the file on the host. The two
+ * measure the same property from opposite sides, so one limit serves both.
+ */
+const LISTENER_AGE_MAX_MS = 10 * 60 * 1000;
+
 /** A common phone viewport. The session runs on phones, not on a desktop. */
 const PHONE = Object.freeze({ width: 390, height: 844 });
 
@@ -129,6 +137,36 @@ check(typeof config.contractId === 'string' && config.contractId.startsWith('C')
 const status = await readJson('/api/status');
 check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no channel account');
 
+// The listener, as the origin reports it.
+//
+// Everything here is read from outside the host, through the status route. The
+// route is a view of the file that the listener writes, and the two live in
+// different processes, so this asks whether the view carries anything at all.
+// A route that answers with nothing while the listener runs is the failure
+// worth catching here: it means the writer and the reader name different
+// files, and it looks perfectly healthy until somebody needs it.
+//
+// The state itself is judged on the host by `deploy/listener-check.mjs`, which
+// reads the file rather than the view. That check stays there on purpose. A
+// reader that could only reach the route would learn nothing about a healthy
+// listener whenever the service in front of it was down.
+const listener = status.listener ?? null;
+check(listener !== null, 'the status route reports no listener at all');
+if (listener !== null) {
+  check(typeof listener.cursor === 'string',
+    listener.cursor === null
+      ? 'the status route reports no cursor, so it is reading a file that nothing writes'
+      : `the status route names the cursor ${listener.cursor}`);
+  check(listener.stuckOn === null,
+    listener.stuckOn === null
+      ? 'the listener is not held on an event that it cannot deliver'
+      : `the listener cannot deliver ${listener.stuckOn}`);
+  check(typeof listener.ageMs === 'number' && listener.ageMs <= LISTENER_AGE_MAX_MS,
+    typeof listener.ageMs === 'number'
+      ? `the cursor was written ${Math.round(listener.ageMs / 1000)} seconds ago`
+      : 'the status route gives the cursor no age, so nothing here shows a stopped listener');
+}
+
 // A passkey binds to the domain that created it. The browser derives that
 // domain from the origin which served the page, and nothing in the application
 // can change it. This check therefore reads a declaration and not a value that
@@ -195,6 +233,9 @@ console.log(`\n  commit   ${release.commit ?? 'the origin names none'}`);
 console.log(`  release  ${release.release ?? 'unnamed'}, published ${release.publishedAt ?? 'at an unknown time'}`);
 console.log(`  contract ${config.contractId}`);
 console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
+console.log(`  listener ${listener?.cursor ?? 'no cursor'}`
+  + `${listener?.stuckOn === null || listener?.stuckOn === undefined ? '' : `, stuck on ${listener.stuckOn}`}`
+  + '   read from outside the host, through the status route');
 console.log(`  errors     ${carried.length} of ${errorNames.length} typed names carried as text`);
 console.log(`  relying party ${RP_ID}, declared in the release`);
 console.log('                the browser derives the real one from the origin');
