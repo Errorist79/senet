@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+# The Rust version and the Wasm target come from rust-toolchain.toml, so this
+# file does not repeat them. `rustup show` reads that file and installs both.
+env:
+  # `cargo install stellar-cli` fails on a bare Ubuntu runner, because the
+  # keyring dependency libdbus-sys finds no dbus development headers. The
+  # prebuilt release binary avoids that dependency.
+  STELLAR_CLI_VERSION: 28.0.0
+  NODE_VERSION: 22
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned Rust toolchain and the Wasm target
+        run: |
+          rustup show
+          rustc --version
+          rustup target list --installed
+
+      - name: Install the Stellar CLI from the release binary
+        run: |
+          set -euo pipefail
+          asset="stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          url="https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/${asset}"
+          curl --fail --location --silent --show-error "$url" --output /tmp/stellar-cli.tar.gz
+          tar -xzf /tmp/stellar-cli.tar.gz -C /tmp stellar
+          sudo install -m 0755 /tmp/stellar /usr/local/bin/stellar
+          stellar --version
+
+      - name: Build the contract for the Wasm target
+        run: stellar contract build
+
+      - name: Run the contract tests
+        run: cargo test --workspace --locked
+
+  library:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install the Node dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run the workspace tests
+        run: npm test
