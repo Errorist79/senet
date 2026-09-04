@@ -1,6 +1,6 @@
 import { xdr } from '@stellar/stellar-sdk';
 import { VoucherError } from '@senet/core';
-import type { RedeemResult } from '../feepayer.js';
+import type { SubmitResult } from '../feepayer.js';
 import type { RouteContext } from './router.js';
 import { badRequest, requireString } from './transport.js';
 
@@ -10,7 +10,7 @@ import { badRequest, requireString } from './transport.js';
  * The voucher terms come back beside the outcome. They come out of the signed
  * entry, and the client cannot read them from the payload alone.
  */
-export interface RedeemReply extends RedeemResult {
+export interface RedeemReply extends SubmitResult {
   readonly voucherId: string;
   readonly amountStroops: string;
   readonly payer: string;

@@ -51,3 +51,18 @@ export async function accountBalanceStroops(
   const body: unknown = await response.json();
   return nativeBalanceStroops(body);
 }
+
+/**
+ * Ask the test network to create and fund an address.
+ *
+ * The service answers 400 when the address already exists, which is not a
+ * failure here, because the address then holds a balance already. It also
+ * funds a contract address, and it moves the token instead of the creation of
+ * an account.
+ */
+export async function friendbotFund(friendbotUrl: string, address: string): Promise<boolean> {
+  const response = await fetch(`${friendbotUrl}?addr=${encodeURIComponent(address)}`);
+  if (response.ok) return true;
+  if (response.status === 400) return false;
+  throw new Error(`the funding service answered ${response.status} for ${address}`);
+}

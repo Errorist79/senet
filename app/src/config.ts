@@ -14,8 +14,10 @@ export const APP_NAME = 'Senet';
 
 /** Keys in the browser's local storage. One place, so a rename orphans nothing. */
 export const STORAGE = {
-  recipient: 'senet.recipient',
+  account: 'senet.account',
+  chain: 'senet.chain',
   ledger: 'senet.ledger',
+  merchant: 'senet.merchant',
 } as const;
 
 /**

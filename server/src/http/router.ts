@@ -5,6 +5,7 @@ import type { FeePayer } from '../feepayer.js';
 import { errorText } from '../outcomes.js';
 import { RequestBudget } from './budget.js';
 import { balanceRoute, configRoute, ledgerRoute, statusRoute } from './read.js';
+import { deployRoute, fundRoute } from './account.js';
 import { redeemRoute } from './redeem.js';
 import {
   RequestError,
@@ -43,6 +44,8 @@ const ROUTES: Readonly<Record<string, Route>> = {
   'GET /balance': (context, _body, url) => balanceRoute(context, url),
   'GET /status': (context) => statusRoute(context),
   'POST /redeem': (context, body) => redeemRoute(context, body),
+  'POST /deploy': (context, body) => deployRoute(context, body),
+  'POST /fund': (context, body) => fundRoute(context, body),
 };
 
 /**
@@ -51,7 +54,11 @@ const ROUTES: Readonly<Record<string, Route>> = {
  * These carry the tighter budget, because each one spends from a channel
  * account.
  */
-const SPENDING_ROUTES: ReadonlySet<string> = new Set(['POST /redeem']);
+const SPENDING_ROUTES: ReadonlySet<string> = new Set([
+  'POST /redeem',
+  'POST /deploy',
+  'POST /fund',
+]);
 
 /**
  * Build the request handler.

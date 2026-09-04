@@ -9,14 +9,14 @@ import {
   readConfig,
   retryable,
 } from '../src/index.js';
-import type { RedeemResult, Stage } from '../src/index.js';
+import type { SubmitResult, Stage } from '../src/index.js';
 import { TESTNET_CONTRACT_ID, nativeTokenId } from '@senet/core';
 
 /** The whole bid that one redeem declared on testnet, in stroops. */
 const MEASURED_REDEEM_BID_STROOPS = 47_743n;
 
 /** A result with only the two fields that the retry rule reads. */
-function resultOf(outcome: RedeemResult['outcome'], stage: Stage): RedeemResult {
+function resultOf(outcome: SubmitResult['outcome'], stage: Stage): SubmitResult {
   return {
     outcome,
     stage,

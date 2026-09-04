@@ -13,12 +13,36 @@ export const TESTNET_HORIZON_URL = 'https://horizon-testnet.stellar.org';
 /** The service that creates and funds a testnet account. */
 export const TESTNET_FRIENDBOT_URL = 'https://friendbot.stellar.org';
 
+/**
+ * The smart account code that a new passkey account runs.
+ *
+ * This is the fixed 2026-08-19 security release of the passkey wallet. A
+ * passkey binds to the code that its account runs, so a change here strands
+ * every account that people already created.
+ * https://github.com/stellar/passkey-kit/blob/main/docs/deployments-2026-08-19.md
+ */
+export const TESTNET_WALLET_WASM_HASH =
+  '502ea4e7bdb3ea99880941f1d35ceb67fb598692c0bb40f842ef9c9f17d58b58';
+
+/**
+ * The WebAuthn relying party, which is the domain that a passkey belongs to.
+ *
+ * A passkey binds to this name. A value taken from the address bar would drift
+ * with the deployment and strand every account, so the service names it.
+ */
+export const DEFAULT_RP_ID = 'senet.hoodrun.io';
+
 /** Everything that the service needs to run. */
 export interface ServerConfig {
   /** The chain identities that the library binds a voucher to. */
   readonly voucher: VoucherConfig;
   readonly rpcUrl: string;
   readonly horizonUrl: string;
+  readonly friendbotUrl: string;
+  /** The smart account code that a new passkey account runs. */
+  readonly walletWasmHash: string;
+  /** The domain that a passkey binds to. */
+  readonly rpId: string;
   /** One funded secret key per channel account. */
   readonly channelSecrets: readonly string[];
 }
@@ -81,6 +105,9 @@ export function readConfig(): ServerConfig {
     },
     rpcUrl: optional('RPC_URL', TESTNET_RPC_URL),
     horizonUrl: optional('HORIZON_URL', TESTNET_HORIZON_URL),
+    friendbotUrl: optional('FRIENDBOT_URL', TESTNET_FRIENDBOT_URL),
+    walletWasmHash: optional('WALLET_WASM_HASH', TESTNET_WALLET_WASM_HASH),
+    rpId: optional('RP_ID', DEFAULT_RP_ID),
     channelSecrets,
   };
 }

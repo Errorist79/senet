@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#101418" />
     <title>Senet</title>
     <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
@@ -14,42 +15,73 @@
       <p class="ledger" id="ledger">ledger unknown</p>
     </header>
 
-    <main class="screen">
-      <h2 class="screen-title">Take a payment</h2>
-      <p class="screen-note">
-        Paste the voucher that the payer shows. The camera arrives with the
-        scanner.
-      </p>
+    <nav class="nav">
+      <button class="nav-button" id="nav-account" type="button">Account</button>
+      <button class="nav-button" id="nav-merchant" type="button">Take a payment</button>
+    </nav>
 
-      <form class="form" id="merchant-form">
-        <label class="field">
-          <span class="field-label">Voucher</span>
-          <textarea
-            class="field-input field-payload"
-            id="merchant-payload"
-            rows="6"
-            spellcheck="false"
-            autocomplete="off"
-            placeholder="The signed authorization entry, in base64"
-          ></textarea>
-        </label>
+    <main>
+      <section class="screen" id="screen-account" hidden>
+        <h2 class="screen-title">Your account</h2>
+        <p class="screen-note">
+          Senet uses a passkey on this device. There is no seed phrase to write
+          down and nothing to lose.
+        </p>
 
-        <label class="field">
-          <span class="field-label">Account that receives the funds</span>
-          <input
-            class="field-input"
-            id="merchant-recipient"
-            type="text"
-            spellcheck="false"
-            autocomplete="off"
-            placeholder="G…"
-          />
-        </label>
+        <form class="form" id="account-form">
+          <label class="field">
+            <span class="field-label">A name for this account</span>
+            <input
+              class="field-input"
+              id="account-name"
+              type="text"
+              autocomplete="off"
+              placeholder="Senet account"
+            />
+          </label>
+          <button class="submit" id="account-create" type="submit">Create with a passkey</button>
+        </form>
 
-        <button class="submit" id="merchant-submit" type="submit">Take the payment</button>
-      </form>
+        <div class="result-panel" id="account-panel"></div>
+      </section>
 
-      <div class="result-panel" id="merchant-result"></div>
+      <section class="screen" id="screen-merchant" hidden>
+        <h2 class="screen-title">Take a payment</h2>
+        <p class="screen-note">
+          Paste the voucher that the payer shows. The camera arrives with the
+          scanner.
+        </p>
+
+        <form class="form" id="merchant-form">
+          <label class="field">
+            <span class="field-label">Voucher</span>
+            <textarea
+              class="field-input field-payload"
+              id="merchant-payload"
+              rows="6"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="The signed authorization entry, in base64"
+            ></textarea>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Account that receives the funds</span>
+            <input
+              class="field-input"
+              id="merchant-recipient"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="G…"
+            />
+          </label>
+
+          <button class="submit" id="merchant-submit" type="submit">Take the payment</button>
+        </form>
+
+        <div class="result-panel" id="merchant-result"></div>
+      </section>
     </main>
 
     <footer class="bar bar-foot">

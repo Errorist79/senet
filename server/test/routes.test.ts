@@ -13,7 +13,16 @@ import {
   signVoucher,
 } from '@senet/core';
 import type { Voucher } from '@senet/core';
-import { FeePayer, RATE_LIMIT_SPEND, createApiHandler } from '../src/index.js';
+import {
+  DEFAULT_RP_ID,
+  FeePayer,
+  RATE_LIMIT_SPEND,
+  TESTNET_FRIENDBOT_URL,
+  TESTNET_HORIZON_URL,
+  TESTNET_RPC_URL,
+  TESTNET_WALLET_WASM_HASH,
+  createApiHandler,
+} from '../src/index.js';
 import type { ServerConfig } from '../src/index.js';
 
 /**
@@ -25,8 +34,11 @@ import type { ServerConfig } from '../src/index.js';
  */
 const config: ServerConfig = {
   voucher: TESTNET_CONFIG,
-  rpcUrl: 'https://soroban-testnet.stellar.org',
-  horizonUrl: 'https://horizon-testnet.stellar.org',
+  rpcUrl: TESTNET_RPC_URL,
+  horizonUrl: TESTNET_HORIZON_URL,
+  friendbotUrl: TESTNET_FRIENDBOT_URL,
+  walletWasmHash: TESTNET_WALLET_WASM_HASH,
+  rpId: DEFAULT_RP_ID,
   channelSecrets: [Keypair.random().secret()],
 };
 

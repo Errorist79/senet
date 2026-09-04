@@ -25,6 +25,23 @@ export interface ChainConfig {
   readonly networkTag: string;
   readonly contractId: string;
   readonly tokenId: string;
+  readonly rpcUrl: string;
+  readonly walletWasmHash: string;
+  readonly rpId: string;
+}
+
+/** What one account deployment produced. */
+export interface DeployReply {
+  readonly outcome: string;
+  readonly hash: string | null;
+  readonly contractId: string;
+}
+
+/** What one address holds. */
+export interface BalanceReply {
+  readonly address: string;
+  readonly balanceStroops: string | null;
+  readonly source: string;
 }
 
 /** The latest ledger that the service saw. */
@@ -131,6 +148,39 @@ export async function fetchConfig(): Promise<ChainConfig> {
     networkTag: text(fields, 'networkTag'),
     contractId: text(fields, 'contractId'),
     tokenId: text(fields, 'tokenId'),
+    rpcUrl: text(fields, 'rpcUrl'),
+    walletWasmHash: text(fields, 'walletWasmHash'),
+    rpId: text(fields, 'rpId'),
+  };
+}
+
+/** Submit an account deployment that the registration already authorized. */
+export async function submitDeploy(request: {
+  contractId: string;
+  hostFunction: string;
+  auth: readonly string[];
+}): Promise<DeployReply> {
+  const fields = await call('/deploy', request);
+  return {
+    outcome: text(fields, 'outcome'),
+    hash: textOrNothing(fields, 'hash'),
+    contractId: text(fields, 'contractId'),
+  };
+}
+
+/** Ask the test network to fund an address. */
+export async function fundAddress(address: string): Promise<boolean> {
+  const fields = await call('/fund', { address });
+  return fields['funded'] === true;
+}
+
+/** Read what one address holds. */
+export async function fetchBalance(address: string): Promise<BalanceReply> {
+  const fields = await call(`/balance?address=${encodeURIComponent(address)}`);
+  return {
+    address: text(fields, 'address'),
+    balanceStroops: textOrNothing(fields, 'balanceStroops'),
+    source: text(fields, 'source'),
   };
 }
 

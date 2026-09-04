@@ -1,6 +1,6 @@
 import { networkTag } from '@senet/core';
 import { MIN_CHANNEL_BALANCE_STROOPS } from '../constants.js';
-import { accountBalanceStroops } from '../horizon.js';
+import { readBalance } from '../balance.js';
 import type { RouteContext } from './router.js';
 import { requireParameter } from './transport.js';
 
@@ -11,6 +11,10 @@ export interface ConfigReply {
   readonly contractId: string;
   readonly tokenId: string;
   readonly rpcUrl: string;
+  /** The smart account code that a new passkey account runs. */
+  readonly walletWasmHash: string;
+  /** The domain that a passkey binds to. */
+  readonly rpId: string;
 }
 
 /** The latest ledger that the service saw. */
@@ -22,11 +26,13 @@ export interface LedgerReply {
   readonly readAtIso: string;
 }
 
-/** One account's native balance. */
+/** One address's balance of the configured token. */
 export interface BalanceReply {
   readonly address: string;
-  /** Stroops, or null when the network does not know the account. */
+  /** Stroops, or null when the network does not know the address. */
   readonly balanceStroops: string | null;
+  /** Where the value came from, so a caller can report it. */
+  readonly source: string;
 }
 
 /** What an operator watches. */
@@ -52,6 +58,8 @@ export function configRoute(context: RouteContext): ConfigReply {
     contractId: voucher.contractId,
     tokenId: voucher.tokenId,
     rpcUrl: context.config.rpcUrl,
+    walletWasmHash: context.config.walletWasmHash,
+    rpId: context.config.rpId,
   };
 }
 
@@ -71,19 +79,23 @@ export async function ledgerRoute(context: RouteContext): Promise<LedgerReply> {
 }
 
 /**
- * One account's native balance.
+ * One address's balance.
  *
- * Horizon serves a classic account. A contract account holds its balance
- * inside the token contract instead, and the account screen brings that read
- * with it.
+ * A classic account and a smart account keep their balances in different
+ * places. This route answers for both kinds. A person who holds a passkey
+ * account does not need to know which kind it is.
  */
 export async function balanceRoute(
   context: RouteContext,
   url: URL,
 ): Promise<BalanceReply> {
   const address = requireParameter(url, 'address');
-  const balance = await accountBalanceStroops(context.config.horizonUrl, address);
-  return { address, balanceStroops: balance === null ? null : balance.toString() };
+  const balance = await readBalance(context.config, context.server, address);
+  return {
+    address,
+    balanceStroops: balance.stroops === null ? null : balance.stroops.toString(),
+    source: balance.source,
+  };
 }
 
 /** The channel balances, the ones under the floor, and the contract limits. */

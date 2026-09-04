@@ -17,6 +17,7 @@ import {
   TESTNET_FRIENDBOT_URL,
   TESTNET_HORIZON_URL,
   accountBalanceStroops,
+  friendbotFund,
 } from '../src/index.js';
 
 /** Channel accounts to generate when the operator names no count. */
@@ -27,16 +28,6 @@ const CONFIRM_ATTEMPTS = 10;
 
 /** How long the tool waits between two of those questions, in milliseconds. */
 const CONFIRM_INTERVAL_MS = 1000;
-
-/** Ask friendbot to create and fund one account. */
-async function fund(address: string): Promise<void> {
-  const response = await fetch(`${TESTNET_FRIENDBOT_URL}?addr=${address}`);
-  // Friendbot answers 400 when the account already exists. That is not a
-  // failure here, because the account then holds a balance already.
-  if (!response.ok && response.status !== 400) {
-    throw new Error(`friendbot answered ${response.status} for ${address}`);
-  }
-}
 
 /** Wait until Horizon reports a balance, so the caller knows the key works. */
 async function confirm(address: string): Promise<bigint> {
@@ -51,7 +42,7 @@ async function confirm(address: string): Promise<bigint> {
 /** Generate one funded account. */
 async function account(role: string): Promise<Keypair> {
   const keypair = Keypair.random();
-  await fund(keypair.publicKey());
+  await friendbotFund(TESTNET_FRIENDBOT_URL, keypair.publicKey());
   const balance = await confirm(keypair.publicKey());
   console.error(`${role.padEnd(10)} ${keypair.publicKey()} ${balance} stroops`);
   return keypair;

@@ -1,8 +1,8 @@
 import { ServiceError, submitRedeem } from './api.js';
 import type { RedeemReply } from './api.js';
-import { STORAGE } from './config.js';
 import { detail, element, fill, make, short, xlm } from './dom.js';
 import { outcomeText } from './outcomes.js';
+import { getMerchantAddress, setMerchantAddress } from './store.js';
 
 /**
  * The merchant screen.
@@ -13,25 +13,6 @@ import { outcomeText } from './outcomes.js';
  * The camera arrives with the scanner. The screen holds no protocol logic: it
  * sends the payload to the service and it reads the service's answer.
  */
-
-/** The account that receives the funds, as the browser remembers it. */
-function rememberedRecipient(): string {
-  try {
-    return window.localStorage.getItem(STORAGE.recipient) ?? '';
-  } catch {
-    // A browser that refuses local storage still runs the screen.
-    return '';
-  }
-}
-
-/** Remember the account, so a merchant types it once. */
-function rememberRecipient(address: string): void {
-  try {
-    window.localStorage.setItem(STORAGE.recipient, address);
-  } catch {
-    // Nothing here depends on the value surviving a reload.
-  }
-}
 
 /** Show one refusal that never reached the ledger. */
 function showRefusal(panel: HTMLElement, code: string, message: string): void {
@@ -80,7 +61,7 @@ export function startMerchantScreen(): void {
   const submit = element('merchant-submit', HTMLButtonElement);
   const panel = element('merchant-result', HTMLDivElement);
 
-  recipient.value = rememberedRecipient();
+  recipient.value = getMerchantAddress();
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -94,7 +75,7 @@ export function startMerchantScreen(): void {
       showRefusal(panel, 'MISSING_FIELD', 'Paste a voucher and name the account that receives it.');
       return;
     }
-    rememberRecipient(address);
+    setMerchantAddress(address);
     submit.disabled = true;
     fill(panel, make('p', 'waiting', 'The service is paying the fee and waiting for a ledger.'));
     try {

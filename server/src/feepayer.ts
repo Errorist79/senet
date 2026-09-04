@@ -26,8 +26,8 @@ import type { Classification, Outcome, Stage } from './outcomes.js';
 /** The contract function that a voucher authorizes. */
 const REDEEM_FUNCTION = 'redeem';
 
-/** What one redeem produced. The service returns this and it raises nothing. */
-export interface RedeemResult {
+/** What one submission produced. The service returns this and it raises nothing. */
+export interface SubmitResult {
   readonly outcome: Outcome;
   readonly stage: Stage;
   /** The ledger hash, when the transaction reached the network. */
@@ -56,12 +56,12 @@ export interface RedeemResult {
 }
 
 /** One redeem, with the terms that the signed entry carried. */
-export interface RedeemRecord extends RedeemResult {
+export interface RedeemRecord extends SubmitResult {
   readonly voucher: DecodedVoucher;
 }
 
 /** The fields that every stage carries, so no result grows key by key. */
-const EMPTY: Omit<RedeemResult, 'outcome' | 'stage' | 'detail'> = {
+const EMPTY: Omit<SubmitResult, 'outcome' | 'stage' | 'detail'> = {
   hash: null,
   ledger: null,
   declaredFeeStroops: null,
@@ -110,7 +110,7 @@ export function operationResultCodeOf(
  * timeout with the hash and leaves the resolution to the caller, rather than
  * sending the same voucher a second time.
  */
-export function retryable(result: RedeemResult): boolean {
+export function retryable(result: SubmitResult): boolean {
   if (result.outcome === 'BAD_SEQUENCE') return true;
   return result.outcome === 'TIMEOUT' && result.stage !== 'poll';
 }
@@ -211,15 +211,49 @@ export class FeePayer {
     recipient: string,
   ): Promise<RedeemRecord> {
     const voucher = readVoucher(this.config.voucher, entry);
-    return { ...(await this.withChannel(voucher, entry, recipient)), voucher };
+    const result = await this.withChannel((channel) =>
+      new TransactionBuilder(channel.next(), {
+        fee: INCLUSION_FEE_STROOPS.toString(),
+        networkPassphrase: this.config.voucher.network,
+      })
+        .addOperation(
+          Operation.invokeContractFunction({
+            contract: this.config.voucher.contractId,
+            function: REDEEM_FUNCTION,
+            args: redeemArgs(voucher, recipient),
+            auth: [entry],
+          }),
+        )
+        .setTimeout(TX_TIMEOUT_SECONDS)
+        .build(),
+    );
+    return { ...result, voucher };
+  }
+
+  /**
+   * Submit one host function that the caller already authorized.
+   *
+   * A smart account deployment arrives this way. The party that registers the
+   * passkey signs the authorization, and it holds no account of its own. This
+   * service therefore supplies the source account and the fee.
+   */
+  async invoke(
+    hostFunction: xdr.HostFunction,
+    auth: readonly xdr.SorobanAuthorizationEntry[],
+  ): Promise<SubmitResult> {
+    return this.withChannel((channel) =>
+      new TransactionBuilder(channel.next(), {
+        fee: INCLUSION_FEE_STROOPS.toString(),
+        networkPassphrase: this.config.voucher.network,
+      })
+        .addOperation(Operation.invokeHostFunction({ func: hostFunction, auth: [...auth] }))
+        .setTimeout(TX_TIMEOUT_SECONDS)
+        .build(),
+    );
   }
 
   /** Hold one channel, and try again only where a retry cannot spend twice. */
-  private async withChannel(
-    voucher: DecodedVoucher,
-    entry: xdr.SorobanAuthorizationEntry,
-    recipient: string,
-  ): Promise<RedeemResult> {
+  private async withChannel(build: (channel: Channel) => Transaction): Promise<SubmitResult> {
     if (!(await this.hasFundedChannel())) {
       return {
         ...EMPTY,
@@ -244,14 +278,14 @@ export class FeePayer {
 
     const started = Date.now();
     try {
-      let last: RedeemResult = {
+      let last: SubmitResult = {
         ...EMPTY,
         outcome: 'UNKNOWN',
         stage: 'precheck',
         detail: 'no attempt ran',
       };
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-        const result = await this.attempt(channel, voucher, entry, recipient);
+        const result = await this.attempt(channel, build);
         last = {
           ...result,
           attempt,
@@ -272,24 +306,9 @@ export class FeePayer {
   /** One build, one simulation and one submission. */
   private async attempt(
     channel: Channel,
-    voucher: DecodedVoucher,
-    entry: xdr.SorobanAuthorizationEntry,
-    recipient: string,
-  ): Promise<RedeemResult> {
-    const raw = new TransactionBuilder(channel.next(), {
-      fee: INCLUSION_FEE_STROOPS.toString(),
-      networkPassphrase: this.config.voucher.network,
-    })
-      .addOperation(
-        Operation.invokeContractFunction({
-          contract: this.config.voucher.contractId,
-          function: REDEEM_FUNCTION,
-          args: redeemArgs(voucher, recipient),
-          auth: [entry],
-        }),
-      )
-      .setTimeout(TX_TIMEOUT_SECONDS)
-      .build();
+    build: (channel: Channel) => Transaction,
+  ): Promise<SubmitResult> {
+    const raw = build(channel);
 
     // Enforcing mode: the entry travels with the transaction, so the host
     // checks the signature, the expiration ledger and the nonce during
@@ -326,7 +345,7 @@ export class FeePayer {
   private async submit(
     prepared: Transaction,
     declaredFeeStroops: string,
-  ): Promise<RedeemResult> {
+  ): Promise<SubmitResult> {
     let sent: rpc.Api.SendTransactionResponse;
     try {
       sent = await this.server.sendTransaction(prepared);
@@ -397,7 +416,7 @@ export class FeePayer {
     stage: Stage,
     detail: string,
     events: readonly xdr.DiagnosticEvent[] | null,
-  ): RedeemResult {
+  ): SubmitResult {
     return { ...EMPTY, ...this.classified(detail, events), stage, detail };
   }
 
