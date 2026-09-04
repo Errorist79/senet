@@ -128,9 +128,14 @@ if (typeof config.rpId === 'string') {
 const bundleText = await (await fetch(`${origin}/app.js`)).text();
 const errorNames = Object.keys(core).filter((name) => name.endsWith('Error'));
 check(errorNames.length > 0, 'the library declares no typed error, so this check reads nothing');
-const missing = errorNames.filter((name) => !bundleText.includes(name));
-check(missing.length === 0,
-  `the bundle carries no text for ${missing.length} of ${errorNames.length} typed errors: ${missing.join(', ')}`);
+// The bundle carries only the errors that the application can raise, because
+// the bundler drops the rest. So the count means nothing, and the presence of
+// any name means everything: a bundler that renames a class renames every one,
+// and none of the names would survive.
+const carried = errorNames.filter((name) => bundleText.includes(name));
+check(carried.length > 0,
+  `the bundle carries no text for any of the ${errorNames.length} typed errors, `
+  + 'so a person reads a renamed class instead of a reason');
 
 // A literal in the bundle would be a second place where the name can drift.
 const named = [...bundleText.matchAll(/rpId\s*:\s*["'`]([^"'`]+)["'`]/g)].map((found) => found[1]);
@@ -139,6 +144,7 @@ check(named.every((value) => value === host),
 
 console.log(`\n  contract ${config.contractId}`);
 console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
+console.log(`  errors     ${carried.length} of ${errorNames.length} typed names carried as text`);
 console.log(`  relying party ${RP_ID}, declared in the release`);
 console.log('                the browser derives the real one from the origin');
 
