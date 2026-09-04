@@ -28,6 +28,15 @@ const AMOUNT_XLM = '0.1';
 /** How long the check waits for a step that reaches the network. */
 const STEP_TIMEOUT_MS = 150_000;
 
+/**
+ * A phone viewport, in CSS pixels.
+ *
+ * The session happens on phones. The check therefore measures a screen that a
+ * person holds, and not a window that happens to be wide enough.
+ */
+const PHONE_WIDTH = 390;
+const PHONE_HEIGHT = 844;
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(HERE, '..', '..', '..', 'app', 'dist');
 
@@ -100,7 +109,7 @@ async function main(): Promise<void> {
   });
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 420, height: 900, deviceScaleFactor: 2 });
+    await page.setViewport({ width: PHONE_WIDTH, height: PHONE_HEIGHT, deviceScaleFactor: 2 });
     page.on('pageerror', (failure: unknown) =>
       console.log(`  page error: ${failure instanceof Error ? failure.message : String(failure)}`),
     );
@@ -155,6 +164,38 @@ async function main(): Promise<void> {
     });
     await page.screenshot({ path: join(shots, 'payer-2-code.png') });
 
+    // The session photographs three things at once: the size line, the level
+    // control and the code. A photograph carries them together only when they
+    // span no more than one screen. A picture revealed the fault that put the
+    // size line out of frame. Nothing else would catch it coming back, so this
+    // states the rule as a measurement.
+    const layout = await page.evaluate(() => {
+      const boxes: DOMRect[] = [];
+      for (const selector of ['.code-size', '.levels', 'canvas.code']) {
+        const found = document.querySelector(`#payer-panel ${selector}`);
+        if (found === null) return null;
+        boxes.push(found.getBoundingClientRect());
+      }
+      return {
+        spanPx: Math.round(Math.max(...boxes.map((b) => b.bottom)) - Math.min(...boxes.map((b) => b.top))),
+        widestPx: Math.round(Math.max(...boxes.map((b) => b.right))),
+        viewportHeightPx: window.innerHeight,
+        viewportWidthPx: window.innerWidth,
+        scrollsSideways: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    });
+    if (layout === null) throw new Error('the code, its size line or its control is missing');
+    console.log(
+      `layout     ${layout.spanPx} of ${layout.viewportHeightPx} tall, widest ${layout.widestPx} of ${layout.viewportWidthPx}`,
+    );
+    if (layout.spanPx > layout.viewportHeightPx) {
+      throw new Error(
+        `the size line, the control and the code span ${layout.spanPx} pixels on a ` +
+          `${layout.viewportHeightPx} pixel screen, so one photograph cannot carry all three`,
+      );
+    }
+    if (layout.scrollsSideways) throw new Error('the page scrolls sideways on a phone');
+
     // The session compares the two error correction levels, so the check draws
     // both and records what each one shows.
     const levels: Record<string, string> = { M: codeSize };
@@ -202,6 +243,7 @@ async function main(): Promise<void> {
       minted,
       codeSize,
       levels,
+      layout,
       voided,
       transactionHash: hash,
       screenshots: [
