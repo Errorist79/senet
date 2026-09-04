@@ -164,16 +164,20 @@ async function submitRefused(voucher, recipient, entry, resources, reason, label
     throw new Error(`${label}: the network accepted a voucher that it must refuse`);
   }
   const reasons = await refusalReasons(outcome.hash);
-  if (!reasons.some((text) => text.includes(reason))) {
+  const recorded = reasons.find((text) => text.includes(reason));
+  if (recorded === undefined) {
     throw new Error(`${label}: the network refused this row, but not for "${reason}"`);
   }
-  return outcome;
+  return { ...outcome, recorded };
 }
 
 const rows = [];
 function record(name, outcome, note) {
   rows.push({ name, hash: outcome.hash, note });
   console.log(`${name.padEnd(34)} ${outcome.status.padEnd(8)} ${outcome.hash}`);
+  // A refusal is only evidence when it names its cause. The run therefore
+  // prints the text that the network wrote into the diagnostic events.
+  if (outcome.recorded !== undefined) console.log(`  the network recorded ${outcome.recorded}`);
 }
 
 console.log(`contract ${contractId}`);

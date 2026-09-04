@@ -48,6 +48,7 @@ calculation:
 | `packages/core/` | The library that builds, signs, encodes and decodes a voucher. |
 | `scripts/` | The evidence commands. |
 | `scripts/out/evidence/` | The archived proof of every cited transaction. |
+| `scripts/out/load-check/` | The archived record of the cost and throughput run. |
 | `.github/workflows/ci.yml` | The build and the test suites. |
 
 ## Versions
@@ -60,20 +61,186 @@ calculation:
 | `stellar-cli` | 28.0.0 |
 | Node | 22 |
 
-Install the Stellar CLI from the prebuilt release binary. A `cargo install` of
-that CLI fails on a bare Ubuntu machine, because the keyring dependency
-`libdbus-sys` finds no dbus development headers.
+## Reproduce the whole path
 
-## Build and test
+This section takes a reader from an empty machine to a redeemed voucher and to
+a refusal that the network recorded. It assumes knowledge of Stellar. It
+assumes no account, no key and nothing from this project.
+
+Everything below runs against testnet. Testnet holds no value.
+
+### 1. Install the tools
+
+| Tool | Version | How to obtain it |
+|---|---|---|
+| Rust | 1.96.0 | `rustup`, which reads `rust-toolchain.toml` and installs the version and the `wasm32v1-none` target on the first build. |
+| Stellar CLI | 28.0.0 | The prebuilt release binary. |
+| Node | 22 | Any 22 release. |
+
+Install the Stellar CLI from the release binary:
 
 ```bash
-stellar contract build      # -> target/wasm32v1-none/release/senet_voucher.wasm
-cargo test --workspace      # the contract tests
-npm install && npm test     # the library tests
+version=28.0.0
+curl --fail --location --silent --show-error \
+  "https://github.com/stellar/stellar-cli/releases/download/v${version}/stellar-cli-${version}-x86_64-unknown-linux-gnu.tar.gz" \
+  --output /tmp/stellar-cli.tar.gz
+tar -xzf /tmp/stellar-cli.tar.gz -C /tmp stellar
+sudo install -m 0755 /tmp/stellar /usr/local/bin/stellar
+stellar --version
 ```
 
-`rust-toolchain.toml` pins the Rust version and the Wasm target, so `rustup`
-installs both on the first build.
+Do not run `cargo install stellar-cli`. It fails on a bare Ubuntu machine,
+because the keyring dependency `libdbus-sys` finds no dbus development headers.
+
+A fresh `rustup` install puts `cargo` on the path of a new shell only. Open a
+new shell after that install, or run `. "$HOME/.cargo/env"` in the current
+one.
+
+Point the CLI at testnet:
+
+```bash
+stellar network use testnet
+```
+
+### 2. Create and fund the accounts
+
+The commands need ten testnet accounts. Four carry the roles of the evidence
+set. Six are the channel accounts of the fee-payer service.
+
+```bash
+for name in a b c d; do
+  stellar keys generate --fund --network testnet "senet-$name"
+done
+for index in 1 2 3 4 5 6; do
+  stellar keys generate --fund --network testnet "senet-channel-$index"
+done
+```
+
+Friendbot funds each account with 10,000 test XLM. It rate limits a burst, so
+the loops create one account at a time.
+
+### 3. Write the `.env` file
+
+Copy the example and fill it in. `.env` is ignored, and it never enters the
+repository.
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Meaning | How to produce the value |
+|---|---|---|
+| `RPC_URL` | The Soroban RPC server. | Keep the default. |
+| `HORIZON_URL` | The Horizon server. | Keep the default. |
+| `CONTRACT_ID` | The voucher contract that the commands call. | Step 4 prints it. |
+| `A_SECRET` | The payer, who signs every voucher. | `stellar keys secret senet-a` |
+| `B_SECRET` | The submitter, who pays the network fee and selects the recipient. | `stellar keys secret senet-b` |
+| `C_SECRET` | The recipient, who stands for a merchant. | `stellar keys secret senet-c` |
+| `D_SECRET` | A second recipient, who receives a refused attempt. | `stellar keys secret senet-d` |
+| `FEEPAYER_CHANNELS` | The channel accounts of the fee-payer, as one comma-separated list of secret keys. | The loop below prints the list. |
+
+```bash
+for index in 1 2 3 4 5 6; do
+  stellar keys secret "senet-channel-$index"
+done | paste -s -d , -
+```
+
+One channel account serves one transaction per ledger, so the number of
+channels sets the throughput. Six channels carry the load check.
+
+### 4. Build the contract and deploy it
+
+```bash
+stellar contract build
+```
+
+That writes `target/wasm32v1-none/release/senet_voucher.wasm`. Use
+`stellar contract build`, and not `cargo build --release`: the two produce
+different artifacts, and only the first reproduces a deployed contract byte for
+byte.
+
+Upload the file, deploy an instance of it, and initialize it. The commands
+below make `senet-a` the admin of the contract as well as the payer, which
+keeps the account count down. An admin sets the two caps and nothing else.
+
+```bash
+admin=$(stellar keys secret senet-a)
+wasm=target/wasm32v1-none/release/senet_voucher.wasm
+
+hash=$(stellar contract upload --wasm "$wasm" --optimize=false \
+  --source-account "$admin" --network testnet | tail -1)
+
+contract=$(stellar contract deploy --wasm-hash "$hash" \
+  --source-account "$admin" --network testnet | tail -1)
+
+stellar contract invoke --id "$contract" --source-account "$admin" \
+  --network testnet -- init \
+  --admin "$(stellar keys public-key senet-a)" \
+  --max_amount 1000000000 --max_ttl_ledgers 8640
+
+echo "CONTRACT_ID=$contract"
+```
+
+The `init` call prints `null`, which is the return value of a call that
+succeeded.
+
+`--optimize=false` keeps the uploaded bytes identical to the file that the
+build produced, so `$hash` equals the sha256 of that file. Put the printed
+`CONTRACT_ID` into `.env`.
+
+`max_amount` is 1,000,000,000 stroops, which is 100 XLM. `max_ttl_ledgers` is
+8,640 ledgers, which is about 12 hours. The library carries the same lifetime
+cap, and the fee-payer service refuses to start when the two disagree.
+
+Read the values back:
+
+```bash
+stellar contract invoke --id "$contract" --source-account "$admin" \
+  --network testnet -- limits
+```
+
+### 5. Run the tests
+
+```bash
+cargo test --workspace     # 30 contract tests
+npm install
+npm run build              # compile the library and the service
+npm test                   # the library and service tests
+```
+
+Steps 6 and 7 run the compiled library, so do not skip `npm run build`.
+
+### 6. Redeem a voucher, and record a refusal
+
+```bash
+node scripts/run-evidence.mjs
+```
+
+The command mints, submits and archives ten transactions. Six succeed and three
+fail on purpose. It prints the reason that the network recorded for each
+refusal, and it stops when a refusal happened for the wrong reason:
+
+```
+1b-double-spend-failed             FAILED   4b8605f6...
+  the network recorded ["nonce already exists for address","GAF5..."]
+```
+
+A refused transaction lands on the ledger. Its hash therefore opens in any
+explorer, and the refusal is a public record rather than a console line.
+
+Every row is archived under `scripts/out/evidence/`, with the envelope, the
+result, the meta, the diagnostic events and the Horizon summary.
+
+### 7. Measure the cost and the throughput
+
+```bash
+node scripts/run-load-check.mjs
+```
+
+### What this path does not cover
+
+The application, the passkey accounts and the payee-presented codes need a
+browser and a phone. They are not part of this path.
 
 ## The deployed contract
 
