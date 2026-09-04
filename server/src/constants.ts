@@ -92,3 +92,57 @@ export const FUND_CONFIRM_INTERVAL_MS = 1000;
 
 /** Stroops in one XLM. Horizon reports a balance with seven decimal places. */
 export const STROOPS_PER_XLM = 10_000_000n;
+
+/**
+ * How long the listener waits between two polls, in milliseconds.
+ *
+ * A ledger closes about every five seconds. Two seconds keeps the delay of a
+ * redemption under one ledger. A shorter interval asks the network a question
+ * that it cannot answer any faster.
+ */
+export const EVENT_POLL_INTERVAL_MS = 2_000;
+
+/**
+ * How many events one poll asks for.
+ *
+ * The RPC accepts 1 to 10,000 and defaults to 100. A burst of redemptions is
+ * far smaller than this, and a page that a delivery failure blocks should be
+ * small enough to retry cheaply.
+ */
+export const EVENT_PAGE_LIMIT = 100;
+
+/** How long the listener waits before it repeats a failed delivery. */
+export const DELIVERY_BACKOFF_MS = 1_000;
+
+/**
+ * The longest wait between two attempts at one delivery.
+ *
+ * The listener never gives up and never skips, so the backoff has a ceiling
+ * rather than an attempt count. A receiver that returns after an hour finds
+ * the listener still asking.
+ */
+export const DELIVERY_BACKOFF_CEILING_MS = 30_000;
+
+/**
+ * The status that the listener exits with when its cursor aged out.
+ *
+ * The RPC keeps about seven days of history. A cursor older than that names a
+ * ledger the network no longer holds, and every redemption between that ledger
+ * and now is unreadable. The listener stops. It does not jump to the present,
+ * because a jump drops those redemptions and leaves a service that looks
+ * healthy.
+ *
+ * 78 is `EX_CONFIG` in `sysexits.h`, which is the closest standard meaning: the
+ * stored state is no longer usable and a person must decide what to do.
+ */
+export const EXIT_CURSOR_AGED_OUT = 78;
+
+/**
+ * The JSON-RPC code that the network returns for a request that it refuses.
+ *
+ * The listener sends one shape of request, and the only part of it that can
+ * age is the cursor. This code therefore means the cursor named a ledger
+ * outside the retained window. The listener classifies on this value and never
+ * on the message, because the message is English prose that the network owns.
+ */
+export const RPC_INVALID_REQUEST = -32600;

@@ -11,6 +11,7 @@ export * from './horizon.js';
 export * from './balance.js';
 export * from './channels.js';
 export * from './limits.js';
+export * from './events.js';
 export * from './feepayer.js';
 export * from './http/transport.js';
 export * from './http/budget.js';
