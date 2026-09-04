@@ -9,7 +9,12 @@
  * This opens the page in a browser and asks the document. No template can fool
  * a rendered check, and it answers in one step.
  *
+ * It asks the deployment which commit it serves before it asks anything else.
+ * That question has one answer. Two people therefore cannot reach opposite
+ * conclusions from it, as they can from a search through a bundle.
+ *
  *   CHROME_PATH=/path/to/chrome ORIGIN=https://senet.hoodrun.io \
+ *     EXPECT_COMMIT=$(git rev-parse HEAD) \
  *     npm run origin-check --workspace @senet/server
  */
 import { launch } from 'puppeteer-core';
@@ -32,6 +37,53 @@ const REQUIRED = [
   { what: 'the three banner facts', selector: '#fact-device, #fact-service, #fact-ledger' },
 ] as const;
 
+/** The placeholder that a checkout carries in place of a real commit. */
+const PLACEHOLDER = 'PLACEHOLDER';
+
+/** What a release says about itself. */
+interface Release {
+  readonly commit: string;
+  readonly release: string;
+  readonly publishedAt: string;
+}
+
+/** Read a string field out of a value of unknown shape. */
+function field(source: Record<string, unknown>, key: string): string {
+  const value = source[key];
+  if (typeof value !== 'string' || value === '') {
+    throw new Error(`the release identity carries no ${key}`);
+  }
+  return value;
+}
+
+/**
+ * Ask the deployment which commit it serves.
+ *
+ * A content search cannot tell a build that is missing something from a build
+ * that has not landed yet. This question can, because a release states its own
+ * identity rather than leaving a reader to infer one.
+ */
+async function readRelease(origin: string): Promise<Release> {
+  const response = await fetch(`${origin}/release.json`);
+  if (!response.ok) {
+    throw new Error(`${origin} serves no release identity: it answered ${response.status}`);
+  }
+  const parsed: unknown = await response.json();
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('the release identity is not a JSON object');
+  }
+  const fields: Record<string, unknown> = { ...parsed };
+  const release = {
+    commit: field(fields, 'commit'),
+    release: field(fields, 'release'),
+    publishedAt: field(fields, 'publishedAt'),
+  };
+  if (release.commit.includes(PLACEHOLDER)) {
+    throw new Error('this deployment came from a working tree rather than from an export');
+  }
+  return release;
+}
+
 /** Read a variable that the check cannot run without. */
 function required(name: string): string {
   const value = process.env[name];
@@ -48,6 +100,16 @@ async function main(): Promise<void> {
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
   try {
+    const release = await readRelease(origin);
+    console.log(`commit     ${release.commit}`);
+    console.log(`release    ${release.release}, published ${release.publishedAt}`);
+    const expected = process.env['EXPECT_COMMIT'];
+    if (expected !== undefined && expected !== '' && expected !== release.commit) {
+      throw new Error(
+        `this deployment serves ${release.commit} and the check expected ${expected}`,
+      );
+    }
+
     const page = await browser.newPage();
     await page.goto(origin, { waitUntil: 'load', timeout: STEP_TIMEOUT_MS });
 
