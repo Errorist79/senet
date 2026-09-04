@@ -23,11 +23,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
+import { Asset, Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import {
-  LIFETIMES, TESTNET_CONTRACT_ID, ed25519Signer, nativeTokenId, randomNonce, randomVoucherId,
-  readVoucher, redeemArgs, signVoucher, TX_TIMEOUT_SECONDS,
+  LIFETIMES, STELLAR_TOML_PATH, TESTNET_CONTRACT_ID, buildPayUri, ed25519Signer, nativeTokenId,
+  randomNonce, randomVoucherId, readVoucher, redeemArgs, signUri, signVoucher, TX_TIMEOUT_SECONDS,
+  verifyUri,
 } from '@senet/core';
+// The domain that this deployment serves under. A request names it as its
+// origin, and a wallet reads the signing key from that domain's file, so the
+// value has to be the one the deployment declares rather than a second copy.
+import { RP_ID } from '@senet/server';
 import {
   ENDPOINTS, EVIDENCE_DIR, RPC_URL, archiveManifest, describeTransaction, loadEnv, readManifest,
   refusalReasons, requireEnv, writeManifest,
@@ -58,6 +63,12 @@ const config = {
 const payer = Keypair.fromSecret(requireEnv('PAYER_SECRET'));
 /** The submitter, who pays the network fee and selects the recipient. */
 const submitter = Keypair.fromSecret(requireEnv('SUBMITTER_SECRET'));
+// Read every remaining variable now rather than where it is used. The last row
+// of this run is a payment, and a run that spent ten transactions before it
+// discovered a missing key would leave those ten on the chain with nothing
+// archived to cite them.
+requireEnv('MERCHANT_ADDRESS');
+requireEnv('SEP7_SIGNING_SECRET');
 // A merchant receives an amount and signs nothing, so each one is an address
 // and not a secret. Every use below passes the address to the contract as the
 // recipient argument.
@@ -181,6 +192,66 @@ function record(name, outcome, note) {
   // A refusal is only evidence when it names its cause. The run therefore
   // prints the text that the network wrote into the diagnostic events.
   if (outcome.recorded !== undefined) console.log(`  the network recorded ${outcome.recorded}`);
+}
+
+/**
+ * Produce the payee-presented payment that the evidence promises.
+ *
+ * The merchant asks and the payer answers, which is the standard direction and
+ * the opposite of a voucher. The request is signed by the key that this
+ * domain's file publishes, so a wallet can tell that the domain asked.
+ *
+ * The payment is a classic payment operation and not a contract call, so the
+ * row it produces is read by a different decoder from every other row here.
+ */
+async function payeePresentedPayment() {
+  const signingKey = Keypair.fromSecret(requireEnv('SEP7_SIGNING_SECRET'));
+  const merchant = requireEnv('MERCHANT_ADDRESS');
+  const amount = stroopsAsAmount(AMOUNT_STROOPS);
+
+  const request = signUri(
+    buildPayUri({ destination: merchant, amount, originDomain: RP_ID }),
+    signingKey.secret(),
+  );
+  // Verify before paying. A request that this domain's own key cannot verify is
+  // not evidence of anything, and paying first would put a transaction on the
+  // chain that no row could honestly cite.
+  const verified = verifyUri(request, signingKey.publicKey());
+  if (!verified.verified) {
+    throw new Error(`the request that this domain signed does not verify: ${verified.reason}`);
+  }
+
+  const source = await server.getAccount(submitter.publicKey());
+  const payment = new TransactionBuilder(source, {
+    fee: INCLUSION_FEE_STROOPS,
+    networkPassphrase: config.network,
+  })
+    .addOperation(Operation.payment({ destination: merchant, asset: Asset.native(), amount }))
+    .setTimeout(TX_TIMEOUT_SECONDS)
+    .build();
+  payment.sign(submitter);
+  const outcome = await send(payment, 'sep7-payment');
+
+  return {
+    name: 'sep7-payment',
+    hash: outcome.hash,
+    status: outcome.status,
+    note: 'A merchant published a signed request and a payer answered it. This is '
+      + 'the payee-presented direction, which the voucher rows reverse.',
+    request: {
+      uri: request,
+      originDomain: RP_ID,
+      signingKey: signingKey.publicKey(),
+      tomlUrl: `https://${RP_ID}${STELLAR_TOML_PATH}`,
+    },
+  };
+}
+
+/** Stroops as the decimal amount that a payment operation and a request take. */
+function stroopsAsAmount(stroops) {
+  const whole = stroops / 10_000_000n;
+  const fraction = (stroops % 10_000_000n).toString().padStart(7, '0');
+  return `${whole}.${fraction}`;
 }
 
 console.log(`contract ${contractId}`);
@@ -322,6 +393,14 @@ async function readKeptRows() {
   }
   return kept;
 }
+
+// The payee-presented payment. It calls no contract, so it runs after every
+// voucher row rather than among them.
+const sep7 = await payeePresentedPayment();
+rows.push({
+  name: sep7.name, hash: sep7.hash, note: sep7.note, producer: 'script', request: sep7.request,
+});
+console.log(`${sep7.name.padEnd(34)} ${sep7.status.padEnd(8)} ${sep7.hash}`);
 
 const kept = await readKeptRows();
 const manifest = {

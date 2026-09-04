@@ -645,3 +645,40 @@ export function compareRequestToChain(request, payment, horizon, verify) {
 
   return { checked, problems };
 }
+
+/**
+ * Ask whether the domain still publishes the key that signed a request.
+ *
+ * This is the half of a request row that decays, and it is separate on purpose.
+ * The signature check beside it needs no network and stays true for ever. This
+ * one reads the domain's file today, so it answers about today: it fails when
+ * the domain rotates its key, and it fails when nobody published the key at all.
+ *
+ * The second failure is the one worth having. A row can carry a request that
+ * verifies perfectly against a key that no wallet could ever find, and every
+ * check that needs no network would pass while the row proved nothing about
+ * the deployment. That state is not imaginary. It reached the archive once,
+ * and this function is what found it.
+ */
+export async function publishesTheKey(request) {
+  let text;
+  try {
+    const response = await fetch(request.tomlUrl);
+    if (!response.ok) {
+      return { published: false, reason: `${request.tomlUrl} answered ${response.status}` };
+    }
+    text = await response.text();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { published: false, reason: `${request.tomlUrl} could not be read: ${detail}` };
+  }
+  const found = text.match(/URI_REQUEST_SIGNING_KEY\s*=\s*"([^"]+)"/);
+  if (found === null) return { published: false, reason: `${request.tomlUrl} names no signing key` };
+  if (found[1] !== request.signingKey) {
+    return {
+      published: false,
+      reason: `the domain publishes ${found[1]} and the row was signed by ${request.signingKey}`,
+    };
+  }
+  return { published: true, reason: null };
+}
