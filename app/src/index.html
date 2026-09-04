@@ -132,6 +132,33 @@
         </form>
 
         <div class="result-panel" id="merchant-result"></div>
+
+        <button class="link-button" id="merchant-report" type="button">
+          The camera will not read a code
+        </button>
+      </section>
+
+      <section class="screen" id="screen-camera" hidden>
+        <h2 class="screen-title">Camera report</h2>
+        <p class="screen-note">
+          This measures the cameras that this phone carries. Show a voucher on a
+          second phone, then hold it in the middle of the picture. Nothing here
+          changes what the scanner does.
+        </p>
+
+        <button class="submit" id="report-find" type="button">Find the cameras</button>
+
+        <video class="scanner" id="report-video" muted playsinline hidden></video>
+
+        <p class="screen-note" id="report-status">Nothing is measured yet.</p>
+
+        <div class="report-cameras" id="report-cameras"></div>
+
+        <pre class="report-output" id="report-output"></pre>
+
+        <button class="submit submit-quiet" id="report-copy" type="button" hidden>
+          Copy the report
+        </button>
       </section>
     </main>
 

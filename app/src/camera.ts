@@ -41,6 +41,38 @@ function cameraProblem(caught: unknown): CameraError {
   return new CameraError('failed', 'The camera did not start. Close other apps that use it.');
 }
 
+/** What the scanner asks for. A merchant points a rear camera at a screen. */
+export const REAR_CAMERA: MediaTrackConstraints = { facingMode: 'environment' };
+
+/**
+ * Open one camera and show it.
+ *
+ * The scanner asks for a rear camera. The camera report asks for one named
+ * device, so that a person can compare the lenses that a phone carries. Both
+ * need the same failures in the same words, so both come through here.
+ */
+export async function openCamera(
+  video: HTMLVideoElement,
+  wanted: MediaTrackConstraints,
+): Promise<MediaStream> {
+  if (navigator.mediaDevices === undefined) {
+    throw new CameraError(
+      'unsupported',
+      'This browser offers no camera. A camera needs a secure connection.',
+    );
+  }
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: wanted, audio: false });
+  } catch (caught) {
+    throw cameraProblem(caught);
+  }
+  video.srcObject = stream;
+  video.setAttribute('playsinline', 'true');
+  await video.play();
+  return stream;
+}
+
 /**
  * Open the camera and read frames until a symbol appears.
  *
@@ -51,25 +83,7 @@ export async function scanForSymbol(
   video: HTMLVideoElement,
   onFound: (scanned: Scanned) => void,
 ): Promise<Scan> {
-  if (navigator.mediaDevices === undefined) {
-    throw new CameraError(
-      'unsupported',
-      'This browser offers no camera. A camera needs a secure connection.',
-    );
-  }
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' },
-      audio: false,
-    });
-  } catch (caught) {
-    throw cameraProblem(caught);
-  }
-
-  video.srcObject = stream;
-  video.setAttribute('playsinline', 'true');
-  await video.play();
+  const stream = await openCamera(video, REAR_CAMERA);
 
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d', { willReadFrequently: true });

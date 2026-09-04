@@ -1,5 +1,6 @@
 import { fetchConfig, fetchLedger } from './api.js';
 import { startAccountScreen } from './account.js';
+import { startCameraReport } from './camera-report.js';
 import { showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
 import { LEDGER_REFRESH_MS } from './config.js';
 import { element } from './dom.js';
@@ -16,7 +17,16 @@ import { getChain, setChain, setLedger } from './store.js';
  */
 
 /** The screens that this build carries. */
-const SCREENS = ['account', 'payer', 'merchant'] as const;
+const SCREENS = ['account', 'payer', 'merchant', 'camera'] as const;
+
+/**
+ * The screens that the navigation leads to.
+ *
+ * The camera report is a measurement, and it is not part of the work that a
+ * payer or a merchant does. The merchant screen offers it where a person needs
+ * it, which is next to a camera that reads nothing.
+ */
+const NAV_SCREENS = ['account', 'payer', 'merchant'] as const;
 
 type ScreenName = (typeof SCREENS)[number];
 
@@ -39,6 +49,8 @@ const refreshers = new Map<ScreenName, () => void>();
 function showScreen(name: ScreenName): void {
   for (const screen of SCREENS) {
     element(`screen-${screen}`, HTMLElement).hidden = screen !== name;
+  }
+  for (const screen of NAV_SCREENS) {
     const button = element(`nav-${screen}`, HTMLButtonElement);
     button.setAttribute('aria-current', screen === name ? 'page' : 'false');
   }
@@ -90,11 +102,14 @@ async function readLedger(): Promise<void> {
 
 async function start(): Promise<void> {
   installWorker();
-  for (const screen of SCREENS) {
+  for (const screen of NAV_SCREENS) {
     element(`nav-${screen}`, HTMLButtonElement).addEventListener('click', () => {
       showScreen(screen);
     });
   }
+  element('merchant-report', HTMLButtonElement).addEventListener('click', () => {
+    showScreen('camera');
+  });
   const wanted = window.location.hash.replace('#', '');
   showScreen(isScreen(wanted) ? wanted : 'account');
 
@@ -103,6 +118,7 @@ async function start(): Promise<void> {
   startAccountScreen();
   startPayerScreen();
   refreshers.set('merchant', startMerchantScreen());
+  startCameraReport();
   showDeviceFact();
 
   // The first screen appeared before a screen registered its own refresh.

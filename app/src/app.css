@@ -406,3 +406,28 @@ body {
 .voucher .link-button {
   margin-top: 0;
 }
+
+.report-cameras {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.report-cameras .submit-quiet {
+  margin-top: 0;
+}
+
+.report-output {
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 50vh;
+  overflow: auto;
+}
