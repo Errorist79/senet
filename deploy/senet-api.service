@@ -5,6 +5,9 @@
 # The service listens on the loopback interface only. The web server in front
 # of it terminates TLS and proxies /api/ to it, so the service never faces the
 # public network itself.
+#
+# The working directory is a link that a deployment renames. A restart therefore
+# takes the service to the new release, and it takes nothing else with it.
 
 [Unit]
 Description=Senet fee-payer service
@@ -13,7 +16,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/senet
+WorkingDirectory=/opt/senet/service
 ExecStart=/usr/bin/node server/dist/tools/serve.js
 Restart=always
 RestartSec=3

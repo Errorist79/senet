@@ -151,6 +151,19 @@ if (chromePath === undefined || chromePath === '') {
       return { secure, scope, active, manifest, failure: null };
     });
     if (state.failure !== null) problems.push(`the worker did not register: ${state.failure}`);
+
+    // The application reads its chain settings from the service at start. A
+    // service that is older than the application answers without some of them,
+    // and the page then loads and looks healthy while account creation refuses.
+    // Only the running application shows that, so the check reads its own words.
+    const started = await page.evaluate(() => ({
+      text: document.body.innerText,
+      chain: window.localStorage.getItem('senet.chain'),
+    }));
+    check(!/did not answer/i.test(started.text),
+      'the application says the service did not answer, so the two releases disagree');
+    check(started.chain !== null,
+      'the application stored no chain settings, so it cannot mint or redeem');
     check(state.secure, 'the page is not a secure context, so no passkey works there');
     check(state.active, 'the service worker did not become active');
     check(state.scope === `${origin}/`, `the worker controls ${state.scope} and not the whole origin`);
