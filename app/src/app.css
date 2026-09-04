@@ -50,15 +50,28 @@ body {
 }
 
 .ledger,
-.chain {
+.fact {
   margin: 0;
   font-size: 13px;
   color: var(--ink-dim);
   font-variant-numeric: tabular-nums;
 }
 
-.chain[data-state='offline'] {
+.bar-foot {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fact[data-state='ready'] {
+  color: var(--good);
+}
+
+.fact[data-state='stale'] {
   color: var(--wait);
+}
+
+.fact[data-state='lost'] {
+  color: var(--bad);
 }
 
 .nav {
@@ -267,4 +280,58 @@ body {
 .detail-link {
   margin-left: auto;
   color: var(--ink-dim);
+}
+
+.code {
+  display: block;
+  margin: 14px 0;
+  image-rendering: pixelated;
+  border-radius: 6px;
+}
+
+.list-title {
+  margin: 26px 0 8px;
+  font-size: 15px;
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+
+.voucher-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voucher {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  font-size: 14px;
+}
+
+.voucher-void {
+  opacity: 0.55;
+}
+
+.voucher-amount {
+  font-weight: 600;
+}
+
+.voucher-life {
+  color: var(--ink-dim);
+  flex: 1;
+}
+
+.voucher-hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.voucher .link-button {
+  margin-top: 0;
 }

@@ -140,8 +140,8 @@ export const NETWORK_ID_BYTES = 4;
  * The whole payload prefix width, in bytes: one version byte and the network
  * identifier.
  *
- * A signed entry measures 792 bytes. At error correction level M a QR symbol
- * of version 23 holds 857 bytes, so this prefix keeps the voucher QR at
- * version 23.
+ * A signed entry from a passkey account measures 896 bytes, so a payload
+ * measures 901. At error correction level M that is a symbol of version 24,
+ * which holds 911 bytes. The prefix therefore costs no extra version.
  */
 export const PAYLOAD_PREFIX_BYTES = 1 + NETWORK_ID_BYTES;

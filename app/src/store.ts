@@ -158,6 +158,85 @@ export function setChain(chain: StoredChain): void {
   write(STORAGE.chain, chain);
 }
 
+/** One voucher that this device minted. */
+export interface StoredVoucher {
+  /** The identifier that the payer and the merchant share. */
+  readonly voucherId: string;
+  readonly amountStroops: string;
+  /** The ledger after which the contract refuses it. */
+  readonly expireAt: number;
+  readonly mintedAtMs: number;
+  /** The whole payload, as the code carries it. */
+  readonly payloadBase64: string;
+  /** `active` until the payer voids it, or a merchant takes it. */
+  readonly state: 'active' | 'void';
+  /** The transaction that voided it. */
+  readonly voidHash: string | null;
+}
+
+/** Read one stored voucher, or nothing when it no longer fits. */
+function readVoucher(value: unknown): StoredVoucher | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const fields: Record<string, unknown> = { ...value };
+  const voucherId = text(fields, 'voucherId');
+  const amountStroops = text(fields, 'amountStroops');
+  const payloadBase64 = text(fields, 'payloadBase64');
+  const expireAt = count(fields, 'expireAt');
+  const mintedAtMs = count(fields, 'mintedAtMs');
+  const state = fields['state'];
+  if (
+    voucherId === null ||
+    amountStroops === null ||
+    payloadBase64 === null ||
+    expireAt === null ||
+    mintedAtMs === null
+  ) {
+    return null;
+  }
+  return {
+    voucherId,
+    amountStroops,
+    expireAt,
+    mintedAtMs,
+    payloadBase64,
+    state: state === 'void' ? 'void' : 'active',
+    voidHash: text(fields, 'voidHash'),
+  };
+}
+
+/**
+ * The vouchers that this device minted.
+ *
+ * The list is what a payer sees, and it is the only place a minted voucher
+ * exists until a merchant takes it. A voucher that this list loses is money
+ * that nobody can spend until it expires.
+ */
+export function getVouchers(): StoredVoucher[] {
+  let text_: string | null = null;
+  try {
+    text_ = window.localStorage.getItem(STORAGE.vouchers);
+  } catch {
+    return [];
+  }
+  if (text_ === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(text_);
+    if (!Array.isArray(parsed)) return [];
+    const found: StoredVoucher[] = [];
+    for (const one of parsed) {
+      const voucher = readVoucher(one);
+      if (voucher !== null) found.push(voucher);
+    }
+    return found;
+  } catch {
+    return [];
+  }
+}
+
+export function setVouchers(vouchers: readonly StoredVoucher[]): void {
+  write(STORAGE.vouchers, vouchers);
+}
+
 /** The account that a merchant sends funds to. */
 export function getMerchantAddress(): string {
   try {

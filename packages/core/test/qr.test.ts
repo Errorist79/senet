@@ -26,14 +26,24 @@ import { decodeSymbol } from './scanner.js';
 /** The error correction level that the payer's code uses. */
 const ERROR_CORRECTION = 'M';
 
-/** The size of a signed entry from a passkey account, in bytes. */
-const PASSKEY_ENTRY_BYTES = 792;
+/**
+ * The size of a signed entry from a passkey account, in bytes.
+ *
+ * Measured on chain from a redemption that a passkey account signed. The
+ * signature is a vector of 584 bytes, which is what makes the entry this size.
+ * An earlier note recorded 792 bytes, and that figure no longer holds for the
+ * pinned account code.
+ */
+const PASSKEY_ENTRY_BYTES = 896;
 
 /** The largest payload that a version 23 symbol holds at this level. */
 const VERSION_23_CAPACITY_BYTES = 857;
 
-/** The symbol version that the payer's code uses. */
-const VOUCHER_QR_VERSION = 23;
+/** The largest payload that a version 24 symbol holds at this level. */
+const VERSION_24_CAPACITY_BYTES = 911;
+
+/** The symbol version that a passkey voucher needs at this level. */
+const VOUCHER_QR_VERSION = 24;
 
 /** Pixels per module when the test rasterizes a symbol. */
 const MODULE_PIXELS = 4;
@@ -126,22 +136,26 @@ function entryOfSize(target: number): xdr.SorobanAuthorizationEntry {
   throw new Error(`no entry of exactly ${target} bytes exists with this shape`);
 }
 
-test('the pinned encoder puts a passkey voucher at version 23', () => {
-  // The claim the product makes about the code that a payer shows.
+test('the pinned encoder puts a passkey voucher at version 24', () => {
+  // The code that a payer really shows, measured rather than assumed.
   const payload = PASSKEY_ENTRY_BYTES + PAYLOAD_PREFIX_BYTES;
-  assert.equal(versionFor(PASSKEY_ENTRY_BYTES), VOUCHER_QR_VERSION);
+  assert.equal(payload, 901);
   assert.equal(versionFor(payload), VOUCHER_QR_VERSION);
 });
 
-test('version 23 holds 857 bytes and no more', () => {
-  assert.equal(versionFor(VERSION_23_CAPACITY_BYTES), VOUCHER_QR_VERSION);
-  assert.equal(versionFor(VERSION_23_CAPACITY_BYTES + 1), VOUCHER_QR_VERSION + 1);
+test('a passkey voucher passed the version 23 ceiling', () => {
+  // An earlier note put the entry at 792 bytes, which fits version 23. The
+  // signature is larger now, so the payload no longer fits, and the version
+  // moved. The ceiling itself stays where it was.
+  assert.equal(versionFor(VERSION_23_CAPACITY_BYTES), 23);
+  assert.equal(versionFor(VERSION_23_CAPACITY_BYTES + 1), 24);
+  assert.ok(PASSKEY_ENTRY_BYTES + PAYLOAD_PREFIX_BYTES > VERSION_23_CAPACITY_BYTES);
 });
 
-test('the prefix leaves room to spare at version 23', () => {
-  const spare = VERSION_23_CAPACITY_BYTES - PASSKEY_ENTRY_BYTES - PAYLOAD_PREFIX_BYTES;
+test('the prefix leaves room to spare at version 24', () => {
+  const spare = VERSION_24_CAPACITY_BYTES - PASSKEY_ENTRY_BYTES - PAYLOAD_PREFIX_BYTES;
   assert.ok(spare > 0, `the prefix leaves ${spare} bytes`);
-  assert.equal(spare, 60);
+  assert.equal(spare, 10);
 });
 
 /** Encode a payload, paint it, scan it, and give back what the scan read. */

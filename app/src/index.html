@@ -17,6 +17,7 @@
 
     <nav class="nav">
       <button class="nav-button" id="nav-account" type="button">Account</button>
+      <button class="nav-button" id="nav-payer" type="button">Pay</button>
       <button class="nav-button" id="nav-merchant" type="button">Take a payment</button>
     </nav>
 
@@ -43,6 +44,40 @@
         </form>
 
         <div class="result-panel" id="account-panel"></div>
+      </section>
+
+      <section class="screen" id="screen-payer" hidden>
+        <h2 class="screen-title">Pay</h2>
+        <p class="screen-note">
+          Make a voucher and show it. This works with no network, because your
+          device signs it and counts the ledger itself.
+        </p>
+
+        <form class="form" id="payer-form">
+          <label class="field">
+            <span class="field-label">Amount in XLM</span>
+            <input
+              class="field-input"
+              id="payer-amount"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="0.1000000"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">How long it lasts</span>
+            <select class="field-input" id="payer-lifetime"></select>
+          </label>
+
+          <button class="submit" id="payer-mint" type="submit">Make the voucher</button>
+        </form>
+
+        <div class="result-panel" id="payer-panel"></div>
+
+        <h3 class="list-title">Your vouchers</h3>
+        <div class="voucher-list" id="payer-list"></div>
       </section>
 
       <section class="screen" id="screen-merchant" hidden>
@@ -91,7 +126,9 @@
     </main>
 
     <footer class="bar bar-foot">
-      <p class="chain" id="chain" data-state="reading">reading the service</p>
+      <p class="fact" id="fact-device" data-state="unknown">no account yet</p>
+      <p class="fact" id="fact-service" data-state="unknown">reading the service</p>
+      <p class="fact" id="fact-ledger" data-state="unknown">ledger unknown</p>
     </footer>
 
     <script type="module" src="/app.js"></script>

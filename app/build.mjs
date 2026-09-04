@@ -57,8 +57,8 @@ const SHOWN_BY_THE_SCREENS = [
   'CredentialTypeError',
   'DeadlineMismatchError',
   'RemainingLifeError',
-  // The payer screen adds `ExpiryWindowError` and `AmountWindowError` when it
-  // lands, because only a mint raises them.
+  'ExpiryWindowError',
+  'AmountWindowError',
 ];
 
 // A bundler renames a class. These names are what a person reads as the reason

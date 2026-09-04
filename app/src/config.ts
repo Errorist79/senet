@@ -18,6 +18,7 @@ export const STORAGE = {
   chain: 'senet.chain',
   ledger: 'senet.ledger',
   merchant: 'senet.merchant',
+  vouchers: 'senet.vouchers',
 } as const;
 
 /**
