@@ -18,7 +18,8 @@
     "account-check": "npm run build && node dist/tools/account-check.js",
     "scan-check": "npm run build && node dist/tools/scan-check.js",
     "payer-check": "npm run build && node dist/tools/payer-check.js",
-    "size-check": "npm run build && node dist/tools/size-check.js"
+    "size-check": "npm run build && node dist/tools/size-check.js",
+    "origin-check": "npm run build && node dist/tools/origin-check.js"
   },
   "dependencies": {
     "@senet/core": "0.1.0",
