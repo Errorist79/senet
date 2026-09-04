@@ -261,12 +261,16 @@ valid only while that same name serves the application.
 
 | Piece | Where |
 |---|---|
-| The application build | `/opt/senet/app/dist`, which nginx serves. |
-| The service | `senet-api.service`, from `/opt/senet`, on `127.0.0.1:8791`. |
-| The web server | nginx, from `/etc/nginx/sites-available/senet`. |
-| The common headers | `/etc/nginx/snippets/senet-common-headers.conf`. |
-| The keys | `/opt/senet/.env`, which git never carries. |
-| The certificate | Certbot, for `senet.hoodrun.io`. |
+| A release | `/opt/senet/releases/<stamp>`, one complete build |
+| The service | `senet-api.service`, from `/opt/senet/service`, on `127.0.0.1:8791` |
+| The application | `/opt/senet/live`, which nginx serves |
+| The web server | nginx, from `/etc/nginx/sites-available/senet` |
+| The common headers | `/etc/nginx/snippets/senet-common-headers.conf` |
+| The keys | `/opt/senet/.env`, which git never carries |
+| The certificate | Certbot, for `senet.hoodrun.io` |
+
+`service` and `live` are links. A deployment renames each one in a single step,
+so no request sees a directory that sits halfway between two releases.
 
 The service listens on the loopback interface only. nginx terminates TLS and
 proxies `/api/` to it, so the service never faces the public network itself.
@@ -283,8 +287,18 @@ ssh root@HOST 'bash /opt/senet-src/deploy/deploy.sh /opt/senet-src'
 an uncommitted tree would carry a file that nobody committed. The deployment
 would then serve code that no reader of the repository can see.
 
+The script builds the release before it changes anything that a reader can
+reach. It then moves the service link, waits for the service to answer, and only
+then moves the application link.
+
+**That order matters.** The application reads its chain settings from
+`/api/config` when it starts. An application that arrives before its service
+meets a service that answers without some of those settings. The page then loads
+and looks healthy, while account creation refuses. A person meets that as a
+broken feature rather than as a site that is down, which is harder to diagnose.
+
 The script never writes `/opt/senet/.env`, so a redeploy cannot lose the channel
-keys.
+keys. It keeps the three newest releases.
 
 ### Check the deployment
 
