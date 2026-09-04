@@ -39,6 +39,7 @@ const config: ServerConfig = {
   friendbotUrl: TESTNET_FRIENDBOT_URL,
   walletWasmHash: TESTNET_WALLET_WASM_HASH,
   listenerStatePath: '/nonexistent/listener.json',
+  redemptionStorePath: '/nonexistent/redemptions.json',
   rpId: RP_ID,
   channelSecrets: [Keypair.random().secret()],
 };

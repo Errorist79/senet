@@ -60,6 +60,14 @@ export interface ServerConfig {
    * two disagree about which file is the truth.
    */
   readonly listenerStatePath: string;
+  /**
+   * Where the service keeps the redemptions that a merchant screen reads.
+   *
+   * A file rather than memory. A restart would otherwise lose a confirmation,
+   * and nothing would refill it, because the listener re-delivers only what a
+   * receiver never accepted.
+   */
+  readonly redemptionStorePath: string;
 }
 
 /**
@@ -125,6 +133,7 @@ export function readConfig(): ServerConfig {
     rpId: RP_ID,
     channelSecrets,
     listenerStatePath: optional('LISTENER_STATE_FILE', './listener.json'),
+    redemptionStorePath: optional('REDEMPTION_STORE_FILE', './redemptions.json'),
   };
 }
 
