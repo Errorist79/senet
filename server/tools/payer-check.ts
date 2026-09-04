@@ -144,7 +144,15 @@ async function main(): Promise<void> {
     await page.waitForSelector('#payer-panel .result-good', { timeout: STEP_TIMEOUT_MS });
     const minted = await readPanel(page, 'payer-panel');
     if (minted === null) throw new Error('the payer screen showed no voucher');
-    console.log(`minted     ${minted.title}, ${minted.values['Code'] ?? 'no code'}`);
+    // The size line is what a person photographs. The check reads that same
+    // text, rather than a detail row that only a machine would open.
+    const codeSize = await page.evaluate(
+      () => document.querySelector('#payer-panel .code-size')?.textContent ?? '',
+    );
+    console.log(`minted     ${minted.title}, ${codeSize === '' ? 'no size shown' : codeSize}`);
+    await page.evaluate(() => {
+      document.querySelector('#payer-panel .result')?.scrollIntoView({ block: 'start' });
+    });
     await page.screenshot({ path: join(shots, 'payer-2-code.png') });
 
     // The void, which pays the voucher back to the payer's own account.
@@ -168,6 +176,7 @@ async function main(): Promise<void> {
       amountXlm: AMOUNT_XLM,
       account: account.values['Address'] ?? null,
       minted,
+      codeSize,
       voided,
       transactionHash: hash,
       screenshots: ['payer-1-account.png', 'payer-2-code.png', 'payer-3-void.png'],

@@ -23,6 +23,17 @@ export const ERROR_CORRECTION = 'M';
 /** The quiet zone around a symbol, in modules. The standard asks for four. */
 const QUIET_MODULES = 4;
 
+/**
+ * The largest symbol version that this build expects to draw.
+ *
+ * A passkey voucher takes version 23, and version 24 when the browser adds an
+ * optional field to the client data that it signs. A version above this means
+ * something grew that nobody measured: a longer name, a different browser, or
+ * a larger signature. The code still works, and it is denser than anything a
+ * measurement covered, so the screen says so rather than letting it pass.
+ */
+export const PLANNED_MAX_VERSION = 24;
+
 /** One QR symbol, ready to draw. */
 export interface Symbol_ {
   readonly isDark: (row: number, column: number) => boolean;

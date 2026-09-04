@@ -1,10 +1,11 @@
 import { fetchConfig, fetchLedger } from './api.js';
 import { startAccountScreen } from './account.js';
+import { showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
 import { LEDGER_REFRESH_MS } from './config.js';
-import { element, short } from './dom.js';
+import { element } from './dom.js';
 import { startMerchantScreen } from './merchant.js';
 import { startPayerScreen } from './payer.js';
-import { getAccount, getChain, setChain, setLedger, getLedger } from './store.js';
+import { getChain, setChain, setLedger } from './store.js';
 
 /**
  * The application shell.
@@ -19,9 +20,6 @@ const SCREENS = ['account', 'payer', 'merchant'] as const;
 
 type ScreenName = (typeof SCREENS)[number];
 
-/** How old a ledger reading may be before the banner calls it stale. */
-const STALE_LEDGER_MS = 60_000;
-
 /** Whether a value names a screen that this build carries. */
 function isScreen(value: string): value is ScreenName {
   return SCREENS.some((name) => name === value);
@@ -35,29 +33,6 @@ function showScreen(name: ScreenName): void {
     button.setAttribute('aria-current', screen === name ? 'page' : 'false');
   }
   window.location.hash = name;
-}
-
-/** Write one of the three facts that the banner keeps apart. */
-function setFact(id: string, text: string, state: 'ready' | 'stale' | 'lost' | 'unknown'): void {
-  const view = element(id, HTMLParagraphElement);
-  view.textContent = text;
-  view.dataset['state'] = state;
-}
-
-/**
- * Say whether this device holds an account.
- *
- * The banner keeps three facts apart on purpose. A device with an account and
- * no network can still mint. A device with a network and no account can do
- * nothing. One combined light would hide which of the two a person holds.
- */
-function showDeviceFact(): void {
-  const account = getAccount();
-  if (account === null) {
-    setFact('fact-device', 'no account yet', 'unknown');
-    return;
-  }
-  setFact('fact-device', `account ${short(account.contractId)}`, 'ready');
 }
 
 /** Register the worker that makes the application open with no network. */
@@ -84,30 +59,10 @@ async function loadChain(): Promise<void> {
       rpcUrl: chain.rpcUrl,
       walletWasmHash: chain.walletWasmHash,
     });
-    setFact('fact-service', `service on ${short(chain.contractId)}`, 'ready');
+    showServiceFact(chain.contractId, true);
   } catch {
-    const cached = getChain();
-    setFact(
-      'fact-service',
-      cached === null ? 'the service has never answered' : 'the service did not answer',
-      cached === null ? 'lost' : 'stale',
-    );
+    showServiceFact(null, getChain() !== null);
   }
-}
-
-/** Say which ledger this device knows about, and how old that reading is. */
-function showLedgerFact(): void {
-  const seen = getLedger();
-  if (seen === null) {
-    setFact('fact-ledger', 'no ledger seen', 'lost');
-    return;
-  }
-  const ageSeconds = Math.round((Date.now() - seen.seenAtMs) / 1000);
-  setFact(
-    'fact-ledger',
-    `ledger ${seen.sequence}, ${ageSeconds} seconds old`,
-    Date.now() - seen.seenAtMs > STALE_LEDGER_MS ? 'stale' : 'ready',
-  );
 }
 
 /** Read the ledger now, and again while the device has a network. */
@@ -141,6 +96,7 @@ async function start(): Promise<void> {
 
   await readLedger();
   window.setInterval(() => void readLedger(), LEDGER_REFRESH_MS);
+  // The age of the ledger reading changes every second, and nothing else does.
   window.setInterval(showLedgerFact, 1000);
 }
 

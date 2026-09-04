@@ -15,7 +15,7 @@ import {
 import type { LifetimeName, Voucher, VoucherConfig } from '@senet/core';
 import { ServiceError, submitRedeem } from './api.js';
 import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
-import { encodeBytes, drawToCanvas } from './qr.js';
+import { PLANNED_MAX_VERSION, encodeBytes, drawToCanvas } from './qr.js';
 import { passkeySigner } from './passkey.js';
 import { getAccount, getChain, getLedger, getVouchers, setVouchers } from './store.js';
 import type { StoredChain, StoredVoucher } from './store.js';
@@ -112,7 +112,13 @@ export function startPayerScreen(): void {
     fill(panel, box);
   }
 
-  /** Draw one voucher's code, so a merchant can read it. */
+  /**
+   * Draw one voucher's code, so a merchant can read it.
+   *
+   * The size of the code sits beside it in plain text, large enough to read in
+   * a photograph of the screen. A person who measures a device needs the
+   * version and the byte count in one shot, and taps nothing to get them.
+   */
   function showCode(voucher: StoredVoucher): void {
     const bytes = Uint8Array.from(window.atob(voucher.payloadBase64), (c) => c.charCodeAt(0));
     const symbol = encodeBytes(bytes);
@@ -121,13 +127,28 @@ export function startPayerScreen(): void {
       make('h2', 'result-title', xlm(voucher.amountStroops)),
       make('p', 'result-advice', 'Show this to the merchant. It works with no network.'),
     );
+    // The size sits above the code, and not below it. A code fills a phone
+    // screen, so a line under it falls off the bottom. A photograph would then
+    // carry the code without the numbers that describe it.
+    box.append(
+      make('p', 'code-size', `version ${symbol.version} · level M · ${bytes.length} bytes`),
+    );
+    if (symbol.version > PLANNED_MAX_VERSION) {
+      // The code still works. It is denser than any code that a measurement
+      // covered, so a scan that fails here is worth a report and not a retry.
+      box.append(
+        make(
+          'p',
+          'code-warning',
+          `This code is denser than any code that this version measured, which ` +
+            `reached version ${PLANNED_MAX_VERSION}. It should still scan. Tell the ` +
+            `operator if it does not.`,
+        ),
+      );
+    }
     const canvas = document.createElement('canvas');
     canvas.className = 'code';
-    box.append(canvas);
-    box.append(
-      detail('Voucher', voucher.voucherId),
-      detail('Code', `version ${symbol.version}, ${bytes.length} bytes`),
-    );
+    box.append(canvas, detail('Voucher', voucher.voucherId));
     fill(panel, box);
     drawToCanvas(canvas, symbol, CODE_SIZE);
   }

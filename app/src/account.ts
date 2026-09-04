@@ -1,4 +1,5 @@
 import { ServiceError, fetchBalance, fundAddress } from './api.js';
+import { showDeviceFact } from './banner.js';
 import { detail, element, fill, make, short, xlm } from './dom.js';
 import { createAccount, restoreAccount } from './passkey.js';
 import { clearAccount, getAccount, getChain } from './store.js';
@@ -83,6 +84,7 @@ export function startAccountScreen(): void {
       forget.type = 'button';
       forget.addEventListener('click', () => {
         clearAccount();
+        showDeviceFact();
         form.hidden = false;
         fill(panel);
       });
@@ -151,6 +153,7 @@ export function startAccountScreen(): void {
     fill(panel, make('p', 'waiting', 'Your device is asking you to confirm the passkey.'));
     try {
       await show(await createAccount(chain, name.value.trim() || 'Senet account'));
+      showDeviceFact();
     } catch (caught) {
       showProblem(panel, reason(caught));
     } finally {
