@@ -27,6 +27,7 @@
  * - does it offer the person the new version?
  * - does the restart deliver the new build?
  * - does the button say what to do when the handover does not happen?
+ * - does the bar go away when the version it announced has arrived?
  *
  * The last one exists because a person pressed a button that did nothing. A
  * check runs the handover on a browser that performs it, so it can never meet
@@ -55,6 +56,16 @@ const FIRST_TITLE = 'Senet';
 /** The commits that the served builds claim, so the footer has one to show. */
 const FIRST_COMMIT = 'aaaaaaa1111111111111111111111111111111111';
 const NEXT_COMMIT = 'bbbbbbb2222222222222222222222222222222222';
+const LATER_COMMIT = 'ccccccc3333333333333333333333333333333333';
+
+/**
+ * What the page sends a worker that waits.
+ *
+ * The value sits here as a literal on purpose. It is the wire between the page
+ * and the worker. A check that imports the same constant as the product cannot
+ * notice that the product changed it.
+ */
+const SKIP_WAITING = 'senet.skip-waiting';
 
 /** Publish a build identity, as the real deployment does. */
 function writeRelease(dir: string, commit: string): void {
@@ -81,7 +92,7 @@ function required(name: string): string {
  * itself differently. The worker's identity changes with it, because a worker
  * that carries the same bytes is the fault that this check exists for.
  */
-function copyAsNextBuild(from: string, to: string, deaf = false): string {
+function copyAsNextBuild(from: string, to: string, suffix: string, deaf = false): string {
   cpSync(from, to, { recursive: true });
 
   const workerPath = join(to, 'sw.js');
@@ -90,7 +101,7 @@ function copyAsNextBuild(from: string, to: string, deaf = false): string {
   if (identity === null) {
     throw new Error('the worker carries no build identity, so no release can reach a person');
   }
-  let written = worker.replace(identity[0], `${identity[0]}${deaf ? '-deaf' : '-next'}`);
+  let written = worker.replace(identity[0], `${identity[0]}-${suffix}`);
   if (deaf) {
     // A worker that never hands over, which is what the phone showed. The
     // handover is the only part that this removes.
@@ -121,12 +132,17 @@ async function main(): Promise<void> {
   const firstBuild = join(work, 'first');
   const next = join(work, 'next');
   const deaf = join(work, 'deaf');
+  const later = join(work, 'later');
   cpSync(DIST, firstBuild, { recursive: true });
   writeRelease(firstBuild, FIRST_COMMIT);
-  const identity = copyAsNextBuild(DIST, next);
+  const identity = copyAsNextBuild(DIST, next, 'next');
   writeRelease(next, NEXT_COMMIT);
-  copyAsNextBuild(DIST, deaf, true);
+  copyAsNextBuild(DIST, deaf, 'deaf', true);
   writeRelease(deaf, NEXT_COMMIT);
+  // A third identity, so that the browser sees a worker that it never held. A
+  // copy of an earlier build carries the same worker, and nothing would wait.
+  copyAsNextBuild(DIST, later, 'later');
+  writeRelease(later, LATER_COMMIT);
   console.log(`first      ${identity}`);
   console.log(`next       ${identity}-next`);
   console.log(`deaf       ${identity}-deaf, a build that never hands over`);
@@ -234,6 +250,38 @@ async function main(): Promise<void> {
       console.log('a returning person reaches the newer build, and chooses when');
     } finally {
       await second.close();
+    }
+
+    // The version that the bar announced arrives while the page stays open.
+    // The bar must then go away, because it announces a thing that happened.
+    // A person who reads it after the fact presses a button with nothing left
+    // to do, which is what the phone showed.
+    served = later;
+    const fourth = await start();
+    try {
+      const page = await fourth.newPage();
+      await page.goto(origin, { waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('update-bar')?.hidden === false, {
+        timeout: STEP_TIMEOUT_MS,
+      });
+      console.log('offered    the application says a new version is ready');
+
+      // The worker takes over without the person pressing anything, which is
+      // what a relaunch does. The page stays as it is.
+      await page.evaluate(async (message: string) => {
+        const registration = await navigator.serviceWorker.getRegistration();
+        registration?.waiting?.postMessage(message);
+      }, SKIP_WAITING);
+      await page.waitForFunction(
+        () => navigator.serviceWorker.controller !== null,
+        { timeout: STEP_TIMEOUT_MS },
+      );
+      await page.waitForFunction(() => document.getElementById('update-bar')?.hidden === true, {
+        timeout: STEP_TIMEOUT_MS,
+      });
+      console.log('cleared    the bar went away when the new version arrived');
+    } finally {
+      await fourth.close();
     }
 
     // The handover fails, and the application must still say what works.

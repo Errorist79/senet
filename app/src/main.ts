@@ -80,6 +80,9 @@ function showScreen(name: ScreenName): void {
  */
 let acceptedRestart = false;
 
+/** What the bar says while a new version waits. */
+const NEW_VERSION = 'A new version is ready.';
+
 /**
  * What a person does when the handover does not happen.
  *
@@ -90,6 +93,18 @@ let acceptedRestart = false;
  */
 const RELAUNCH_ADVICE =
   'Close Senet from the App Switcher, then open it again. That always works.';
+
+/**
+ * What the bar says when it was wrong.
+ *
+ * The offer announced a version that has since arrived. A person who presses
+ * then has nothing to restart into, and silence would read as a dead button.
+ * The bar states the good news instead, and then goes away.
+ */
+const ALREADY_CURRENT = 'This is the newest version.';
+
+/** Whether a restart is under way, so that nothing redraws over it. */
+let restarting = false;
 
 /**
  * Ask the registration which worker waits, at this moment.
@@ -106,36 +121,62 @@ async function workerInWaiting(): Promise<ServiceWorker | null> {
   return registration.waiting ?? registration.installing;
 }
 
-function offerUpdate(): void {
+/**
+ * Draw the offer from what the registration holds now.
+ *
+ * The offer is a state and not an event. An earlier version showed the bar at
+ * one step of the arrival and never looked again. The bar then outlived the
+ * version that it announced. A person read `a new version is ready` on a device
+ * that already ran it, and pressed a button with nothing left to do.
+ *
+ * This is the same correction that the destination on the merchant screen and
+ * the facts in the banner needed. A fact drawn once goes stale.
+ */
+async function refreshUpdateOffer(): Promise<void> {
+  if (restarting) return;
   const bar = element('update-bar', HTMLDivElement);
   const text = element('update-text', HTMLParagraphElement);
   const restart = element('update-restart', HTMLButtonElement);
-  bar.hidden = false;
 
-  restart.addEventListener(
-    'click',
-    () => {
-      restart.disabled = true;
-      restart.textContent = 'Restarting';
-      acceptedRestart = true;
-      void takeTheNewVersion(text, restart);
-    },
-    { once: true },
-  );
+  if ((await workerInWaiting()) === null) {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  text.textContent = NEW_VERSION;
+  restart.hidden = false;
+  restart.disabled = false;
+  restart.textContent = 'Restart now';
 }
 
-/** Take the version that waits, and say what to do when it does not arrive. */
-async function takeTheNewVersion(
-  text: HTMLParagraphElement,
-  restart: HTMLButtonElement,
-): Promise<void> {
+/** Take the version that waits, and say what happened when it does not arrive. */
+async function takeTheNewVersion(): Promise<void> {
+  const bar = element('update-bar', HTMLDivElement);
+  const text = element('update-text', HTMLParagraphElement);
+  const restart = element('update-restart', HTMLButtonElement);
+
   const waiting = await workerInWaiting();
-  if (waiting !== null) waiting.postMessage(SKIP_WAITING);
+  if (waiting === null) {
+    // The offer was out of date. The person gets the good news, not silence.
+    text.textContent = ALREADY_CURRENT;
+    restart.hidden = true;
+    window.setTimeout(() => {
+      bar.hidden = true;
+    }, RESTART_TIMEOUT_MS);
+    return;
+  }
+
+  restarting = true;
+  acceptedRestart = true;
+  restart.disabled = true;
+  restart.textContent = 'Restarting';
+  waiting.postMessage(SKIP_WAITING);
 
   // The page reloads when the worker takes over, so this timer only ever
   // finishes when the handover did not happen.
   window.setTimeout(() => {
     acceptedRestart = false;
+    restarting = false;
     text.textContent = RELAUNCH_ADVICE;
     restart.hidden = true;
   }, RESTART_TIMEOUT_MS);
@@ -154,9 +195,18 @@ function installWorker(): void {
   // The page reloads only for a restart that the person accepted, and only
   // once. Any other change of controller leaves the screen alone.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!acceptedRestart) return;
-    acceptedRestart = false;
-    window.location.reload();
+    if (acceptedRestart) {
+      acceptedRestart = false;
+      window.location.reload();
+      return;
+    }
+    // A worker took over without the person pressing anything. The offer that
+    // announced it is now out of date, so the bar goes.
+    void refreshUpdateOffer();
+  });
+
+  element('update-restart', HTMLButtonElement).addEventListener('click', () => {
+    void takeTheNewVersion();
   });
 
   navigator.serviceWorker
@@ -164,22 +214,24 @@ function installWorker(): void {
     .then((registration) => {
       // A worker can already be waiting from an earlier visit. Nothing fires
       // for that one, so the application asks.
-      if (registration.waiting !== null) offerUpdate();
+      void refreshUpdateOffer();
 
       registration.addEventListener('updatefound', () => {
         const arriving = registration.installing;
         if (arriving === null) return;
-        arriving.addEventListener('statechange', () => {
-          // A first install controls nothing and replaces nothing, so it needs
-          // no permission. Only a worker that displaces another one does.
-          if (arriving.state !== 'installed') return;
-          if (navigator.serviceWorker.controller === null) return;
-          offerUpdate();
-        });
+        // Every step of the arrival changes what waits. The offer follows the
+        // state, and not any one step of it. A worker passes through the
+        // installed state before it becomes the active one. A bar drawn on that
+        // step alone announces a version that has already arrived.
+        arriving.addEventListener('statechange', () => void refreshUpdateOffer());
       });
 
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') void registration.update();
+        if (document.visibilityState !== 'visible') return;
+        void registration.update();
+        // An application on a home screen resumes without a navigation. This is
+        // the moment to correct an offer that went stale while it slept.
+        void refreshUpdateOffer();
       });
     })
     .catch(() => {
