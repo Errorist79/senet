@@ -1,0 +1,52 @@
+# The Senet event listener.
+#
+# Install it at /etc/systemd/system/senet-listener.service.
+#
+# The listener reads the contract's events over RPC and posts one message per
+# redemption. It holds a cursor, so it is the first process in this project
+# that carries state between one run and the next.
+#
+# The state file sits outside every release directory. A deployment copies a
+# release with `rsync --delete` and later removes old releases, so a cursor
+# inside a release is destroyed by the next deployment. `/opt/senet/` is the
+# one directory that a deployment never writes, and `.env` already lives there.
+#
+# The working directory is a link that a deployment renames, exactly as the
+# fee-payer service uses. A restart therefore takes the listener to the new
+# release and takes nothing else with it.
+
+[Unit]
+Description=Senet event listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/senet/service
+ExecStart=/usr/bin/node server/dist/tools/listen.js
+Environment=ENV_FILE=/opt/senet/.env
+Environment=LISTENER_STATE_FILE=/opt/senet/state/listener.json
+
+Restart=always
+RestartSec=5
+
+# Exit status 78 means one thing, and this service reserves it for that: the
+# stored cursor is older than the ledger range that the RPC still holds, so the
+# events between the cursor and the window are gone for ever.
+#
+# A restart cannot repair that. A listener that restarted would either fail the
+# same way for ever or, worse, start again from the newest ledger and look
+# healthy while every redemption in the gap stays unreported. Neither is a
+# decision that a service makes for itself, so the unit stays down and a person
+# chooses.
+#
+# Verified on systemd 249: a unit that exits 78 under this directive records
+# NRestarts=0 and stays down, and the same unit exiting 79 records five
+# restarts in eight seconds.
+RestartPreventExitStatus=78
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

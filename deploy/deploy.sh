@@ -46,6 +46,12 @@ if [ ! -f "$TARGET/.env" ]; then
 fi
 chmod 600 "$TARGET/.env"
 
+# The event listener keeps its cursor here. The directory sits beside `.env`
+# rather than inside a release, because the release copy below runs with
+# `--delete` and the prune at the end removes old releases outright. A cursor
+# inside a release would not survive its own deployment.
+mkdir -p "$TARGET/state"
+
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 RELEASE="$TARGET/releases/$STAMP"
 
