@@ -1,56 +1,56 @@
 {
   "network": "Test SDF Network ; September 2015",
   "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
-  "producedAt": "2026-09-04T04:48:23.365Z",
+  "producedAt": "2026-09-04T05:05:38.338Z",
   "rows": [
     {
       "name": "1a-success",
-      "hash": "8d506b3b914cb132afa57f09a5a28751e39457d2bafafbc7b8828e49c0050cf2",
+      "hash": "3230eceb47e4ca7fb45fe5f51c7c9284732cccf118c7a5260ff470472a04e78c",
       "note": "One account signs the entry and a second account submits it. The party that submits selects the recipient after the signature exists."
     },
     {
       "name": "1b-double-spend-failed",
-      "hash": "95b6fbff5f50f7e8aacce2965317ef3b8095b51502a414a471018a489764880f",
+      "hash": "18fa6ed29c7e55b924d9b64c745acd73069b60f1ecb3b8a6cc8f7e97d8f2bb1d",
       "note": "The network refuses a second submission of the same signed entry, because it consumed the nonce."
     },
     {
       "name": "1c-expired-host-signature-failed",
-      "hash": "956673d0298266c607facd071be4b0ea179c5178dfdb6d69f5483fde13165d3d",
+      "hash": "9ee25a038a4ddb736069a670712b7b420bb68cb6d4131c699aad4e2b4ac7d79c",
       "note": "The network refuses an entry whose signature expiration ledger is in the past."
     },
     {
       "name": "8-void-success",
-      "hash": "9c3c8db1532a0ea904b73cc0d24dd40d342b47f6b683158ac8b57dbabd351070",
+      "hash": "a3013edb4ca4903473002317f889d97fc5a1ed68c79e118e89459091e34140f6",
       "note": "The payer voids the voucher and redeems it to their own address. The nonce is consumed and the balance does not change."
     },
     {
       "name": "8-after-void-failed",
-      "hash": "4830ef9def7edff587375ee3675e6e90604e74fd044cad280e709c9f40bc0216",
+      "hash": "fd8f263e2ceca9a46f67d0d4aa2a3f537e0dc027d62d1658413f777968db0e58",
       "note": "The network refuses a redemption of a voucher that the payer voided."
     },
     {
       "name": "task3-handbuilt",
-      "hash": "1f64d4540799ba4e970491c962413d3d58ce74ee2d9cad894949aff4415a646a",
+      "hash": "0cd43bb23d8012edbbf76a41c659ae205557b5918fd14cb671a41db162fa6b75",
       "note": "A client that never called simulation built this voucher. The redemption succeeds."
     },
     {
       "name": "lifetime-5m",
-      "hash": "aa6ccd88329a5beacda1e78dab381092f62da811c31664ff7c7f22e19229e9bf",
+      "hash": "d33cef7e40ed1043fedc4de16776df4996c63ea0a0c294084e2e0ea730f7709a",
       "note": "A voucher with a lifetime of 60 ledgers, about 5 minutes."
     },
     {
       "name": "lifetime-15m",
-      "hash": "98146c96a679fca742376cddbb6f572d8511acd728a74f7598453ba3f14d768d",
+      "hash": "58b45f32d875038dca6a25bd586ea1efbf5ef69487f35966d33a4af5d8ae0e99",
       "note": "A voucher with a lifetime of 180 ledgers, about 15 minutes. This lifetime is the default."
     },
     {
       "name": "lifetime-1h",
-      "hash": "9d71f0abf5638a3d45e7a6ce03daa4c8a32eef375c0dbae4550d2a74cc3f2160",
+      "hash": "faf3d98ece447d1fadb28e43fa6f86f16d4ea81fddda31bce8669b2f18cd8e50",
       "note": "A voucher with a lifetime of 720 ledgers, about 1 hour."
     },
     {
       "name": "lifetime-12h",
-      "hash": "dc7329641609cf4bd62102aee7673c402631e770ae0e4de919fde0cf7c6c6f87",
+      "hash": "681e068f4c7286a03839524ceb2870f75ac27863add59c99897a3d4a3fac5b7b",
       "note": "A voucher with a lifetime of 8,640 ledgers, about 12 hours. This lifetime equals the cap of the contract."
     },
     {

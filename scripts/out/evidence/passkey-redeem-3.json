@@ -3,7 +3,7 @@
   "hash": "6d010865a40c918adb0ac16b0bbec17ab4729eecfb0973e0eb25b1b7599f97b3",
   "note": "A third passkey redemption with a secp256r1 signature, for 33 XLM. The recipient differs from the payer.",
   "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
-  "archivedAt": "2026-09-04T04:49:24.810Z",
+  "archivedAt": "2026-09-04T05:05:43.728Z",
   "rpc": {
     "status": "SUCCESS",
     "ledger": 4454342,
