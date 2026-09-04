@@ -29,12 +29,18 @@ const ERROR_CORRECTION = 'M';
 /**
  * The size of a signed entry from a passkey account, in bytes.
  *
- * Measured on chain from a redemption that a passkey account signed. The
- * signature is a vector of 584 bytes, which is what makes the entry this size.
- * An earlier note recorded 792 bytes, and that figure no longer holds for the
- * pinned account code.
+ * A passkey entry takes one of two sizes, and the difference is not ours. A
+ * browser may add an optional field to the client data that it signs, which
+ * says not to compare that data against a template. Chrome adds it to some
+ * assertions and not to others, and the field measures 108 bytes.
+ *
+ * Both figures are for the production name. A shorter name gives a smaller
+ * entry, because the client data carries the origin as text.
  */
-const PASSKEY_ENTRY_BYTES = 896;
+const PASSKEY_ENTRY_BYTES = 792;
+
+/** The same entry when the browser adds that optional field. */
+const PASSKEY_ENTRY_BYTES_PADDED = 900;
 
 /** The largest payload that a version 23 symbol holds at this level. */
 const VERSION_23_CAPACITY_BYTES = 857;
@@ -42,8 +48,11 @@ const VERSION_23_CAPACITY_BYTES = 857;
 /** The largest payload that a version 24 symbol holds at this level. */
 const VERSION_24_CAPACITY_BYTES = 911;
 
-/** The symbol version that a passkey voucher needs at this level. */
-const VOUCHER_QR_VERSION = 24;
+/** The symbol version that a passkey voucher needs, without that field. */
+const VOUCHER_QR_VERSION = 23;
+
+/** The symbol version that the same voucher needs with that field. */
+const VOUCHER_QR_VERSION_PADDED = 24;
 
 /** Pixels per module when the test rasterizes a symbol. */
 const MODULE_PIXELS = 4;
@@ -136,26 +145,33 @@ function entryOfSize(target: number): xdr.SorobanAuthorizationEntry {
   throw new Error(`no entry of exactly ${target} bytes exists with this shape`);
 }
 
-test('the pinned encoder puts a passkey voucher at version 24', () => {
-  // The code that a payer really shows, measured rather than assumed.
-  const payload = PASSKEY_ENTRY_BYTES + PAYLOAD_PREFIX_BYTES;
-  assert.equal(payload, 901);
-  assert.equal(versionFor(payload), VOUCHER_QR_VERSION);
+test('a passkey voucher takes version 23, and version 24 with the added field', () => {
+  // The code that a payer really shows. A measurement gave both sizes, and
+  // the browser chooses which of the two appears.
+  assert.equal(versionFor(PASSKEY_ENTRY_BYTES + PAYLOAD_PREFIX_BYTES), VOUCHER_QR_VERSION);
+  assert.equal(
+    versionFor(PASSKEY_ENTRY_BYTES_PADDED + PAYLOAD_PREFIX_BYTES),
+    VOUCHER_QR_VERSION_PADDED,
+  );
 });
 
-test('a passkey voucher passed the version 23 ceiling', () => {
-  // An earlier note put the entry at 792 bytes, which fits version 23. The
-  // signature is larger now, so the payload no longer fits, and the version
-  // moved. The ceiling itself stays where it was.
+test('the added field is what crosses the version 23 ceiling', () => {
   assert.equal(versionFor(VERSION_23_CAPACITY_BYTES), 23);
   assert.equal(versionFor(VERSION_23_CAPACITY_BYTES + 1), 24);
-  assert.ok(PASSKEY_ENTRY_BYTES + PAYLOAD_PREFIX_BYTES > VERSION_23_CAPACITY_BYTES);
+  assert.ok(PASSKEY_ENTRY_BYTES + PAYLOAD_PREFIX_BYTES <= VERSION_23_CAPACITY_BYTES);
+  assert.ok(PASSKEY_ENTRY_BYTES_PADDED + PAYLOAD_PREFIX_BYTES > VERSION_23_CAPACITY_BYTES);
 });
 
-test('the prefix leaves room to spare at version 24', () => {
-  const spare = VERSION_24_CAPACITY_BYTES - PASSKEY_ENTRY_BYTES - PAYLOAD_PREFIX_BYTES;
-  assert.ok(spare > 0, `the prefix leaves ${spare} bytes`);
-  assert.equal(spare, 10);
+test('the larger voucher leaves six bytes inside version 24', () => {
+  // Six bytes is the whole margin. A longer domain name, or a browser that
+  // adds anything else to the client data, takes the code to version 25.
+  const spare = VERSION_24_CAPACITY_BYTES - PASSKEY_ENTRY_BYTES_PADDED - PAYLOAD_PREFIX_BYTES;
+  assert.equal(spare, 6);
+  assert.ok(spare > 0);
+});
+
+test('the added field measures the same in both entries', () => {
+  assert.equal(PASSKEY_ENTRY_BYTES_PADDED - PASSKEY_ENTRY_BYTES, 108);
 });
 
 /** Encode a payload, paint it, scan it, and give back what the scan read. */

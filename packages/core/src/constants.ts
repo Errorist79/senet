@@ -140,8 +140,9 @@ export const NETWORK_ID_BYTES = 4;
  * The whole payload prefix width, in bytes: one version byte and the network
  * identifier.
  *
- * A signed entry from a passkey account measures 896 bytes, so a payload
- * measures 901. At error correction level M that is a symbol of version 24,
- * which holds 911 bytes. The prefix therefore costs no extra version.
+ * A signed entry from a passkey account measures 792 bytes. It measures 900
+ * when the browser adds an optional field to the client data that it signs. At
+ * error correction level M those payloads take a symbol of version 23 and of
+ * version 24. The prefix costs no extra version in either case.
  */
 export const PAYLOAD_PREFIX_BYTES = 1 + NETWORK_ID_BYTES;
