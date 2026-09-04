@@ -1,5 +1,6 @@
 /**
- * Prove that a returning person reaches a newer build.
+ * Prove that a returning person reaches a newer build, and that nobody is
+ * interrupted to deliver it.
  *
  * Every other check in this repository opens the application in a fresh
  * browser. A fresh browser holds no worker and no cache, so it takes the newest
@@ -7,32 +8,19 @@
  * that a real person is always in: they already ran an earlier build, and a
  * worker of that build controls the page.
  *
- * That state is why the application shipped with no update path at all. Every
- * check passed, and the only way to a newer build was to delete the application
- * and lose the account with it.
+ * This check holds that state across three browser sessions, because the update
+ * path spans them. A build installs during one session and arrives at the next
+ * start, which is how a person meets it.
  *
- * This check holds that state, and it holds it across two browser sessions.
- * The first session installs one build and then closes. The second session
- * opens the second build against the profile that the first one left. A phone
- * is always in that state. A session that ended hours ago installed the worker
- * that controls it.
+ * The three questions:
  *
- * An earlier version of this check installed and updated inside one session. It
- * passed while the restart did nothing on a real phone, so a pass in one
- * session proves less than it appears to.
+ * - does a session that is already open keep the version that it started with?
+ * - does the next start deliver the newer build?
+ * - does the footer name the build that is running, in both sessions?
  *
- * The check asks three questions:
- *
- * - does the application refuse to swap itself without permission?
- * - does it offer the person the new version?
- * - does the restart deliver the new build?
- * - does the button say what to do when the handover does not happen?
- * - does the bar go away when the version it announced has arrived?
- *
- * The last one exists because a person pressed a button that did nothing. A
- * check runs the handover on a browser that performs it, so it can never meet
- * that failure by accident. This one therefore serves a worker that ignores the
- * message, which is the same silence from the page's side.
+ * The first question is the safety rule. A payment application must not replace
+ * itself while a payment is in progress. This build holds that rule by never
+ * touching a page that is already open.
  *
  *   CHROME_PATH=/path/to/chrome npm run update-check --workspace @senet/server
  */
@@ -53,19 +41,13 @@ const NEXT_TITLE = 'Senet next';
 /** What the first build calls itself. */
 const FIRST_TITLE = 'Senet';
 
+/** How long the check gives the new worker to install and take over. */
+const SETTLE_MS = 5_000;
+
 /** The commits that the served builds claim, so the footer has one to show. */
 const FIRST_COMMIT = 'aaaaaaa1111111111111111111111111111111111';
 const NEXT_COMMIT = 'bbbbbbb2222222222222222222222222222222222';
-const LATER_COMMIT = 'ccccccc3333333333333333333333333333333333';
 
-/**
- * What the page sends a worker that waits.
- *
- * The value sits here as a literal on purpose. It is the wire between the page
- * and the worker. A check that imports the same constant as the product cannot
- * notice that the product changed it.
- */
-const SKIP_WAITING = 'senet.skip-waiting';
 
 /** Publish a build identity, as the real deployment does. */
 function writeRelease(dir: string, commit: string): void {
@@ -92,7 +74,7 @@ function required(name: string): string {
  * itself differently. The worker's identity changes with it, because a worker
  * that carries the same bytes is the fault that this check exists for.
  */
-function copyAsNextBuild(from: string, to: string, suffix: string, deaf = false): string {
+function copyAsNextBuild(from: string, to: string, suffix: string): string {
   cpSync(from, to, { recursive: true });
 
   const workerPath = join(to, 'sw.js');
@@ -101,16 +83,7 @@ function copyAsNextBuild(from: string, to: string, suffix: string, deaf = false)
   if (identity === null) {
     throw new Error('the worker carries no build identity, so no release can reach a person');
   }
-  let written = worker.replace(identity[0], `${identity[0]}-${suffix}`);
-  if (deaf) {
-    // A worker that never hands over, which is what the phone showed. The
-    // handover is the only part that this removes.
-    const handover = /\w+\.skipWaiting\(\)/.exec(written);
-    if (handover === null) {
-      throw new Error('the worker calls no skipWaiting, so this check cannot silence it');
-    }
-    written = written.replace(handover[0], 'void 0');
-  }
+  const written = worker.replace(identity[0], `${identity[0]}-${suffix}`);
   writeFileSync(workerPath, written);
 
   const pagePath = join(to, 'index.html');
@@ -131,21 +104,12 @@ async function main(): Promise<void> {
   const work = mkdtempSync(join(tmpdir(), 'senet-update-'));
   const firstBuild = join(work, 'first');
   const next = join(work, 'next');
-  const deaf = join(work, 'deaf');
-  const later = join(work, 'later');
   cpSync(DIST, firstBuild, { recursive: true });
   writeRelease(firstBuild, FIRST_COMMIT);
   const identity = copyAsNextBuild(DIST, next, 'next');
   writeRelease(next, NEXT_COMMIT);
-  copyAsNextBuild(DIST, deaf, 'deaf', true);
-  writeRelease(deaf, NEXT_COMMIT);
-  // A third identity, so that the browser sees a worker that it never held. A
-  // copy of an earlier build carries the same worker, and nothing would wait.
-  copyAsNextBuild(DIST, later, 'later');
-  writeRelease(later, LATER_COMMIT);
   console.log(`first      ${identity}`);
   console.log(`next       ${identity}-next`);
-  console.log(`deaf       ${identity}-deaf, a build that never hands over`);
 
   // The served directory changes under the browser, which is what a deployment
   // does to a phone that is already running the application.
@@ -161,8 +125,8 @@ async function main(): Promise<void> {
   const origin = `http://localhost:${address.port}`;
   console.log(`origin     ${origin}`);
 
-  // One profile, two sessions. The profile is what carries the worker from the
-  // first session into the second, as a phone carries it across a day.
+  // One profile, three sessions. The profile is what carries the worker between
+  // them, as a phone carries it across a day.
   const profile = join(work, 'profile');
   const start = () =>
     launch({
@@ -176,10 +140,11 @@ async function main(): Promise<void> {
     try {
       const page = await first.newPage();
       await page.goto(origin, { waitUntil: 'load' });
-      await page.waitForFunction(() => navigator.serviceWorker.controller !== null, {
-        timeout: STEP_TIMEOUT_MS,
-      });
-      console.log('installed  the worker of the first build controls the page');
+      // The worker becomes active, and it does not claim this page. A page
+      // that registers a worker therefore never gets a controller. The next
+      // start does, which is the whole point of the design.
+      await waitForActiveWorker(page);
+      console.log('installed  the worker of the first build is active');
     } finally {
       await first.close();
     }
@@ -190,132 +155,79 @@ async function main(): Promise<void> {
     try {
       const page = await second.newPage();
       await page.goto(origin, { waitUntil: 'load' });
+      console.log(`identity   the footer shows ${await buildFact(page)}`);
 
-      // The state that matters, read from the browser rather than assumed. A
-      // report of a dead button needs to say what the page held at the press.
-      const before = await page.evaluate(async () => {
-        const registration = await navigator.serviceWorker.getRegistration();
-        return {
-          controller: navigator.serviceWorker.controller !== null,
-          waiting: registration?.waiting !== undefined && registration?.waiting !== null,
-          installing: registration?.installing !== undefined && registration?.installing !== null,
-          active: registration?.active !== undefined && registration?.active !== null,
-        };
-      });
-      console.log(
-        `state      controller ${before.controller}, waiting ${before.waiting}, ` +
-          `installing ${before.installing}, active ${before.active}`,
+      // The new worker installs and becomes the active one during this session.
+      // The page must not notice.
+      await page.waitForFunction(
+        async () => {
+          const registration = await navigator.serviceWorker.getRegistration();
+          return registration !== undefined;
+        },
+        { timeout: STEP_TIMEOUT_MS },
       );
-
-      await page.waitForFunction(() => document.getElementById('update-bar')?.hidden === false, {
-        timeout: STEP_TIMEOUT_MS,
-      });
-      console.log('offered    the application says a new version is ready');
-
-      const shownBefore = await buildFact(page);
-      console.log(`identity   the footer shows ${shownBefore}`);
-      if (!shownBefore.includes(FIRST_COMMIT.slice(0, 7))) {
-        throw new Error(`the footer names ${shownBefore}, and the first build is running`);
-      }
+      await new Promise((rest) => setTimeout(rest, SETTLE_MS));
 
       const heldTitle = await page.title();
       if (heldTitle !== FIRST_TITLE) {
-        throw new Error(
-          `the application swapped itself without asking: it already shows ${heldTitle}`,
-        );
+        throw new Error(`the application replaced itself under an open session: ${heldTitle}`);
       }
-      console.log('held       the new build waits, and the first build keeps the screen');
-
-      await page.click('#update-restart');
-      await page.waitForFunction((wanted: string) => document.title === wanted, {
-        timeout: STEP_TIMEOUT_MS,
-      }, NEXT_TITLE);
-      console.log(`restarted  the application now shows ${await page.title()}`);
-
-      const barAfter = await page.evaluate(
-        () => document.getElementById('update-bar')?.hidden ?? true,
-      );
-      if (barAfter === false) {
-        throw new Error('the application offers an update that it took a moment ago');
+      const heldIdentity = await buildFact(page);
+      if (!heldIdentity.includes(FIRST_COMMIT.slice(0, 7))) {
+        throw new Error(`the footer moved under an open session: ${heldIdentity}`);
       }
-      // The result the person reads. A report of a restart is worth less than
-      // a string on their own screen that changes when they act.
-      await page.waitForFunction(
-        (wanted: string) =>
-          (document.getElementById('fact-build')?.textContent ?? '').includes(wanted),
-        { timeout: STEP_TIMEOUT_MS },
-        NEXT_COMMIT.slice(0, 7),
-      );
-      console.log(`identity   the footer now shows ${await buildFact(page)}`);
-      console.log('a returning person reaches the newer build, and chooses when');
+      if ((await page.$('#update-bar')) !== null) {
+        throw new Error('the application asks a person about a version, which it must not');
+      }
+      console.log('undisturbed the open session keeps the build that it started with');
     } finally {
       await second.close();
     }
 
-    // The version that the bar announced arrives while the page stays open.
-    // The bar must then go away, because it announces a thing that happened.
-    // A person who reads it after the fact presses a button with nothing left
-    // to do, which is what the phone showed.
-    served = later;
-    const fourth = await start();
-    try {
-      const page = await fourth.newPage();
-      await page.goto(origin, { waitUntil: 'load' });
-      await page.waitForFunction(() => document.getElementById('update-bar')?.hidden === false, {
-        timeout: STEP_TIMEOUT_MS,
-      });
-      console.log('offered    the application says a new version is ready');
-
-      // The worker takes over without the person pressing anything, which is
-      // what a relaunch does. The page stays as it is.
-      await page.evaluate(async (message: string) => {
-        const registration = await navigator.serviceWorker.getRegistration();
-        registration?.waiting?.postMessage(message);
-      }, SKIP_WAITING);
-      await page.waitForFunction(
-        () => navigator.serviceWorker.controller !== null,
-        { timeout: STEP_TIMEOUT_MS },
-      );
-      await page.waitForFunction(() => document.getElementById('update-bar')?.hidden === true, {
-        timeout: STEP_TIMEOUT_MS,
-      });
-      console.log('cleared    the bar went away when the new version arrived');
-    } finally {
-      await fourth.close();
-    }
-
-    // The handover fails, and the application must still say what works.
-    served = deaf;
     const third = await start();
     try {
       const page = await third.newPage();
       await page.goto(origin, { waitUntil: 'load' });
-      await page.waitForFunction(() => document.getElementById('update-bar')?.hidden === false, {
-        timeout: STEP_TIMEOUT_MS,
-      });
-      await page.click('#update-restart');
-      await page.waitForFunction(
-        () => (document.getElementById('update-text')?.textContent ?? '').includes('App Switcher'),
-        { timeout: STEP_TIMEOUT_MS },
-      );
-      const said = await page.evaluate(
-        () => document.getElementById('update-text')?.textContent ?? '',
-      );
-      console.log(`advised    ${said.trim()}`);
-      const stillOffers = await page.evaluate(
-        () => document.getElementById('update-restart')?.hidden ?? true,
-      );
-      if (stillOffers === false) {
-        throw new Error('the application still offers a button that does nothing');
+      const title = await page.title();
+      if (title !== NEXT_TITLE) {
+        throw new Error(`the next start served ${title}, and the newer build was ready`);
       }
-      console.log('the button never stays dead, and the advice always works');
+      const shown = await buildFact(page);
+      console.log(`identity   the footer now shows ${shown}`);
+      if (!shown.includes(NEXT_COMMIT.slice(0, 7))) {
+        throw new Error(`the footer names ${shown}, and the newer build is running`);
+      }
+      console.log('delivered  the next start carries the newer build');
     } finally {
       await third.close();
     }
+    console.log('a person gets the newer build, and nothing interrupts them to do it');
   } finally {
     service.close();
     rmSync(work, { recursive: true, force: true });
   }
+}
+
+/**
+ * Wait until a worker is active, whether or not it controls this page.
+ *
+ * The poll runs here rather than in the page. A predicate that returns a
+ * promise is a truthy value in the page, so a wait on one passes at once and
+ * proves nothing.
+ */
+async function waitForActiveWorker(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof launch>>['newPage']>>,
+): Promise<void> {
+  const deadline = Date.now() + STEP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const state = await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      return registration?.active?.state ?? null;
+    });
+    if (state === 'activated') return;
+    await new Promise((rest) => setTimeout(rest, 500));
+  }
+  throw new Error('no worker became active, so the application caches nothing');
 }
 
 /** The build identity that the footer shows, as a person reads it. */

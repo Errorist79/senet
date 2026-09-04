@@ -2,7 +2,7 @@ import { fetchConfig, fetchLedger, fetchRelease } from './api.js';
 import { startAccountScreen } from './account.js';
 import { startCameraReport } from './camera-report.js';
 import { showBuildFact, showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
-import { LEDGER_REFRESH_MS, RESTART_TIMEOUT_MS, SKIP_WAITING } from './config.js';
+import { LEDGER_REFRESH_MS } from './config.js';
 import { element } from './dom.js';
 import { startMerchantScreen } from './merchant.js';
 import { startPayerScreen } from './payer.js';
@@ -66,162 +66,34 @@ function showScreen(name: ScreenName): void {
  * swap at that moment ends the payment, and it destroys the only evidence of
  * the payment. The person picks the moment instead.
  */
-/**
- * Whether the person asked for the restart.
- *
- * A worker takes control twice for two different reasons. The first time is
- * the first visit, where the worker claims a page that no worker controlled,
- * and the page is already the newest build. The second time is a restart that
- * the person accepted. Only the second one reloads.
- *
- * An earlier version reloaded on both. That reload landed in the middle of the
- * passkey ceremony on a first visit, and it made the account screen do nothing
- * at all.
- */
-let acceptedRestart = false;
-
-/** What the bar says while a new version waits. */
-const NEW_VERSION = 'A new version is ready.';
 
 /**
- * What a person does when the handover does not happen.
+ * Register the worker, and let a newer one arrive at the next start.
  *
- * A relaunch always works. A new worker waits only while a client of the
- * earlier worker stays open. An application that a person closes leaves no
- * client, so the new worker takes over on its own at the next start. This text
- * therefore states a certainty rather than another thing to try.
- */
-const RELAUNCH_ADVICE =
-  'Close Senet from the App Switcher, then open it again. That always works.';
-
-/** Whether a restart is under way, so that nothing redraws over it. */
-let restarting = false;
-
-/**
- * Ask the registration which worker waits, at this moment.
+ * The worker takes over as soon as it installs, and it never claims a page
+ * that is already open. A person keeps the version that they opened, for as
+ * long as they keep it open. They get the newer one at the next start.
  *
- * The worker that the bar named can disappear before a person presses. A phone
- * freezes an application on the home screen, and it ends the workers of that
- * application. A reference that this page captured minutes ago can then point
- * at nothing. A send to nothing throws nothing, and a person reads that as a
- * dead button.
- */
-async function workerInWaiting(): Promise<ServiceWorker | null> {
-  const registration = await navigator.serviceWorker.getRegistration();
-  if (registration === undefined) return null;
-  return registration.waiting ?? registration.installing;
-}
-
-/**
- * Draw the offer from what the registration holds now.
+ * This is the whole update path, and it holds the rule that matters by
+ * construction: a payment application must not replace itself while a payment
+ * is in progress. Nothing about a running session changes, so no moment exists
+ * at which a change could be unsafe.
  *
- * The offer is a state and not an event. An earlier version showed the bar at
- * one step of the arrival and never looked again. The bar then outlived the
- * version that it announced. A person read `a new version is ready` on a device
- * that already ran it, and pressed a button with nothing left to do.
- *
- * This is the same correction that the destination on the merchant screen and
- * the facts in the banner needed. A fact drawn once goes stale.
- */
-async function refreshUpdateOffer(): Promise<void> {
-  if (restarting) return;
-  const bar = element('update-bar', HTMLDivElement);
-  const text = element('update-text', HTMLParagraphElement);
-  const restart = element('update-restart', HTMLButtonElement);
-
-  if ((await workerInWaiting()) === null) {
-    bar.hidden = true;
-    return;
-  }
-  bar.hidden = false;
-  text.textContent = NEW_VERSION;
-  restart.hidden = false;
-  restart.disabled = false;
-  restart.textContent = 'Restart now';
-}
-
-/** Take the version that waits, and say what happened when it does not arrive. */
-async function takeTheNewVersion(): Promise<void> {
-  const bar = element('update-bar', HTMLDivElement);
-  const text = element('update-text', HTMLParagraphElement);
-  const restart = element('update-restart', HTMLButtonElement);
-
-  const waiting = await workerInWaiting();
-  if (waiting === null) {
-    // The worker took over between the draw and the press, which is a race
-    // rather than a state that a person can sit in. The bar goes, which is what
-    // the press asked for. Nothing announces it, because a message that exists
-    // to explain an impossible state teaches a person to expect the state.
-    bar.hidden = true;
-    return;
-  }
-
-  restarting = true;
-  acceptedRestart = true;
-  restart.disabled = true;
-  restart.textContent = 'Restarting';
-  waiting.postMessage(SKIP_WAITING);
-
-  // The page reloads when the worker takes over, so this timer only ever
-  // finishes when the handover did not happen.
-  window.setTimeout(() => {
-    acceptedRestart = false;
-    restarting = false;
-    text.textContent = RELAUNCH_ADVICE;
-    restart.hidden = true;
-  }, RESTART_TIMEOUT_MS);
-}
-
-/**
- * Register the worker, and watch for a newer one.
- *
- * A browser looks for a new worker when the page navigates. An application on
- * a home screen resumes without a navigation, so it can run for days and never
- * look. This asks whenever the application comes back to the front.
+ * An earlier version offered the person a restart instead. It asked a question
+ * that nobody needs to answer, and the machinery of the question carried four
+ * faults in one evening. The footer names the build. That answers the only
+ * question that a person has, and a person never has to ask it.
  */
 function installWorker(): void {
   if (!('serviceWorker' in navigator)) return;
-
-  // The page reloads only for a restart that the person accepted, and only
-  // once. Any other change of controller leaves the screen alone.
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (acceptedRestart) {
-      acceptedRestart = false;
-      window.location.reload();
-      return;
-    }
-    // A worker took over without the person pressing anything. The offer that
-    // announced it is now out of date, so the bar goes.
-    void refreshUpdateOffer();
-  });
-
-  element('update-restart', HTMLButtonElement).addEventListener('click', () => {
-    void takeTheNewVersion();
-  });
-
   navigator.serviceWorker
     .register('/sw.js', { scope: '/' })
     .then((registration) => {
-      // A worker can already be waiting from an earlier visit. Nothing fires
-      // for that one, so the application asks.
-      void refreshUpdateOffer();
-
-      registration.addEventListener('updatefound', () => {
-        const arriving = registration.installing;
-        if (arriving === null) return;
-        // Every step of the arrival changes what waits. The offer follows the
-        // state, and not any one step of it. A worker passes through the
-        // installed state before it becomes the active one. A bar drawn on that
-        // step alone announces a version that has already arrived.
-        arriving.addEventListener('statechange', () => void refreshUpdateOffer());
-      });
-
+      // A browser looks for a new worker when the page navigates. An
+      // application on a home screen resumes without a navigation, so it can
+      // run for days and never look. This asks whenever it comes to the front.
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState !== 'visible') return;
-        void registration.update();
-        // An application on a home screen resumes without a navigation. This is
-        // the moment to correct an offer that went stale while it slept.
-        void refreshUpdateOffer();
+        if (document.visibilityState === 'visible') void registration.update();
       });
     })
     .catch(() => {

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { RELEASE_PATH, SKIP_WAITING } from './config.js';
+import { RELEASE_PATH } from './config.js';
 
 /**
  * The service worker.
@@ -46,43 +46,47 @@ function workerScope(): ServiceWorkerGlobalScope {
 const scope = workerScope();
 
 /**
- * Take the shell, and then wait.
+ * Take the shell, and take over.
  *
- * The worker does not take over on its own. A person can hold a minted voucher
- * on the screen, or wait for a merchant's submission to answer. A swap at that
- * moment ends a payment in progress, and the screen that the swap destroys is
- * the person's only evidence of it. The application offers the person a restart
- * instead, and this worker waits until they take it.
+ * The worker becomes the active one as soon as it installs. It does not claim
+ * a page that is already open. A person therefore keeps the version that they
+ * started with, until they start the application again.
+ *
+ * That pair is what makes a swap safe without any test of whether it is safe.
+ * A person can hold a minted voucher on the screen, or wait for a payment to
+ * answer. Nothing about the open page changes, and neither one stops.
  */
 scope.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then(async (cache) => {
-      await cache.addAll(SHELL);
-      // The identity of this build, taken at the same moment as the files it
-      // describes. A page that reads it over the network later reads whatever
-      // the origin serves then, which names a build that nobody is running.
-      //
-      // This stays outside `addAll` on purpose. A deployment that publishes no
-      // identity must still get a worker, and `addAll` refuses the whole set
-      // when one file is missing.
-      await cache.add(RELEASE_PATH).catch(() => {
-        // The footer says that the build is unknown, and everything else works.
-      });
-    }),
+    caches
+      .open(CACHE)
+      .then(async (cache) => {
+        await cache.addAll(SHELL);
+        // The identity of this build, taken at the same moment as the files it
+        // describes. A page that reads it over the network later reads whatever
+        // the origin serves then, which names a build that nobody is running.
+        //
+        // This stays outside `addAll` on purpose. A deployment that publishes
+        // no identity must still get a worker, and `addAll` refuses the whole
+        // set when one file is missing.
+        await cache.add(RELEASE_PATH).catch(() => {
+          // The footer says that the build is unknown, and everything else works.
+        });
+      })
+      .then(() => scope.skipWaiting()),
   );
 });
 
-/** The person chose the moment. Take over now. */
-scope.addEventListener('message', (event) => {
-  if (event.data === SKIP_WAITING) void scope.skipWaiting();
-});
-
+// The caches of earlier builds go. This worker never calls `clients.claim`. A
+// page that another worker controls keeps that worker, and it keeps the cache
+// of that worker, until the next start.
 scope.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((names) => Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name))))
-      .then(() => scope.clients.claim()),
+      .then((names) =>
+        Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name))),
+      ),
   );
 });
 

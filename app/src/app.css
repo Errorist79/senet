@@ -432,41 +432,10 @@ body {
   overflow: auto;
 }
 
-.update-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  max-width: 560px;
-  margin: 10px auto 0;
-  padding: 10px 14px;
-  border: 1px solid var(--ink-dim);
-  border-radius: var(--radius);
-  background: var(--raised);
-}
 
-.update-text {
-  margin: 0;
-  font-size: 14px;
-}
 
-.update-restart {
-  padding: 8px 14px;
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--ink);
-  color: var(--ground);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
 
-.update-restart:disabled {
-  opacity: 0.5;
-  cursor: progress;
-}
+
 
 .account-signin {
   margin-top: 26px;
@@ -497,3 +466,6 @@ body {
 .notice-line:last-child {
   margin-bottom: 0;
 }
+
+
+

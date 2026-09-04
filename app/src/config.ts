@@ -43,25 +43,6 @@ export const REQUEST_TIMEOUT_MS = 130_000;
 export const SCAN_FPS = 10;
 
 /**
- * What the application says to a worker that waits.
- *
- * A new worker installs and then waits. A payment application must not replace
- * itself while a payment is in progress. This message carries the person's
- * answer to it.
- */
-export const SKIP_WAITING = 'senet.skip-waiting';
-
-/**
- * How long the application waits for a restart to finish, in milliseconds.
- *
- * A worker that takes over changes the controller in well under a second. This
- * wait is long enough that a slow device never reads the fallback by mistake.
- * It is also short enough that a person does not sit in front of a screen that
- * says nothing.
- */
-export const RESTART_TIMEOUT_MS = 6_000;
-
-/**
  * Where the deployment states which build it serves.
  *
  * The application shows this on the screen, so a person compares the phone
