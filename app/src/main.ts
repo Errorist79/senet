@@ -137,6 +137,13 @@ async function readLedger(): Promise<void> {
 
 async function start(): Promise<void> {
   installWorker();
+
+  // The build identity comes first. It comes before every call that needs
+  // the service. It is a fact about the files that this device runs, so it does
+  // not wait on a network. A device with no network needs about a second to
+  // fail the service call. The footer said `build unknown` for that second,
+  // which is the one moment a person is most likely to read it.
+  showBuildFact(await fetchRelease());
   for (const screen of NAV_SCREENS) {
     element(`nav-${screen}`, HTMLButtonElement).addEventListener('click', () => {
       showScreen(screen);
@@ -159,10 +166,6 @@ async function start(): Promise<void> {
   // The first screen appeared before a screen registered its own refresh.
   const opened = window.location.hash.replace('#', '');
   if (isScreen(opened)) refreshers.get(opened)?.();
-
-  // The build identity is a fact about the files that this device runs, so it
-  // comes from the origin rather than from the service.
-  showBuildFact(await fetchRelease());
 
   await readLedger();
   window.setInterval(() => void readLedger(), LEDGER_REFRESH_MS);

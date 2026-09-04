@@ -17,6 +17,7 @@
  * - does a session that is already open keep the version that it started with?
  * - does the next start deliver the newer build?
  * - does the footer name the build that is running, in both sessions?
+ * - does the worker hold the identity, so that it reads with no network?
  *
  * The first question is the safety rule. A payment application must not replace
  * itself while a payment is in progress. This build holds that rule by never
@@ -145,6 +146,15 @@ async function main(): Promise<void> {
       // start does, which is the whole point of the design.
       await waitForActiveWorker(page);
       console.log('installed  the worker of the first build is active');
+
+      // The identity must live in the cache beside the files that it names.
+      // A worker that fetches it later reads whatever the origin serves then,
+      // and a device with no network reads nothing at all.
+      const held = await page.evaluate(async () => (await caches.match('/release.json')) !== undefined);
+      if (!held) {
+        throw new Error('the worker holds no build identity, so a device with no network cannot read one');
+      }
+      console.log('identity   the worker holds it, beside the files that it names');
     } finally {
       await first.close();
     }

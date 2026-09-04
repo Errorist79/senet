@@ -80,6 +80,17 @@ scope.addEventListener('install', (event) => {
 // The caches of earlier builds go. This worker never calls `clients.claim`. A
 // page that another worker controls keeps that worker, and it keeps the cache
 // of that worker, until the next start.
+//
+// That page loses its cache here, while it is still open. Today it never
+// notices, because the shell holds everything and a loaded page asks only for
+// the service, which no worker answers. A reload reaches the new worker and
+// the new cache, which a measurement confirmed.
+//
+// This becomes a real fault the day the application loads anything after the
+// first paint: a font, an image, a split bundle, a second page. Such a request
+// would reach the deleted cache of the old worker, and it would fail with no
+// network and no message. A person who adds such a request must also keep the
+// previous cache here, in the same change.
 scope.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
