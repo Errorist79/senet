@@ -20,6 +20,18 @@ export interface StoredAccount {
   readonly contractId: string;
   /** The transaction that deployed it. */
   readonly deployHash: string | null;
+  /**
+   * The origin that created this account.
+   *
+   * A passkey binds to the domain that created it, so an account created under
+   * one name cannot sign under another. The account survives a change of name
+   * and the passkey does not, and nothing on chain says so. This value is what
+   * lets the screen say it.
+   *
+   * An account stored by an earlier version carries no origin, and the screen
+   * says nothing rather than guessing.
+   */
+  readonly origin: string | null;
 }
 
 /** The last ledger that this device saw, and when it saw it. */
@@ -81,7 +93,12 @@ export function getAccount(): StoredAccount | null {
   const keyId = text(fields, 'keyId');
   const contractId = text(fields, 'contractId');
   if (keyId === null || contractId === null) return null;
-  return { keyId, contractId, deployHash: text(fields, 'deployHash') };
+  return {
+    keyId,
+    contractId,
+    deployHash: text(fields, 'deployHash'),
+    origin: text(fields, 'origin'),
+  };
 }
 
 export function setAccount(account: StoredAccount): void {

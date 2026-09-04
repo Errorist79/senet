@@ -92,6 +92,7 @@ export async function createAccount(
     keyId: created.keyIdBase64,
     contractId: created.contractId,
     deployHash: submitted.hash,
+    origin: window.location.origin,
   };
   setAccount(account);
   restoreAccount(chain);

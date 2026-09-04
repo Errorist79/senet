@@ -33,13 +33,33 @@ export function startAccountScreen(): void {
   const name = element('account-name', HTMLInputElement);
   const form = element('account-form', HTMLFormElement);
 
+  /**
+   * Whether this account belongs to the name that serves the page.
+   *
+   * A passkey binds to the domain that created it. An account created under
+   * one name keeps its funds under another, and its passkey signs nothing
+   * there. Nothing on chain reports that, so the screen does.
+   */
+  function belongsHere(account: StoredAccount): boolean {
+    return account.origin === null || account.origin === window.location.origin;
+  }
+
   /** Draw the account, and read what it holds when the network answers. */
   async function show(account: StoredAccount): Promise<void> {
     form.hidden = true;
-    const box = make('div', 'result result-good');
+    const wrongName = !belongsHere(account);
+    const box = make('div', `result result-${wrongName ? 'wait' : 'good'}`);
     box.append(
-      make('h2', 'result-title', 'Your account'),
-      make('p', 'result-advice', 'The passkey stays in this device. There is no seed phrase.'),
+      make('h2', 'result-title', wrongName ? 'Another name holds this account' : 'Your account'),
+      make(
+        'p',
+        'result-advice',
+        wrongName
+          ? `${account.origin ?? ''} created this account. A passkey works only ` +
+            `under the name that created it, so this page cannot sign for it. Open ` +
+            `that name, or create a new account here.`
+          : 'The passkey stays in this device. There is no seed phrase.',
+      ),
       detail('Address', short(account.contractId), account.contractId),
     );
     if (account.deployHash !== null) {
@@ -50,7 +70,7 @@ export function startAccountScreen(): void {
     box.append(balance);
 
     const fund = make('button', 'submit submit-quiet', 'Add test funds');
-    if (fund instanceof HTMLButtonElement) {
+    if (!wrongName && fund instanceof HTMLButtonElement) {
       fund.type = 'button';
       fund.addEventListener('click', () => {
         void addFunds(account, fund, balance);
