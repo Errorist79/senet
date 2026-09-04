@@ -94,15 +94,6 @@ const NEW_VERSION = 'A new version is ready.';
 const RELAUNCH_ADVICE =
   'Close Senet from the App Switcher, then open it again. That always works.';
 
-/**
- * What the bar says when it was wrong.
- *
- * The offer announced a version that has since arrived. A person who presses
- * then has nothing to restart into, and silence would read as a dead button.
- * The bar states the good news instead, and then goes away.
- */
-const ALREADY_CURRENT = 'This is the newest version.';
-
 /** Whether a restart is under way, so that nothing redraws over it. */
 let restarting = false;
 
@@ -157,12 +148,11 @@ async function takeTheNewVersion(): Promise<void> {
 
   const waiting = await workerInWaiting();
   if (waiting === null) {
-    // The offer was out of date. The person gets the good news, not silence.
-    text.textContent = ALREADY_CURRENT;
-    restart.hidden = true;
-    window.setTimeout(() => {
-      bar.hidden = true;
-    }, RESTART_TIMEOUT_MS);
+    // The worker took over between the draw and the press, which is a race
+    // rather than a state that a person can sit in. The bar goes, which is what
+    // the press asked for. Nothing announces it, because a message that exists
+    // to explain an impossible state teaches a person to expect the state.
+    bar.hidden = true;
     return;
   }
 
