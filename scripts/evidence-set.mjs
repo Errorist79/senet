@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { scValToNative, xdr } from '@stellar/stellar-sdk';
+import { Address, scValToNative, xdr } from '@stellar/stellar-sdk';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const EVIDENCE_DIR = path.join(ROOT, 'scripts', 'out', 'evidence');
@@ -122,4 +122,52 @@ export async function refusalReasons(hash) {
     }
   }
   return reasons;
+}
+
+/**
+ * The signature scheme that an authorization entry carries.
+ *
+ * Two shapes appear on chain, and both were read from real transactions. An
+ * account that holds a key signs with a list of one map that carries
+ * `public_key` and `signature`. A smart account signs with a list of one map
+ * whose key names the curve, and a passkey names `Secp256r1` there.
+ */
+function signatureScheme(signature) {
+  let decoded;
+  try {
+    decoded = scValToNative(signature);
+  } catch {
+    return 'unknown';
+  }
+  const text = JSON.stringify(decoded, (key, value) =>
+    (typeof value === 'bigint' ? value.toString() : value)) ?? '';
+  if (text.includes('Secp256r1')) return 'secp256r1';
+  if (text.includes('public_key') || text.includes('Ed25519')) return 'ed25519';
+  return 'unknown';
+}
+
+/**
+ * Read the contract that a transaction invoked, and how the payer signed it.
+ *
+ * A row that no script can produce still has to state which contract it proves
+ * and which signature it carries. This function reads both from the chain, so
+ * nobody writes either value by hand and nobody has to keep it correct.
+ */
+export async function describeTransaction(hash) {
+  const result = await rpcTransaction(hash);
+  if (!result.envelopeXdr) return null;
+  const transaction = xdr.TransactionEnvelope.fromXDR(result.envelopeXdr, 'base64').v1().tx();
+  const operation = transaction.operations()[0].body().invokeHostFunctionOp();
+  const invoked = operation.hostFunction().invokeContract().contractAddress();
+  const entry = operation.auth()[0];
+  const credentials = entry.credentials();
+  const addressCredentials = credentials.switch().value === 2
+    ? credentials.addressV2()
+    : credentials.address();
+  return {
+    contractId: Address.fromScAddress(invoked).toString(),
+    payer: Address.fromScAddress(addressCredentials.address()).toString(),
+    credentialType: credentials.switch().value === 2 ? 'ADDRESS_V2' : 'ADDRESS',
+    signature: signatureScheme(addressCredentials.signature()),
+  };
 }

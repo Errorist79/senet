@@ -28,7 +28,9 @@ import {
   LIFETIMES, ed25519Signer, nativeTokenId, randomNonce, randomVoucherId,
   readVoucher, redeemArgs, signVoucher, TX_TIMEOUT_SECONDS,
 } from '@senet/core';
-import { ROOT, RPC_URL, archiveManifest, refusalReasons, writeManifest } from './evidence-set.mjs';
+import {
+  ROOT, RPC_URL, archiveManifest, describeTransaction, refusalReasons, writeManifest,
+} from './evidence-set.mjs';
 
 /** The value of one voucher in stroops, which is 0.5 XLM. */
 const AMOUNT_STROOPS = 5_000_000n;
@@ -297,19 +299,39 @@ for (const [name, lifetime] of Object.entries(LIFETIMES)) {
  * The rows that a passkey produced, which this command keeps as they are.
  *
  * A script cannot produce a WebAuthn signature, because the ceremony needs a
- * person and a device. Each kept row therefore carries the identifier of the
- * contract that held it, and a redeploy does not change that identifier.
+ * person and a device. A person captures such a row, and the only value that
+ * a person supplies is the hash. This command reads the rest from the chain.
+ *
+ * The contract of a kept row therefore comes from the transaction itself, and
+ * nobody keeps it correct by hand. A person who captures a fresh redemption
+ * replaces the hash. The row then names the current contract, and it needs no
+ * other change. The command also proves that the row
+ * carries a passkey signature, so a row of another kind cannot enter the set
+ * under a passkey name.
  */
-function readKeptRows() {
+async function readKeptRows() {
   const file = path.join(ROOT, 'scripts', 'out', 'evidence', 'manifest.json');
   if (!fs.existsSync(file)) return [];
   const previous = JSON.parse(fs.readFileSync(file, 'utf8'));
-  return previous.rows
-    .filter((row) => row.name.startsWith('passkey-'))
-    .map((row) => ({ ...row, contractId: row.contractId ?? previous.contractId }));
+  const kept = [];
+  for (const row of previous.rows.filter((each) => each.name.startsWith('passkey-'))) {
+    const described = await describeTransaction(row.hash);
+    if (described === null) {
+      console.log(`${row.name.padEnd(34)} KEPT     the RPC server no longer holds this row`);
+      kept.push(row);
+      continue;
+    }
+    if (described.signature !== 'secp256r1') {
+      throw new Error(`${row.name}: this row carries a ${described.signature} signature, not a passkey`);
+    }
+    const current = described.contractId === contractId ? 'current contract' : 'earlier contract';
+    console.log(`${row.name.padEnd(34)} KEPT     ${described.signature}, ${current}`);
+    kept.push({ ...row, contractId: described.contractId });
+  }
+  return kept;
 }
 
-const kept = readKeptRows();
+const kept = await readKeptRows();
 const manifest = {
   network: config.network,
   contractId,

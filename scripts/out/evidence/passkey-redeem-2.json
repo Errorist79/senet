@@ -3,7 +3,7 @@
   "hash": "e2bdb88c472deefef4f88c929cd975d2d6b0ac9e00047cd8181ffa8a79a7a8bb",
   "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
   "note": "A second passkey redemption with a secp256r1 signature. The recipient differs from the payer.",
-  "archivedAt": "2026-09-04T04:30:38.159Z",
+  "archivedAt": "2026-09-04T04:37:42.773Z",
   "rpc": {
     "status": "SUCCESS",
     "ledger": 4454315,

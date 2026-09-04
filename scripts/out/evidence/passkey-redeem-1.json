@@ -3,7 +3,7 @@
   "hash": "5909cdadb42f8ee88af3016ceb0edc352791185da88a7865bf35a7b930f54510",
   "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
   "note": "A contract account signs with a secp256r1 passkey signature that its own __check_auth verifies. The recipient differs from the payer.",
-  "archivedAt": "2026-09-04T04:30:37.790Z",
+  "archivedAt": "2026-09-04T04:37:42.406Z",
   "rpc": {
     "status": "SUCCESS",
     "ledger": 4442216,

@@ -118,9 +118,22 @@ A refused row lands on chain as a failed transaction, so each refusal is a
 public hash. The command reads the diagnostic events of every refused row. It
 then checks that the network refused the row for the stated reason.
 
-Four rows come from a passkey, and the command keeps them as they are. A script
-cannot produce them, because a WebAuthn signature needs a person and a device.
-Each kept row names the contract that held it.
+### What a script produces, and what a person produces
+
+A script produces every row above. The payer there holds a key, so the script
+signs on its own.
+
+A script cannot produce a row whose payer is a passkey. A WebAuthn signature
+needs a person, a device and a gesture, so no command creates one. A person
+captures such a row, and the only value that the person supplies is the
+transaction hash. The command reads the rest from the chain: the contract that
+the transaction called, the payer, and the signature scheme. It refuses a row
+that carries no passkey signature.
+
+The archive holds four passkey rows today, and each one names the contract that
+held it. A row against an earlier contract stays until a person captures a
+fresh one against the current contract. The replacement needs the new hash and
+nothing else.
 
 A second command refreshes the archive of the current set. It produces no
 transaction:
