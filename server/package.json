@@ -22,7 +22,9 @@
     "origin-check": "npm run build && node dist/tools/origin-check.js",
     "report-check": "npm run build && node dist/tools/report-check.js",
     "update-check": "npm run build && node dist/tools/update-check.js",
-    "signin-check": "npm run build && node dist/tools/signin-check.js"
+    "signin-check": "npm run build && node dist/tools/signin-check.js",
+    "listen": "npm run build && node dist/tools/listen.js",
+    "listen-check": "npm run build && node dist/tools/listen-check.js"
   },
   "dependencies": {
     "@senet/core": "0.1.0",

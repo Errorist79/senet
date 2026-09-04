@@ -146,3 +146,13 @@ export const EXIT_CURSOR_AGED_OUT = 78;
  * on the message, because the message is English prose that the network owns.
  */
 export const RPC_INVALID_REQUEST = -32600;
+
+/**
+ * How many times a run that must end repeats a refused delivery.
+ *
+ * A listener that runs for ever never gives up, because a receiver that
+ * returns after an hour should find its message waiting. A run that a person
+ * started needs to end and to say why, so it stops after this many refusals
+ * and moves nothing. The event that it could not deliver is still the next one.
+ */
+export const DELIVERY_ATTEMPTS_WHEN_QUIET = 5;

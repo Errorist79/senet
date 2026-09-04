@@ -2,7 +2,14 @@ import { renameSync, writeFileSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { Address, scValToNative } from '@stellar/stellar-sdk';
 import type { rpc, xdr } from '@stellar/stellar-sdk';
-import { EVENT_PAGE_LIMIT, RPC_INVALID_REQUEST } from './constants.js';
+import {
+  DELIVERY_ATTEMPTS_WHEN_QUIET,
+  DELIVERY_BACKOFF_CEILING_MS,
+  DELIVERY_BACKOFF_MS,
+  EVENT_PAGE_LIMIT,
+  EVENT_POLL_INTERVAL_MS,
+  RPC_INVALID_REQUEST,
+} from './constants.js';
 
 /**
  * The redemption feed.
@@ -260,4 +267,96 @@ export async function pollOnce(
   // here too, which is what keeps the position moving through a quiet week.
   writePosition(parts.statePath, { cursor: page.cursor });
   return { read: page.events.length, delivered, cursor: page.cursor, stuckOn: null };
+}
+
+/**
+ * Post one message, and treat only an accepted answer as delivery.
+ *
+ * The answer decides whether the position moves, so it must mean that the
+ * receiver holds the message. A receiver that answers before it writes turns
+ * an accepted message into a lost one, and nothing sends it again. This side
+ * therefore counts a 2xx and nothing else, and it counts a refused connection
+ * as a refusal rather than as an error to raise.
+ */
+export function postToWebhook(url: string): Deliver {
+  return async (message) => {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(message),
+      });
+      return response.ok;
+    } catch {
+      // A receiver that is down is a receiver that refused. The listener holds
+      // its position and asks again.
+      return false;
+    }
+  };
+}
+
+/** How long a listener runs. */
+export type RunUntil = 'quiet' | 'forever';
+
+/** What one run did. */
+export interface RunOutcome {
+  readonly polls: number;
+  readonly delivered: number;
+  /** The event that no receiver would take, when the run ended on one. */
+  readonly stuckOn: string | null;
+}
+
+/** Wait, so that a refused delivery does not become a busy loop. */
+function rest(ms: number): Promise<void> {
+  return new Promise((done) => setTimeout(done, ms));
+}
+
+/**
+ * Run the listener until it catches up, or for ever.
+ *
+ * `quiet` reads to the end of the feed and returns. A person who follows the
+ * written path runs that mode. Every step of the path is then a command that
+ * ends. A reader who must leave a process alive loses it when they close a
+ * terminal, and then meets a merchant screen that never confirms. `forever` is
+ * what the service unit runs.
+ *
+ * One function serves both modes, so a reader runs what the service runs.
+ */
+export async function runListener(
+  parts: ListenerParts,
+  until: RunUntil,
+  firstLedger: number,
+  attemptsWhenQuiet = DELIVERY_ATTEMPTS_WHEN_QUIET,
+): Promise<RunOutcome> {
+  let polls = 0;
+  let delivered = 0;
+  let refusals = 0;
+  let wait = DELIVERY_BACKOFF_MS;
+
+  for (;;) {
+    const held = readPosition(parts.statePath);
+    const from = held ?? { startLedger: firstLedger };
+    const result = await pollOnce(parts, from);
+    polls += 1;
+    delivered += result.delivered;
+
+    if (result.stuckOn !== null) {
+      refusals += 1;
+      // A run that must end cannot wait for ever. It stops, and it moves no
+      // position, so the event that it could not deliver is still the next.
+      if (until === 'quiet' && refusals >= attemptsWhenQuiet) {
+        return { polls, delivered, stuckOn: result.stuckOn };
+      }
+      await rest(wait);
+      wait = Math.min(wait * 2, DELIVERY_BACKOFF_CEILING_MS);
+      continue;
+    }
+
+    refusals = 0;
+    wait = DELIVERY_BACKOFF_MS;
+    // An empty page means the feed holds nothing newer, which is what caught
+    // up means.
+    if (until === 'quiet' && result.read === 0) return { polls, delivered, stuckOn: null };
+    await rest(until === 'quiet' ? 0 : EVENT_POLL_INTERVAL_MS);
+  }
 }

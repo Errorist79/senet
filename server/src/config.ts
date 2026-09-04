@@ -118,3 +118,60 @@ export function readConfig(): ServerConfig {
     channelSecrets,
   };
 }
+
+/** What the listener needs, which the API service does not. */
+export interface ListenerConfig {
+  /** Where one redemption message goes. */
+  readonly webhookUrl: string;
+  /**
+   * Where the listener keeps its position.
+   *
+   * The file sits outside a release, because a deployment replaces a release
+   * and would take the position with it. A checkout with no deployment keeps
+   * it in the working directory.
+   */
+  readonly statePath: string;
+  /**
+   * The ledger that a first start reads from, when no position exists.
+   *
+   * Nothing means the latest ledger at that moment. Such a listener reports
+   * what happens next. It does not replay a week of history to a receiver
+   * that already saw it.
+   */
+  readonly startLedger: number | null;
+}
+
+/** Read what the listener needs. */
+export function readListenerConfig(): ListenerConfig {
+  const startLedger = optional('LISTENER_START_LEDGER', '');
+  const parsed = startLedger === '' ? null : Number(startLedger);
+  if (parsed !== null && !Number.isSafeInteger(parsed)) {
+    throw new Error(`LISTENER_START_LEDGER is ${startLedger}, which is not a ledger number`);
+  }
+  return {
+    webhookUrl: required('WEBHOOK_URL'),
+    statePath: optional('LISTENER_STATE_FILE', './listener.json'),
+    startLedger: parsed,
+  };
+}
+
+/**
+ * Whether a URL names this machine.
+ *
+ * The SDK refuses a plain HTTP endpoint unless a caller allows it, which is
+ * the right default: a URL that crosses a network and carries no encryption
+ * exposes everything on it. A URL that never leaves the machine crosses no
+ * network, so the rule protects nothing there, and a developer with a local
+ * RPC needs it.
+ *
+ * The test is the host and not the scheme, so a plain HTTP address anywhere
+ * else is still refused.
+ */
+export function isLoopbackUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+}
