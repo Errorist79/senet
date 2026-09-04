@@ -1,0 +1,17 @@
+# Senet: the Stellar information file that SEP-1 defines.
+#
+# Testnet only. The domain publishes one signing key, so that a wallet verifies
+# a payment request that names senet.hoodrun.io as its origin domain.
+
+VERSION="2.7.0"
+NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+URI_REQUEST_SIGNING_KEY="GBJLKISD3BJG7CTDFB4XSJ7AZT5RVKR4YC22ODE4POXIUHMIFI6WRJG5"
+
+[DOCUMENTATION]
+ORG_NAME="Senet"
+ORG_DESCRIPTION="Payer-presented QR payments on Stellar testnet."
+ORG_URL="https://senet.hoodrun.io"
+
+[[CONTRACTS]]
+name="Senet voucher"
+contract="CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY"
