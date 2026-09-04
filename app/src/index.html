@@ -88,8 +88,18 @@
         </p>
 
         <form class="form" id="merchant-form">
-          <label class="field">
-            <span class="field-label">Account that receives the funds</span>
+          <div class="destination" id="merchant-destination" hidden>
+            <span class="field-label">Payment goes to</span>
+            <span class="destination-value" id="merchant-destination-value"></span>
+            <button class="link-button" id="merchant-elsewhere" type="button">
+              Send somewhere else
+            </button>
+          </div>
+
+          <label class="field" id="merchant-other" hidden>
+            <span class="field-label" id="merchant-other-label">
+              Account that receives the funds
+            </span>
             <input
               class="field-input"
               id="merchant-recipient"

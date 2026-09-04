@@ -13,6 +13,7 @@ import type { Scan } from './camera.js';
 import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
 import { outcomeText } from './outcomes.js';
 import {
+  getAccount,
   getChain,
   getLedger,
   getMerchantAddress,
@@ -121,17 +122,76 @@ function readCode(config: VoucherConfig, bytes: Uint8Array, now: number): Held {
   return { voucher, remaining: assertRemainingLife(voucher.expireAt, now) };
 }
 
-/** Wire the merchant screen to the document. */
-export function startMerchantScreen(): void {
+/**
+ * Wire the merchant screen to the document.
+ *
+ * It gives back the way to refresh itself. The account arrives on another
+ * screen. A destination drawn once at start would then say that this device
+ * holds nothing long after it holds an account.
+ */
+export function startMerchantScreen(): () => void {
   const form = element('merchant-form', HTMLFormElement);
   const payload = element('merchant-payload', HTMLTextAreaElement);
   const recipient = element('merchant-recipient', HTMLInputElement);
   const scanButton = element('merchant-scan', HTMLButtonElement);
+  const destination = element('merchant-destination', HTMLDivElement);
+  const destinationValue = element('merchant-destination-value', HTMLSpanElement);
+  const elsewhere = element('merchant-elsewhere', HTMLButtonElement);
+  const other = element('merchant-other', HTMLLabelElement);
+  const otherLabel = element('merchant-other-label', HTMLSpanElement);
   const video = element('merchant-video', HTMLVideoElement);
   const panel = element('merchant-result', HTMLDivElement);
 
-  recipient.value = getMerchantAddress();
   let scan: Scan | null = null;
+
+  /**
+   * Show where the payment goes.
+   *
+   * A merchant taking a payment on their own phone should not type a fifty six
+   * character address that the same screen is already displaying. A mistyped
+   * address that happens to be valid sends the money where nobody can recover
+   * it. The device's own account is therefore the default, and typing is the
+   * deliberate path.
+   */
+  function showDestination(): void {
+    const account = getAccount();
+    const typed = getMerchantAddress();
+    if (account === null) {
+      // With no account the screen has nothing to offer, so it asks, and it
+      // says why it is asking rather than presenting an empty box.
+      destination.hidden = true;
+      other.hidden = false;
+      otherLabel.textContent =
+        'This device holds no account, so name the account that receives the funds';
+      recipient.value = typed;
+      return;
+    }
+    if (typed !== '' && typed !== account.contractId) {
+      // Somebody chose another destination, and that choice stands until they
+      // clear it. The screen shows what it will really do.
+      destination.hidden = true;
+      other.hidden = false;
+      otherLabel.textContent = 'Account that receives the funds';
+      recipient.value = typed;
+      return;
+    }
+    destination.hidden = false;
+    other.hidden = true;
+    destinationValue.textContent = short(account.contractId);
+    destinationValue.dataset['full'] = account.contractId;
+    recipient.value = account.contractId;
+  }
+
+  elsewhere.addEventListener('click', () => {
+    destination.hidden = true;
+    other.hidden = false;
+    otherLabel.textContent = 'Account that receives the funds';
+    recipient.value = '';
+    recipient.focus();
+  });
+
+  showDestination();
+  
 
   /** Stop the camera and put the button back. */
   function stopScan(): void {
@@ -243,12 +303,15 @@ export function startMerchantScreen(): void {
 
   /** Send one voucher to the service, and show what it answers. */
   async function send(entryXdr: string): Promise<void> {
-    const address = recipient.value.trim();
+    const account = getAccount();
+    const address = recipient.value.trim() === '' ? (account?.contractId ?? '') : recipient.value.trim();
     if (address === '') {
       showRefusal(panel, 'MISSING_FIELD', 'Name the account that receives the funds.');
       return;
     }
-    setMerchantAddress(address);
+    // A destination that is this device's own account needs no remembering,
+    // because the account is where it comes from.
+    if (account === null || address !== account.contractId) setMerchantAddress(address);
     fill(panel, make('p', 'waiting', 'The service is paying the fee and waiting for a ledger.'));
     try {
       showResult(panel, await submitRedeem(entryXdr, address));
@@ -257,4 +320,6 @@ export function startMerchantScreen(): void {
       showRefusal(panel, code, message);
     }
   }
+
+  return showDestination;
 }

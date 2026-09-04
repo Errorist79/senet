@@ -233,6 +233,35 @@ async function main(): Promise<void> {
     console.log(`hash       ${hash ?? 'none'}`);
     await page.screenshot({ path: join(shots, 'payer-3-void.png') });
 
+    // A merchant on their own phone should type nothing. The screen shows the
+    // device's account as the destination, and the field it used to present is
+    // gone unless a person asks for it.
+    await page.click('#nav-merchant');
+    await page.waitForSelector('#merchant-scan', { timeout: STEP_TIMEOUT_MS });
+    const destination = await page.evaluate(() => {
+      const shown = document.querySelector('#merchant-destination');
+      const value = document.querySelector('#merchant-destination-value');
+      const field = document.querySelector('#merchant-other');
+      return {
+        showsDestination: shown instanceof HTMLElement && !shown.hidden,
+        asksForOne: field instanceof HTMLElement && !field.hidden,
+        address: value instanceof HTMLElement ? (value.dataset['full'] ?? '') : '',
+      };
+    });
+    const address = account.values['Address'] ?? '';
+    console.log(
+      `merchant   ${destination.showsDestination ? 'shows the destination' : 'shows no destination'}` +
+        `, ${destination.asksForOne ? 'asks for one' : 'asks for nothing'}`,
+    );
+    if (!destination.showsDestination || destination.asksForOne) {
+      throw new Error('the merchant screen asks for an account that the device already holds');
+    }
+    if (destination.address !== address) {
+      throw new Error(
+        `the merchant screen sends to ${destination.address} and this device holds ${address}`,
+      );
+    }
+
     const record = {
       ranAt: new Date().toISOString(),
       origin,
@@ -245,6 +274,7 @@ async function main(): Promise<void> {
       levels,
       layout,
       voided,
+      merchantDestination: destination,
       transactionHash: hash,
       screenshots: [
         'payer-1-account.png',

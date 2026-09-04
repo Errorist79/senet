@@ -25,6 +25,16 @@ function isScreen(value: string): value is ScreenName {
   return SCREENS.some((name) => name === value);
 }
 
+/**
+ * What a screen does when it becomes visible again.
+ *
+ * A screen draws from what the device holds, and another screen can change
+ * that. A destination drawn once at start says that this device holds nothing
+ * long after it holds an account. A screen that reads the device therefore
+ * says how to draw itself again.
+ */
+const refreshers = new Map<ScreenName, () => void>();
+
 /** Show one screen, and mark the button that leads to it. */
 function showScreen(name: ScreenName): void {
   for (const screen of SCREENS) {
@@ -32,6 +42,7 @@ function showScreen(name: ScreenName): void {
     const button = element(`nav-${screen}`, HTMLButtonElement);
     button.setAttribute('aria-current', screen === name ? 'page' : 'false');
   }
+  refreshers.get(name)?.();
   window.location.hash = name;
 }
 
@@ -91,8 +102,12 @@ async function start(): Promise<void> {
   await loadChain();
   startAccountScreen();
   startPayerScreen();
-  startMerchantScreen();
+  refreshers.set('merchant', startMerchantScreen());
   showDeviceFact();
+
+  // The first screen appeared before a screen registered its own refresh.
+  const opened = window.location.hash.replace('#', '');
+  if (isScreen(opened)) refreshers.get(opened)?.();
 
   await readLedger();
   window.setInterval(() => void readLedger(), LEDGER_REFRESH_MS);
