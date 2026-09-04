@@ -49,6 +49,7 @@ calculation:
 | `scripts/` | The evidence commands. |
 | `scripts/out/evidence/` | The archived proof of every cited transaction. |
 | `scripts/out/load-check/` | The archived record of the cost and throughput run. |
+| `scripts/out/device-check/` | The archived record of a run that a person made on a phone. |
 | `.github/workflows/ci.yml` | The build and the test suites. |
 | `deploy/` | The web server configuration, the service unit and the deployment. |
 
@@ -336,6 +337,26 @@ The command produces ten rows:
 A refused row lands on chain as a failed transaction, so each refusal is a
 public hash. The command reads the diagnostic events of every refused row. It
 then checks that the network refused the row for the stated reason.
+
+### A row that a person produces on a phone
+
+A script cannot produce a redemption that a passkey signed, so a person makes
+one on a phone and carries back the hash and what the screen said. One command
+turns that into a row:
+
+```bash
+node scripts/archive-device-row.mjs <hash> --screen merchant \
+  --title "Paid" --advice "the sentence under the title"
+```
+
+It reads the rest from the network: the contract, the payer, the recipient, the
+amount, the voucher identifier, the ledger and the fee. It names the row after
+the voucher identifier that it read, so nobody types one.
+
+The command writes nothing until a caller adds `--write`. It first prints the
+row that it would write, so a person checks the signature scheme and the
+recipient before anything reaches the archive. It refuses a hash that the
+network does not hold, and it refuses a figure that disagrees with the chain.
 
 ### What a script produces, and what a person produces
 

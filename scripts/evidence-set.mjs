@@ -24,6 +24,7 @@ export const OUT_DIR = path.join(ROOT, 'scripts', 'out');
 export const EVIDENCE_DIR = path.join(OUT_DIR, 'evidence');
 export const LOAD_CHECK_DIR = path.join(OUT_DIR, 'load-check');
 export const APP_CHECK_DIR = path.join(OUT_DIR, 'app-check');
+export const DEVICE_CHECK_DIR = path.join(OUT_DIR, 'device-check');
 export const RPC_URL = process.env.RPC_URL ?? TESTNET_RPC_URL;
 export const HORIZON_URL = process.env.HORIZON_URL ?? TESTNET_HORIZON_URL;
 
@@ -113,6 +114,42 @@ function signatureScheme(signature) {
   if (text.includes('Secp256r1')) return 'secp256r1';
   if (text.includes('public_key') || text.includes('Ed25519')) return 'ed25519';
   return 'unknown';
+}
+
+/**
+ * Read the terms of a redemption out of the transaction itself.
+ *
+ * A person who finishes a run on a phone holds a hash and nothing else. Every
+ * other value of the voucher sits inside the transaction, so this reader takes
+ * them from there and nobody types one of them.
+ *
+ * The contract takes `redeem(payer, amount, voucher_id, expire_at, recipient)`,
+ * so the arguments arrive in that order.
+ */
+export async function describeRedeem(hash) {
+  const described = await describeTransaction(hash);
+  if (described === null) return null;
+  const result = await rpcTransaction(hash);
+  const transaction = xdr.TransactionEnvelope.fromXDR(result.envelopeXdr, 'base64').v1().tx();
+  const invocation = transaction.operations()[0].body().invokeHostFunctionOp()
+    .hostFunction().invokeContract();
+  const name = invocation.functionName().toString();
+  const args = invocation.args().map((argument) => scValToNative(argument));
+  if (name !== 'redeem' || args.length !== 5) {
+    return { ...described, functionName: name, redeem: null };
+  }
+  const [payer, amount, voucherId, expireAt, recipient] = args;
+  return {
+    ...described,
+    functionName: name,
+    redeem: {
+      payer: String(payer),
+      amount: String(amount),
+      voucherId: String(voucherId),
+      expireAt: Number(expireAt),
+      recipient: String(recipient),
+    },
+  };
 }
 
 /**
@@ -233,6 +270,47 @@ function namesTheSame(shown, full) {
  * the two disagree. It reads the archive alone, so it still works after a
  * testnet reset.
  */
+/**
+ * Compare the figures that a screen showed against one Horizon summary.
+ *
+ * The preview of a new row and the check over the whole archive both call this.
+ * A person therefore sees the same comparison before a write that the archive
+ * applies after it.
+ */
+export function compareShownToChain(values, horizon, hash) {
+  const problems = [];
+  let checked = 0;
+  if (horizon === null || horizon === undefined) {
+    return { checked, problems: ['Horizon holds nothing to check the screen against'] };
+  }
+  const compare = (label, shown, actual) => {
+    if (shown === undefined) return;
+    checked += 1;
+    if (shown !== actual) {
+      problems.push(`the screen showed ${label} as ${shown}, and the chain says ${actual}`);
+    }
+  };
+  compare('the ledger', values.Ledger, String(horizon.ledger));
+  compare('the fee', values['Fee charged'], stroopsAsXlm(horizon.fee_charged));
+  compare('the outcome', values.Outcome, horizon.successful ? 'SUCCESS' : 'FAILED');
+  const transaction = values.Transaction;
+  if (transaction !== undefined) {
+    checked += 1;
+    if (!namesTheSame(transaction, hash)) {
+      problems.push(`the screen showed the transaction as ${transaction}, and the row cites ${hash}`);
+    }
+  }
+  return { checked, problems };
+}
+
+/**
+ * Compare the figures that a screen showed against the chain.
+ *
+ * A figure on a screen is a claim about the application, and not a fact about
+ * the network. This check turns each one into a fact, or it names the row where
+ * the two disagree. It reads the archive alone, so it still works after a
+ * testnet reset.
+ */
 export function deriveShownClaims(dir, manifest) {
   const problems = [];
   let checked = 0;
@@ -240,28 +318,9 @@ export function deriveShownClaims(dir, manifest) {
     const values = row.shown?.values;
     if (values === undefined) continue;
     const archived = readArchivedRow(dir, row.name);
-    const horizon = archived.horizon;
-    if (horizon === null) {
-      problems.push(`${row.name}: Horizon holds nothing to check the screen against`);
-      continue;
-    }
-    const compare = (label, shown, actual) => {
-      if (shown === undefined) return;
-      checked += 1;
-      if (shown !== actual) {
-        problems.push(`${row.name}: the screen showed ${label} as ${shown}, and the chain says ${actual}`);
-      }
-    };
-    compare('the ledger', values.Ledger, String(horizon.ledger));
-    compare('the fee', values['Fee charged'], stroopsAsXlm(horizon.fee_charged));
-    compare('the outcome', values.Outcome, horizon.successful ? 'SUCCESS' : 'FAILED');
-    const transaction = values.Transaction;
-    if (transaction !== undefined) {
-      checked += 1;
-      if (!namesTheSame(transaction, row.hash)) {
-        problems.push(`${row.name}: the screen showed the transaction as ${transaction}, and the row cites ${row.hash}`);
-      }
-    }
+    const found = compareShownToChain(values, archived.horizon, row.hash);
+    checked += found.checked;
+    for (const problem of found.problems) problems.push(`${row.name}: ${problem}`);
   }
   return { checked, problems };
 }
