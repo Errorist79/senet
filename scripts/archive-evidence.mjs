@@ -5,10 +5,10 @@
 //
 // Run it with `node scripts/archive-evidence.mjs`.
 
-import { archiveManifest, readManifest } from './evidence-set.mjs';
+import { EVIDENCE_DIR, archiveManifest, readManifest } from './evidence-set.mjs';
 
-const manifest = readManifest();
-const incomplete = await archiveManifest(manifest);
+const manifest = readManifest(EVIDENCE_DIR);
+const incomplete = await archiveManifest(EVIDENCE_DIR, manifest);
 
 console.log(`\narchived ${manifest.rows.length} rows into scripts/out/evidence`);
 if (incomplete > 0) {

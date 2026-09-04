@@ -1,9 +1,9 @@
 {
   "name": "passkey-void",
   "hash": "2f03d32d9b6455369f1aa2aa5698ff989571549fb78b31bfc9c806312ad01efe",
-  "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
   "note": "A passkey account voids a voucher with a secp256r1 signature. The payer and the recipient are the same address.",
-  "archivedAt": "2026-09-04T04:37:43.588Z",
+  "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
+  "archivedAt": "2026-09-04T04:49:25.165Z",
   "rpc": {
     "status": "SUCCESS",
     "ledger": 4441876,

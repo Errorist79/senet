@@ -29,7 +29,8 @@ import {
   readVoucher, redeemArgs, signVoucher, TX_TIMEOUT_SECONDS,
 } from '@senet/core';
 import {
-  ROOT, RPC_URL, archiveManifest, describeTransaction, refusalReasons, writeManifest,
+  EVIDENCE_DIR, RPC_URL, archiveManifest, describeTransaction, loadEnv, readManifest,
+  refusalReasons, requireEnv, writeManifest,
 } from './evidence-set.mjs';
 
 /** The value of one voucher in stroops, which is 0.5 XLM. */
@@ -42,21 +43,6 @@ const INCLUSION_FEE_STROOPS = '200000';
 const REASON_NONCE_CONSUMED = 'nonce already exists for address';
 /** The reason that the network gives when the signature of an entry is old. */
 const REASON_SIGNATURE_EXPIRED = 'signature has expired';
-
-function loadEnv() {
-  const file = path.join(ROOT, '.env');
-  if (!fs.existsSync(file)) return;
-  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2];
-  }
-}
-
-function requireEnv(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is absent from the environment and from .env`);
-  return value;
-}
 
 loadEnv();
 
@@ -310,9 +296,8 @@ for (const [name, lifetime] of Object.entries(LIFETIMES)) {
  * under a passkey name.
  */
 async function readKeptRows() {
-  const file = path.join(ROOT, 'scripts', 'out', 'evidence', 'manifest.json');
-  if (!fs.existsSync(file)) return [];
-  const previous = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!fs.existsSync(path.join(EVIDENCE_DIR, 'manifest.json'))) return [];
+  const previous = readManifest(EVIDENCE_DIR);
   const kept = [];
   for (const row of previous.rows.filter((each) => each.name.startsWith('passkey-'))) {
     const described = await describeTransaction(row.hash);
@@ -338,10 +323,10 @@ const manifest = {
   producedAt: new Date().toISOString(),
   rows: [...rows, ...kept],
 };
-writeManifest(manifest);
+writeManifest(EVIDENCE_DIR, manifest);
 
 console.log('\narchiving');
-const incomplete = await archiveManifest(manifest);
+const incomplete = await archiveManifest(EVIDENCE_DIR, manifest);
 console.log(`\nproduced ${rows.length} rows and kept ${kept.length} passkey rows`);
 if (incomplete > 0) {
   console.log(`${incomplete} row(s) carry no meta, because the RPC server dropped them.`);

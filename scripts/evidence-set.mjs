@@ -1,4 +1,4 @@
-// The evidence set, and the archive step that makes it durable.
+// The evidence trees, and the archive step that makes them durable.
 //
 // Testnet resets, and the RPC server keeps about seven days of history. A
 // transaction hash is therefore not a durable citation. `archiveRow` reads the
@@ -6,6 +6,11 @@
 // reads the summary from Horizon. It then writes one JSON file for the row.
 // The files stay in the repository, so a reader verifies the record after the
 // network forgets the hash.
+//
+// Two trees use this module. `scripts/out/evidence/` holds the proof rows, one
+// row for one property. `scripts/out/load-check/` holds a run that measures
+// throughput and fee across many redemptions. Both trees carry the same file
+// format, so one archive step serves them.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,12 +19,38 @@ import { Address, scValToNative, xdr } from '@stellar/stellar-sdk';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const EVIDENCE_DIR = path.join(ROOT, 'scripts', 'out', 'evidence');
-export const MANIFEST_PATH = path.join(EVIDENCE_DIR, 'manifest.json');
+export const LOAD_CHECK_DIR = path.join(ROOT, 'scripts', 'out', 'load-check');
 export const RPC_URL = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
 export const HORIZON_URL = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
 
 /** The fields that the archive keeps from the Horizon summary of a transaction. */
 const HORIZON_FIELDS = ['successful', 'ledger', 'fee_charged', 'created_at', 'source_account'];
+
+function manifestPath(dir) {
+  return path.join(dir, 'manifest.json');
+}
+
+/**
+ * Read `.env` at the root of the repository into the process environment.
+ *
+ * A value that the environment already carries wins. A caller therefore
+ * overrides one value and leaves the file alone.
+ */
+export function loadEnv() {
+  const file = path.join(ROOT, '.env');
+  if (!fs.existsSync(file)) return;
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2];
+  }
+}
+
+/** Read a variable that a command cannot run without. */
+export function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is absent from the environment and from .env`);
+  return value;
+}
 
 async function rpcTransaction(hash) {
   const response = await fetch(RPC_URL, {
@@ -43,14 +74,12 @@ async function horizonSummary(hash) {
 }
 
 /** Read one transaction from the network and write its archive file. */
-export async function archiveRow(row, contractId) {
+export async function archiveRow(dir, row, contractId) {
   const result = await rpcTransaction(row.hash);
   const horizon = await horizonSummary(row.hash);
   const payload = {
-    name: row.name,
-    hash: row.hash,
+    ...row,
     contractId: row.contractId ?? contractId,
-    note: row.note,
     archivedAt: new Date().toISOString(),
     rpc: {
       status: result.status,
@@ -63,18 +92,23 @@ export async function archiveRow(row, contractId) {
     },
     horizon,
   };
-  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
-  fs.writeFileSync(path.join(EVIDENCE_DIR, `${row.name}.json`), `${JSON.stringify(payload, null, 2)}\n`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${row.name}.json`), `${JSON.stringify(payload, null, 2)}\n`);
   return payload;
 }
 
-export function readManifest() {
-  return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+export function readManifest(dir) {
+  return JSON.parse(fs.readFileSync(manifestPath(dir), 'utf8'));
 }
 
-export function writeManifest(manifest) {
-  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
-  fs.writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
+export function writeManifest(dir, manifest) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(manifestPath(dir), `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+/** Read the archive file of one row. */
+export function readArchivedRow(dir, name) {
+  return JSON.parse(fs.readFileSync(path.join(dir, `${name}.json`), 'utf8'));
 }
 
 /**
@@ -83,10 +117,10 @@ export function writeManifest(manifest) {
  * A row that the RPC server no longer holds keeps its Horizon summary, but it
  * carries no meta. This function counts such a row and names it to the caller.
  */
-export async function archiveManifest(manifest) {
+export async function archiveManifest(dir, manifest) {
   let incomplete = 0;
   for (const row of manifest.rows) {
-    const payload = await archiveRow(row, manifest.contractId);
+    const payload = await archiveRow(dir, row, manifest.contractId);
     const status = payload.rpc.status ?? 'NOT_FOUND';
     if (payload.rpc.envelopeXdr == null) incomplete += 1;
     const ledger = payload.rpc.ledger ?? payload.horizon?.ledger ?? 'unknown';
@@ -159,8 +193,7 @@ export async function describeTransaction(hash) {
   const transaction = xdr.TransactionEnvelope.fromXDR(result.envelopeXdr, 'base64').v1().tx();
   const operation = transaction.operations()[0].body().invokeHostFunctionOp();
   const invoked = operation.hostFunction().invokeContract().contractAddress();
-  const entry = operation.auth()[0];
-  const credentials = entry.credentials();
+  const credentials = operation.auth()[0].credentials();
   const addressCredentials = credentials.switch().value === 2
     ? credentials.addressV2()
     : credentials.address();
@@ -170,4 +203,65 @@ export async function describeTransaction(hash) {
     credentialType: credentials.switch().value === 2 ? 'ADDRESS_V2' : 'ADDRESS',
     signature: signatureScheme(addressCredentials.signature()),
   };
+}
+
+/**
+ * Derive the claims of a load check from its archived rows.
+ *
+ * A summary that states a figure is a label. The same figure, derived from the
+ * archived rows, is a fact. This function reads the archive only, so it still
+ * works after a testnet reset, when nobody can ask the network again.
+ *
+ * The channel of a row is the account that submitted it. The Horizon summary
+ * carries that account as `source_account`, so no row stores it a second time.
+ */
+export function deriveLoadClaims(dir, manifest) {
+  const batches = { sequential: [], concurrent: [] };
+  let successful = 0;
+  for (const row of manifest.rows) {
+    const archived = readArchivedRow(dir, row.name);
+    if (archived.horizon?.successful === true) successful += 1;
+    const batch = batches[row.batch];
+    if (batch === undefined) throw new Error(`${row.name}: the row names no known batch`);
+    batch.push({ ledger: archived.horizon?.ledger, channel: archived.horizon?.source_account });
+  }
+
+  const shape = (rows) => ({
+    rows: rows.length,
+    ledgers: new Set(rows.map((each) => each.ledger)).size,
+    channels: new Set(rows.map((each) => each.channel)).size,
+    ledger: rows.length > 0 ? rows[0].ledger : null,
+  });
+  const sequential = shape(batches.sequential);
+  const concurrent = shape(batches.concurrent);
+
+  const summary = manifest.summary ?? {};
+  const problems = [];
+  const expect = (holds, message) => {
+    if (!holds) problems.push(message);
+  };
+  expect(successful === manifest.rows.length,
+    `${successful} of ${manifest.rows.length} rows succeeded on chain`);
+  expect(successful === summary.succeeded,
+    `the summary claims ${summary.succeeded} successes and the archive shows ${successful}`);
+  expect(sequential.rows === summary.sequential,
+    `the summary claims ${summary.sequential} sequential rows and the archive holds ${sequential.rows}`);
+  expect(concurrent.rows === summary.concurrent,
+    `the summary claims ${summary.concurrent} concurrent rows and the archive holds ${concurrent.rows}`);
+  // One channel serves one transaction per ledger. A sequential batch that
+  // reuses one channel must therefore occupy one ledger for each row.
+  expect(sequential.channels === 1,
+    `the sequential batch used ${sequential.channels} channels, and it must use one`);
+  expect(sequential.ledgers === sequential.rows,
+    `the sequential batch used ${sequential.ledgers} ledgers for ${sequential.rows} rows`);
+  // The concurrent batch carries the throughput claim: one ledger, and one
+  // channel for each row inside it.
+  expect(concurrent.ledgers === 1,
+    `the concurrent batch spread over ${concurrent.ledgers} ledgers, and it must use one`);
+  expect(concurrent.channels === concurrent.rows,
+    `the concurrent batch used ${concurrent.channels} channels for ${concurrent.rows} rows`);
+  expect(concurrent.ledger === summary.concurrentLedger,
+    `the summary names ledger ${summary.concurrentLedger} and the archive shows ${concurrent.ledger}`);
+
+  return { derived: { successful, sequential, concurrent }, problems };
 }

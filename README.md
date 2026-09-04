@@ -149,3 +149,35 @@ row into `scripts/out/evidence/`.
 A row that the RPC server no longer holds keeps its Horizon summary, but it
 carries no meta. The command names such a row. The command then returns a
 non-zero exit code.
+
+## The load check
+
+The proof rows show that each rule holds. They do not show what a redemption
+costs in steady state, and they do not show how many redemptions fit in one
+ledger. A separate command answers those two questions:
+
+```bash
+node scripts/run-load-check.mjs
+```
+
+It drives the fee-payer service. One channel account serves one transaction per
+ledger, so the size of the channel pool sets the throughput. The run shows both
+sides of that rule:
+
+- twenty redemptions run one after another and reuse one channel, so they
+  occupy one ledger each;
+- five redemptions run at the same time through five channels, so one ledger
+  carries all five.
+
+The command archives all twenty-five transactions into
+`scripts/out/load-check/`, in the same format as the proof rows.
+
+A row of the load check holds only what the chain cannot say: the batch, the
+attempt number, and how long the client waited. The ledger, the channel and the
+fee stay out of the row, because the archived Horizon summary already carries
+all three. The channel of a row is the account that submitted it.
+
+The command then derives the figures of its own summary from the archived rows,
+and it fails when the two disagree. A figure that a summary states is a label.
+The same figure, derived from the archive, is a fact. The check reads the
+archive alone, so it still works after a testnet reset.
