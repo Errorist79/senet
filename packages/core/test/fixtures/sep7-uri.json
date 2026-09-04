@@ -1,0 +1,15 @@
+{
+  "source": "recorded once from an earlier SEP-7 module",
+  "input": {
+    "destination": "GAFVCOWZWSJEAFOKBEBO2B4QITJ2YXN6YIYG6BUURQINVDVW4OPS3OL6",
+    "amount": "12.5000000",
+    "memo": "order 42",
+    "memoType": "text",
+    "msg": "Senet test payment, with a space & an ampersand",
+    "originDomain": "senet.hoodrun.io",
+    "signerSeedHex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+    "signerPublic": "GBTL47RTFR5EKMZSXWOQU735WBK7LRPPDIDK3JTNTCZZ7NUBBRDTVSK2"
+  },
+  "unsignedUri": "web+stellar:pay?destination=GAFVCOWZWSJEAFOKBEBO2B4QITJ2YXN6YIYG6BUURQINVDVW4OPS3OL6&amount=12.5000000&memo=order+42&memo_type=text&msg=Senet+test+payment%2C+with+a+space+%26+an+ampersand&origin_domain=senet.hoodrun.io",
+  "signedUri": "web+stellar:pay?destination=GAFVCOWZWSJEAFOKBEBO2B4QITJ2YXN6YIYG6BUURQINVDVW4OPS3OL6&amount=12.5000000&memo=order+42&memo_type=text&msg=Senet+test+payment%2C+with+a+space+%26+an+ampersand&origin_domain=senet.hoodrun.io&signature=N%2Bl1fYMam6eDbYL1jS7po1KknSf7QPjrhZcJ5Q3lO0VjPQc%2BqHvDwcNVZOyyeup14qcQ3X1wftQIYE5vNxhFDA%3D%3D"
+}

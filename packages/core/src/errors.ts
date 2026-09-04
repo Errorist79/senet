@@ -118,6 +118,9 @@ export class AmountWindowError extends VoucherError {
   }
 }
 
+/** A SEP-7 request does not hold the shape that the standard names. */
+export class UriFormatError extends VoucherError {}
+
 /** The installed `@stellar/stellar-sdk` is not the version this code reads. */
 export class SdkVersionError extends VoucherError {
   constructor(

@@ -18,7 +18,7 @@ export interface ReferenceEntry {
 }
 
 /** A plain object, whose values stay unknown until a check reads one. */
-function asObject(value: unknown, label: string): Record<string, unknown> {
+export function asObject(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`the fixture field ${label} is not an object`);
   }
@@ -26,7 +26,7 @@ function asObject(value: unknown, label: string): Record<string, unknown> {
 }
 
 /** A value that carries a string under `key`. */
-function stringField(source: Record<string, unknown>, key: string): string {
+export function stringField(source: Record<string, unknown>, key: string): string {
   const value = source[key];
   if (typeof value !== 'string') {
     throw new Error(`the fixture field ${key} is not a string`);
@@ -44,15 +44,19 @@ function numberField(source: Record<string, unknown>, key: string): number {
 }
 
 /**
- * Read the recorded fixture.
+ * Read one recorded fixture.
  *
- * `JSON.parse` returns a value of unknown shape. Every field passes a check
- * that inspects it before this function names its type.
+ * `JSON.parse` returns a value of unknown shape, so every field passes a check
+ * that inspects it before a caller names its type.
  */
+export function readFixture(name: string): Record<string, unknown> {
+  const path = new URL(`../../test/fixtures/${name}`, import.meta.url);
+  return asObject(JSON.parse(readFileSync(path, 'utf8')), name);
+}
+
+/** The entry that the earlier module recorded, with every field checked. */
 export function readReferenceEntry(): ReferenceEntry {
-  const path = new URL('../../test/fixtures/reference-entry.json', import.meta.url);
-  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
-  const root = asObject(parsed, 'the fixture');
+  const root = readFixture('reference-entry.json');
   const input = asObject(root['input'], 'input');
   return {
     config: {
