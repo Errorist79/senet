@@ -1,0 +1,32 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+  "producedAt": "2026-09-04T04:50:17.441Z",
+  "summary": {
+    "origin": "http://127.0.0.1:33277",
+    "serviceWorkerActive": true
+  },
+  "rows": [
+    {
+      "name": "app-merchant-905134460058084626",
+      "hash": "d205263f859e7e4433573f9dd4e3b6c267facc2932727ee9d297d35f6c5a5ecf",
+      "note": "The application built the transaction in a browser and submitted it through the fee-payer service. The merchant screen showed the result.",
+      "producer": "browser",
+      "screen": "merchant",
+      "shown": {
+        "title": "Paid",
+        "advice": "The ledger holds the payment. Give the goods to the payer.",
+        "values": {
+          "Outcome": "SUCCESS",
+          "Amount": "0.1000000 XLM",
+          "Voucher": "905134460058084626",
+          "Payer": "GBD7QXSN…CRYCJ6QR",
+          "Recipient": "GBMUEFPF…NRVFPKBC",
+          "Transaction": "d205263f…6c5a5ecf",
+          "Ledger": "4494766",
+          "Fee charged": "0.0027364 XLM"
+        }
+      }
+    }
+  ]
+}

@@ -25,11 +25,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import {
-  LIFETIMES, ed25519Signer, nativeTokenId, randomNonce, randomVoucherId,
+  LIFETIMES, TESTNET_CONTRACT_ID, ed25519Signer, nativeTokenId, randomNonce, randomVoucherId,
   readVoucher, redeemArgs, signVoucher, TX_TIMEOUT_SECONDS,
 } from '@senet/core';
 import {
-  EVIDENCE_DIR, RPC_URL, archiveManifest, describeTransaction, loadEnv, readManifest,
+  ENDPOINTS, EVIDENCE_DIR, RPC_URL, archiveManifest, describeTransaction, loadEnv, readManifest,
   refusalReasons, requireEnv, writeManifest,
 } from './evidence-set.mjs';
 
@@ -47,7 +47,7 @@ const REASON_SIGNATURE_EXPIRED = 'signature has expired';
 loadEnv();
 
 const server = new rpc.Server(RPC_URL);
-const contractId = requireEnv('CONTRACT_ID');
+const contractId = process.env.CONTRACT_ID || TESTNET_CONTRACT_ID;
 const config = {
   network: Networks.TESTNET,
   contractId,
@@ -55,13 +55,16 @@ const config = {
 };
 
 /** The payer, who signs every voucher. */
-const payer = Keypair.fromSecret(requireEnv('A_SECRET'));
+const payer = Keypair.fromSecret(requireEnv('PAYER_SECRET'));
 /** The submitter, who pays the network fee and selects the recipient. */
-const submitter = Keypair.fromSecret(requireEnv('B_SECRET'));
+const submitter = Keypair.fromSecret(requireEnv('SUBMITTER_SECRET'));
+// A merchant receives an amount and signs nothing, so each one is an address
+// and not a secret. Every use below passes the address to the contract as the
+// recipient argument.
 /** The first recipient, who stands for a merchant. */
-const merchant = Keypair.fromSecret(requireEnv('C_SECRET'));
+const merchant = requireEnv('MERCHANT_ADDRESS');
 /** The second recipient, who receives a refused attempt. */
-const otherMerchant = Keypair.fromSecret(requireEnv('D_SECRET'));
+const otherMerchant = requireEnv('SECOND_MERCHANT_ADDRESS');
 
 const signPayer = ed25519Signer(config, payer.secret());
 
@@ -173,7 +176,7 @@ async function submitRefused(voucher, recipient, entry, resources, reason, label
 
 const rows = [];
 function record(name, outcome, note) {
-  rows.push({ name, hash: outcome.hash, note });
+  rows.push({ name, hash: outcome.hash, note, producer: 'script' });
   console.log(`${name.padEnd(34)} ${outcome.status.padEnd(8)} ${outcome.hash}`);
   // A refusal is only evidence when it names its cause. The run therefore
   // prints the text that the network wrote into the diagnostic events.
@@ -188,7 +191,7 @@ console.log(`submitter ${submitter.publicKey()}\n`);
 // selects the recipient after the signature exists.
 const main = await terms(LIFETIMES['15m']);
 const mainEntry = await mint(main, randomNonce());
-const mainOutcome = await submitAccepted(main, merchant.publicKey(), mainEntry, '1a');
+const mainOutcome = await submitAccepted(main, merchant, mainEntry, '1a');
 record(
   '1a-success',
   mainOutcome,
@@ -200,7 +203,7 @@ record(
 record(
   '1b-double-spend-failed',
   await submitRefused(
-    main, otherMerchant.publicKey(), mainEntry, mainOutcome.resources,
+    main, otherMerchant, mainEntry, mainOutcome.resources,
     REASON_NONCE_CONSUMED, '1b',
   ),
   'The network refuses a second submission of the same signed entry, because it consumed the nonce.',
@@ -213,14 +216,14 @@ const expiredNonce = randomNonce();
 const expiredTerms = await terms(LIFETIMES['15m']);
 const twinEntry = await mint(expiredTerms, expiredNonce);
 const { resources: expiredResources } =
-  await prepare(expiredTerms, merchant.publicKey(), twinEntry, '1c-footprint');
+  await prepare(expiredTerms, merchant, twinEntry, '1c-footprint');
 const latest = await server.getLatestLedger();
 const expired = { ...expiredTerms, expireAt: latest.sequence - 1 };
 const expiredEntry = await mint(expired, expiredNonce);
 record(
   '1c-expired-host-signature-failed',
   await submitRefused(
-    expired, merchant.publicKey(), expiredEntry, expiredResources,
+    expired, merchant, expiredEntry, expiredResources,
     REASON_SIGNATURE_EXPIRED, '1c',
   ),
   'The network refuses an entry whose signature expiration ledger is in the past.',
@@ -239,7 +242,7 @@ record(
 record(
   '8-after-void-failed',
   await submitRefused(
-    voided, merchant.publicKey(), voidEntry, voidOutcome.resources,
+    voided, merchant, voidEntry, voidOutcome.resources,
     REASON_NONCE_CONSUMED, '8-after',
   ),
   'The network refuses a redemption of a voucher that the payer voided.',
@@ -264,7 +267,7 @@ if (violation) throw new Error(`the payer path reached the network: ${violation}
 console.log('the payer built and signed one voucher with no network call');
 record(
   'task3-handbuilt',
-  await submitAccepted(offline, merchant.publicKey(), offlineEntry, 'task3'),
+  await submitAccepted(offline, merchant, offlineEntry, 'task3'),
   'A client that never called simulation built this voucher. The redemption succeeds.',
 );
 
@@ -280,7 +283,7 @@ for (const [name, lifetime] of Object.entries(LIFETIMES)) {
   const entry = await mint(voucher, randomNonce());
   record(
     `lifetime-${name}`,
-    await submitAccepted(voucher, merchant.publicKey(), entry, `lifetime-${name}`),
+    await submitAccepted(voucher, merchant, entry, `lifetime-${name}`),
     LIFETIME_NOTES[name],
   );
 }
@@ -315,7 +318,7 @@ async function readKeptRows() {
     }
     const current = described.contractId === contractId ? 'current contract' : 'earlier contract';
     console.log(`${row.name.padEnd(34)} KEPT     ${described.signature}, ${current}`);
-    kept.push({ ...row, contractId: described.contractId });
+    kept.push({ ...row, producer: 'device', contractId: described.contractId });
   }
   return kept;
 }
@@ -330,7 +333,7 @@ const manifest = {
 writeManifest(EVIDENCE_DIR, manifest);
 
 console.log('\narchiving');
-const incomplete = await archiveManifest(EVIDENCE_DIR, manifest);
+const incomplete = await archiveManifest(EVIDENCE_DIR, manifest, ENDPOINTS);
 console.log(`\nproduced ${rows.length} rows and kept ${kept.length} passkey rows`);
 if (incomplete > 0) {
   console.log(`${incomplete} row(s) carry no meta, because the RPC server dropped them.`);

@@ -102,48 +102,45 @@ Point the CLI at testnet:
 stellar network use testnet
 ```
 
-### 2. Create and fund the accounts
-
-The commands need ten testnet accounts. Four carry the roles of the evidence
-set. Six are the channel accounts of the fee-payer service.
+### 2. Install the dependencies
 
 ```bash
-for name in a b c d; do
-  stellar keys generate --fund --network testnet "senet-$name"
-done
-for index in 1 2 3 4 5 6; do
-  stellar keys generate --fund --network testnet "senet-channel-$index"
-done
+npm install
+npm run build
 ```
 
-Friendbot funds each account with 10,000 test XLM. It rate limits a burst, so
-the loops create one account at a time.
+The build compiles the library and the service. The account tool in the next
+step is part of the service, so this step comes before it.
 
-### 3. Write the `.env` file
+### 3. Create the accounts and write the `.env` file
 
-Copy the example and fill it in. `.env` is ignored, and it never enters the
-repository.
+One tool creates every account, funds it through friendbot, waits until Horizon
+reports a balance, and prints the whole `.env` file:
 
 ```bash
-cp .env.example .env
+npm run --silent new-keys --workspace @senet/server > .env
+chmod 600 .env
 ```
 
-| Variable | Meaning | How to produce the value |
-|---|---|---|
-| `RPC_URL` | The Soroban RPC server. | Keep the default. |
-| `HORIZON_URL` | The Horizon server. | Keep the default. |
-| `CONTRACT_ID` | The voucher contract that the commands call. | Step 4 prints it. |
-| `A_SECRET` | The payer, who signs every voucher. | `stellar keys secret senet-a` |
-| `B_SECRET` | The submitter, who pays the network fee and selects the recipient. | `stellar keys secret senet-b` |
-| `C_SECRET` | The recipient, who stands for a merchant. | `stellar keys secret senet-c` |
-| `D_SECRET` | A second recipient, who receives a refused attempt. | `stellar keys secret senet-d` |
-| `FEEPAYER_CHANNELS` | The channel accounts of the fee-payer, as one comma-separated list of secret keys. | The loop below prints the list. |
+Git ignores `.env`, and it never enters the repository.
 
-```bash
-for index in 1 2 3 4 5 6; do
-  stellar keys secret "senet-channel-$index"
-done | paste -s -d , -
-```
+The tool creates ten accounts. Four carry a role of the evidence set, and six
+are the channel accounts of the fee-payer service. `CHANNEL_COUNT` sets the
+number of channels, and the default is six.
+
+| Variable | Role |
+|---|---|
+| `PAYER_SECRET` | Signs every voucher. |
+| `SUBMITTER_SECRET` | Submits the evidence transactions and pays their fee. |
+| `MERCHANT_ADDRESS` | Receives a redemption. |
+| `SECOND_MERCHANT_ADDRESS` | Receives a refused attempt. |
+| `FEEPAYER_CHANNELS` | The channel accounts, as secret keys separated by commas. |
+| `CONTRACT_ID` | The voucher contract. Step 4 prints it. |
+| `RPC_URL`, `HORIZON_URL` | The servers. Keep the values that the tool writes. |
+
+A merchant receives an amount and signs nothing, so the file keeps an address
+for each one and no secret. The address of the payer derives from its secret,
+so the file carries the secret alone.
 
 One channel account serves one transaction per ledger, so the number of
 channels sets the throughput. Six channels carry the load check.
@@ -160,11 +157,11 @@ different artifacts, and only the first reproduces a deployed contract byte for
 byte.
 
 Upload the file, deploy an instance of it, and initialize it. The commands
-below make `senet-a` the admin of the contract as well as the payer, which
-keeps the account count down. An admin sets the two caps and nothing else.
+below make the payer the admin of the contract as well, which keeps the account
+count down. An admin sets the two caps and nothing else.
 
 ```bash
-admin=$(stellar keys secret senet-a)
+admin=$(grep '^PAYER_SECRET=' .env | cut -d= -f2)
 wasm=target/wasm32v1-none/release/senet_voucher.wasm
 
 hash=$(stellar contract upload --wasm "$wasm" --optimize=false \
@@ -175,9 +172,10 @@ contract=$(stellar contract deploy --wasm-hash "$hash" \
 
 stellar contract invoke --id "$contract" --source-account "$admin" \
   --network testnet -- init \
-  --admin "$(stellar keys public-key senet-a)" \
+  --admin "$(stellar keys public-key "$admin")" \
   --max_amount 1000000000 --max_ttl_ledgers 8640
 
+sed -i "s|^CONTRACT_ID=.*|CONTRACT_ID=$contract|" .env
 echo "CONTRACT_ID=$contract"
 ```
 
@@ -185,8 +183,7 @@ The `init` call prints `null`, which is the return value of a call that
 succeeded.
 
 `--optimize=false` keeps the uploaded bytes identical to the file that the
-build produced, so `$hash` equals the sha256 of that file. Put the printed
-`CONTRACT_ID` into `.env`.
+build produced, so `$hash` equals the sha256 of that file.
 
 `max_amount` is 1,000,000,000 stroops, which is 100 XLM. `max_ttl_ledgers` is
 8,640 ledgers, which is about 12 hours. The library carries the same lifetime
@@ -203,12 +200,8 @@ stellar contract invoke --id "$contract" --source-account "$admin" \
 
 ```bash
 cargo test --workspace     # 30 contract tests
-npm install
-npm run build              # compile the library and the service
 npm test                   # the library and service tests
 ```
-
-Steps 6 and 7 run the compiled library, so do not skip `npm run build`.
 
 ### 6. Redeem a voucher, and record a refusal
 
@@ -228,8 +221,9 @@ refusal, and it stops when a refusal happened for the wrong reason:
 A refused transaction lands on the ledger. Its hash therefore opens in any
 explorer, and the refusal is a public record rather than a console line.
 
-Every row is archived under `scripts/out/evidence/`, with the envelope, the
-result, the meta, the diagnostic events and the Horizon summary.
+The command archives every row under `scripts/out/evidence/`. Each file holds
+the envelope, the result, the meta, the diagnostic events and the Horizon
+summary.
 
 ### 7. Measure the cost and the throughput
 
@@ -258,9 +252,9 @@ the deployed contract.
 ## The evidence archive
 
 Testnet resets, and the RPC server keeps about seven days of history. A
-transaction hash is therefore not a durable citation. Every cited transaction
-is archived in this repository, with its envelope, its result, its meta and its
-diagnostic events, plus the summary that Horizon holds.
+transaction hash is therefore not a durable citation. This repository archives
+every cited transaction. Each file holds the envelope, the result, the meta and
+the diagnostic events, plus the summary that Horizon holds.
 
 One command produces the whole set on testnet and archives it:
 

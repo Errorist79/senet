@@ -3,7 +3,8 @@
   "hash": "2f03d32d9b6455369f1aa2aa5698ff989571549fb78b31bfc9c806312ad01efe",
   "note": "A passkey account voids a voucher with a secp256r1 signature. The payer and the recipient are the same address.",
   "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
-  "archivedAt": "2026-09-04T05:05:44.111Z",
+  "producer": "device",
+  "archivedAt": "2026-09-04T08:48:08.737Z",
   "rpc": {
     "status": "SUCCESS",
     "ledger": 4441876,

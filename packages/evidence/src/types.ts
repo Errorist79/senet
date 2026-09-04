@@ -1,0 +1,102 @@
+/**
+ * The shape of one archived transaction, and of the manifest that names a set
+ * of them.
+ *
+ * Several commands write into the evidence trees, and more arrive as the
+ * application grows. Every writer compiles against one definition of the
+ * shape. A change of the shape therefore breaks a build. Without that one
+ * definition it would produce a row that looks right and is wrong.
+ */
+
+/** How a row came to exist. */
+export type Producer = 'script' | 'browser' | 'device';
+
+/** The text and the figures that a person read on a screen. */
+export interface Shown {
+  /** The title of the result, such as `Paid`. */
+  readonly title: string;
+  /** The sentence that told the person what to do next. */
+  readonly advice: string;
+  /**
+   * The figures as the screen rendered them.
+   *
+   * The chain carries these values too. They stay here because they make a
+   * claim about the application and not about the network. A later check
+   * compares each one against the chain.
+   */
+  readonly values?: Readonly<Record<string, string>>;
+}
+
+/**
+ * One row of a manifest.
+ *
+ * A row needs three fields only: a name, a hash, and one sentence that says
+ * what the row shows. Every other field is optional. A row is therefore
+ * complete when a producer writes it during a run. It is equally complete when
+ * a person recovers it later from a hash alone. Nothing that the chain already
+ * carries belongs here. The voucher identifier, the amount, the payer, the
+ * recipient, the ledger and the fee all reach the archive from the network.
+ */
+export interface Row {
+  /** Unique inside its tree. It names the archive file. */
+  readonly name: string;
+  /** The transaction that the row cites. */
+  readonly hash: string;
+  /** One sentence: what this row shows. */
+  readonly note: string;
+  /** The contract of the row, when the manifest names another one. */
+  readonly contractId?: string;
+  /** How the row came to exist. */
+  readonly producer?: Producer;
+  /** The screen that produced the row, for a browser or a device. */
+  readonly screen?: string;
+  /** What a person read on that screen. */
+  readonly shown?: Shown;
+  /** Which batch of a load check the row belongs to. */
+  readonly batch?: string;
+  /** The number of the attempt that produced the row. The first attempt is one. */
+  readonly attempt?: number;
+  /** How long the client waited, in milliseconds. */
+  readonly elapsedMs?: number;
+}
+
+/** A set of rows that one command produced. */
+export interface Manifest {
+  /** The network passphrase. */
+  readonly network: string;
+  /** The contract that the rows call, unless a row names another. */
+  readonly contractId: string;
+  /** When the command produced the set. */
+  readonly producedAt: string;
+  /** The figures that the set claims, for a set that measures something. */
+  readonly summary?: Readonly<Record<string, string | number | boolean | null>>;
+  readonly rows: readonly Row[];
+}
+
+/** What Horizon says about a transaction. */
+export interface HorizonSummary {
+  readonly successful: boolean | null;
+  readonly ledger: number | null;
+  readonly fee_charged: string | null;
+  readonly created_at: string | null;
+  readonly source_account: string | null;
+}
+
+/** What the RPC server says about a transaction. */
+export interface RpcSummary {
+  readonly status: string | null;
+  readonly ledger: number | null;
+  readonly createdAt: string | null;
+  readonly envelopeXdr: string | null;
+  readonly resultXdr: string | null;
+  readonly resultMetaXdr: string | null;
+  readonly diagnosticEventsXdr: readonly string[] | null;
+}
+
+/** One row, with everything that the network said about it. */
+export interface ArchivedRow extends Row {
+  readonly contractId: string;
+  readonly archivedAt: string;
+  readonly rpc: RpcSummary;
+  readonly horizon: HorizonSummary | null;
+}

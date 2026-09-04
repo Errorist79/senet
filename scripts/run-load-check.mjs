@@ -22,7 +22,7 @@ import { Keypair, rpc } from '@stellar/stellar-sdk';
 import { LIFETIMES, ed25519Signer, randomNonce, randomVoucherId, signVoucher } from '@senet/core';
 import { FeePayer, readConfig } from '@senet/server';
 import {
-  LOAD_CHECK_DIR, archiveManifest, deriveLoadClaims, loadEnv, requireEnv, writeManifest,
+  ENDPOINTS, LOAD_CHECK_DIR, archiveManifest, deriveLoadClaims, loadEnv, requireEnv, writeManifest,
 } from './evidence-set.mjs';
 
 /** Redemptions that run one after another, through one channel. */
@@ -36,8 +36,9 @@ const LIFETIME_LEDGERS = LIFETIMES['15m'];
 
 loadEnv();
 const config = readConfig();
-const payer = Keypair.fromSecret(requireEnv('A_SECRET'));
-const recipient = Keypair.fromSecret(requireEnv('C_SECRET')).publicKey();
+const payer = Keypair.fromSecret(requireEnv('PAYER_SECRET'));
+// A merchant receives an amount and signs nothing, so it is an address.
+const recipient = requireEnv('MERCHANT_ADDRESS');
 const signPayer = ed25519Signer(config.voucher, payer.secret());
 
 /** Mint and sign one voucher, as a payer with no network does. */
@@ -51,6 +52,12 @@ async function mint(expireAt) {
   return signVoucher(config.voucher, voucher, randomNonce(), signPayer);
 }
 
+/** What each batch of the run shows, as the row of every member states it. */
+const BATCH_NOTES = {
+  sequential: 'One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.',
+  concurrent: 'One of five redemptions that run at the same time. They use one channel account each, so one ledger carries all five.',
+};
+
 /**
  * The row that the manifest keeps for one redemption.
  *
@@ -61,7 +68,15 @@ async function mint(expireAt) {
  * that can disagree with it.
  */
 function row(name, batch, result) {
-  return { name, batch, attempt: result.attempt, elapsedMs: result.elapsedMs, hash: result.hash };
+  return {
+    name,
+    hash: result.hash,
+    note: BATCH_NOTES[batch],
+    producer: 'script',
+    batch,
+    attempt: result.attempt,
+    elapsedMs: result.elapsedMs,
+  };
 }
 
 function label(batch, index, total) {
@@ -129,7 +144,7 @@ const manifest = {
 writeManifest(LOAD_CHECK_DIR, manifest);
 
 console.log('\narchiving');
-const incomplete = await archiveManifest(LOAD_CHECK_DIR, manifest);
+const incomplete = await archiveManifest(LOAD_CHECK_DIR, manifest, ENDPOINTS);
 if (incomplete > 0) {
   throw new Error(`${incomplete} row(s) carry no meta, so the archive is not durable`);
 }

@@ -1,34 +1,34 @@
-// The evidence trees, and the archive step that makes them durable.
+// The evidence trees, and the readers that a producer needs.
 //
-// Testnet resets, and the RPC server keeps about seven days of history. A
-// transaction hash is therefore not a durable citation. `archiveRow` reads the
-// envelope, the result, the meta and the diagnostic events from RPC. It also
-// reads the summary from Horizon. It then writes one JSON file for the row.
-// The files stay in the repository, so a reader verifies the record after the
-// network forgets the hash.
+// The archive format and the step that writes it live in `@senet/evidence`, so
+// that every writer holds one definition of a row. This file carries what only
+// the commands under `scripts/` use. That is the path of each tree, the reader
+// of `.env`, and three readers that decode a transaction.
 //
-// Two trees use this module. `scripts/out/evidence/` holds the proof rows, one
-// row for one property. `scripts/out/load-check/` holds a run that measures
-// throughput and fee across many redemptions. Both trees carry the same file
-// format, so one archive step serves them.
+// Two trees carry the same format. `scripts/out/evidence/` holds the proof
+// rows, one row for one property. `scripts/out/load-check/` holds a run that
+// measures throughput and fee across many redemptions.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Address, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { TESTNET_HORIZON_URL, TESTNET_RPC_URL, readArchivedRow } from '@senet/evidence';
+
+export {
+  archiveManifest, archiveRow, readArchivedRow, readManifest, writeManifest,
+} from '@senet/evidence';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const EVIDENCE_DIR = path.join(ROOT, 'scripts', 'out', 'evidence');
-export const LOAD_CHECK_DIR = path.join(ROOT, 'scripts', 'out', 'load-check');
-export const RPC_URL = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
-export const HORIZON_URL = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+export const OUT_DIR = path.join(ROOT, 'scripts', 'out');
+export const EVIDENCE_DIR = path.join(OUT_DIR, 'evidence');
+export const LOAD_CHECK_DIR = path.join(OUT_DIR, 'load-check');
+export const APP_CHECK_DIR = path.join(OUT_DIR, 'app-check');
+export const RPC_URL = process.env.RPC_URL ?? TESTNET_RPC_URL;
+export const HORIZON_URL = process.env.HORIZON_URL ?? TESTNET_HORIZON_URL;
 
-/** The fields that the archive keeps from the Horizon summary of a transaction. */
-const HORIZON_FIELDS = ['successful', 'ledger', 'fee_charged', 'created_at', 'source_account'];
-
-function manifestPath(dir) {
-  return path.join(dir, 'manifest.json');
-}
+/** The endpoints that the archive step reads a transaction from. */
+export const ENDPOINTS = Object.freeze({ rpcUrl: RPC_URL, horizonUrl: HORIZON_URL });
 
 /**
  * Read `.env` at the root of the repository into the process environment.
@@ -58,75 +58,10 @@ async function rpcTransaction(hash) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTransaction', params: { hash } }),
   });
-  if (!response.ok) throw new Error(`RPC ${response.status} for ${hash}`);
+  if (!response.ok) throw new Error(`the RPC server answered ${response.status} for ${hash}`);
   const payload = await response.json();
-  if (payload.error) throw new Error(`RPC error for ${hash}: ${payload.error.message}`);
+  if (payload.error) throw new Error(`the RPC server refused ${hash}: ${payload.error.message}`);
   return payload.result ?? {};
-}
-
-async function horizonSummary(hash) {
-  const response = await fetch(`${HORIZON_URL}/transactions/${hash}`);
-  if (!response.ok) return null;
-  const record = await response.json();
-  const summary = {};
-  for (const field of HORIZON_FIELDS) summary[field] = record[field];
-  return summary;
-}
-
-/** Read one transaction from the network and write its archive file. */
-export async function archiveRow(dir, row, contractId) {
-  const result = await rpcTransaction(row.hash);
-  const horizon = await horizonSummary(row.hash);
-  const payload = {
-    ...row,
-    contractId: row.contractId ?? contractId,
-    archivedAt: new Date().toISOString(),
-    rpc: {
-      status: result.status,
-      ledger: result.ledger,
-      createdAt: result.createdAt,
-      envelopeXdr: result.envelopeXdr,
-      resultXdr: result.resultXdr,
-      resultMetaXdr: result.resultMetaXdr,
-      diagnosticEventsXdr: result.diagnosticEventsXdr,
-    },
-    horizon,
-  };
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, `${row.name}.json`), `${JSON.stringify(payload, null, 2)}\n`);
-  return payload;
-}
-
-export function readManifest(dir) {
-  return JSON.parse(fs.readFileSync(manifestPath(dir), 'utf8'));
-}
-
-export function writeManifest(dir, manifest) {
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(manifestPath(dir), `${JSON.stringify(manifest, null, 2)}\n`);
-}
-
-/** Read the archive file of one row. */
-export function readArchivedRow(dir, name) {
-  return JSON.parse(fs.readFileSync(path.join(dir, `${name}.json`), 'utf8'));
-}
-
-/**
- * Archive every row of a manifest.
- *
- * A row that the RPC server no longer holds keeps its Horizon summary, but it
- * carries no meta. This function counts such a row and names it to the caller.
- */
-export async function archiveManifest(dir, manifest) {
-  let incomplete = 0;
-  for (const row of manifest.rows) {
-    const payload = await archiveRow(dir, row, manifest.contractId);
-    const status = payload.rpc.status ?? 'NOT_FOUND';
-    if (payload.rpc.envelopeXdr == null) incomplete += 1;
-    const ledger = payload.rpc.ledger ?? payload.horizon?.ledger ?? 'unknown';
-    console.log(`${row.name.padEnd(34)} ${String(status).padEnd(10)} ledger ${ledger}`);
-  }
-  return incomplete;
 }
 
 /**
@@ -161,7 +96,7 @@ export async function refusalReasons(hash) {
 /**
  * The signature scheme that an authorization entry carries.
  *
- * Two shapes appear on chain, and both were read from real transactions. An
+ * Two shapes appear on chain, and both come from real transactions. An
  * account that holds a key signs with a list of one map that carries
  * `public_key` and `signature`. A smart account signs with a list of one map
  * whose key names the curve, and a passkey names `Secp256r1` there.
@@ -264,4 +199,69 @@ export function deriveLoadClaims(dir, manifest) {
     `the summary names ledger ${summary.concurrentLedger} and the archive shows ${concurrent.ledger}`);
 
   return { derived: { successful, sequential, concurrent }, problems };
+}
+
+/** Seven decimal places separate one XLM from one stroop. */
+const STROOPS_IN_ONE_XLM = 10_000_000n;
+
+/** The amount that a screen shows for a figure that the chain holds in stroops. */
+function stroopsAsXlm(stroops) {
+  if (stroops === null || stroops === undefined) return null;
+  const value = BigInt(stroops);
+  const whole = value / STROOPS_IN_ONE_XLM;
+  const fraction = (value % STROOPS_IN_ONE_XLM).toString().padStart(7, '0');
+  return `${whole}.${fraction} XLM`;
+}
+
+/**
+ * Whether a value that a screen shortened still names the same text.
+ *
+ * A screen shows a long identifier with its middle removed. The check compares
+ * the head and the tail that remain.
+ */
+function namesTheSame(shown, full) {
+  const parts = shown.split('\u2026');
+  if (parts.length !== 2) return shown === full;
+  return full.startsWith(parts[0]) && full.endsWith(parts[1]);
+}
+
+/**
+ * Compare the figures that a screen showed against the chain.
+ *
+ * A figure on a screen is a claim about the application, and not a fact about
+ * the network. This check turns each one into a fact, or it names the row where
+ * the two disagree. It reads the archive alone, so it still works after a
+ * testnet reset.
+ */
+export function deriveShownClaims(dir, manifest) {
+  const problems = [];
+  let checked = 0;
+  for (const row of manifest.rows) {
+    const values = row.shown?.values;
+    if (values === undefined) continue;
+    const archived = readArchivedRow(dir, row.name);
+    const horizon = archived.horizon;
+    if (horizon === null) {
+      problems.push(`${row.name}: Horizon holds nothing to check the screen against`);
+      continue;
+    }
+    const compare = (label, shown, actual) => {
+      if (shown === undefined) return;
+      checked += 1;
+      if (shown !== actual) {
+        problems.push(`${row.name}: the screen showed ${label} as ${shown}, and the chain says ${actual}`);
+      }
+    };
+    compare('the ledger', values.Ledger, String(horizon.ledger));
+    compare('the fee', values['Fee charged'], stroopsAsXlm(horizon.fee_charged));
+    compare('the outcome', values.Outcome, horizon.successful ? 'SUCCESS' : 'FAILED');
+    const transaction = values.Transaction;
+    if (transaction !== undefined) {
+      checked += 1;
+      if (!namesTheSame(transaction, row.hash)) {
+        problems.push(`${row.name}: the screen showed the transaction as ${transaction}, and the row cites ${row.hash}`);
+      }
+    }
+  }
+  return { checked, problems };
 }

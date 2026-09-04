@@ -1,189 +1,239 @@
 {
   "network": "Test SDF Network ; September 2015",
   "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
-  "producedAt": "2026-09-04T05:07:32.784Z",
+  "producedAt": "2026-09-04T08:49:52.969Z",
   "summary": {
     "sequential": 20,
     "concurrent": 5,
     "succeeded": 25,
     "channelCount": 6,
-    "concurrentLedger": 4494973
+    "concurrentLedger": 4497641
   },
   "rows": [
     {
       "name": "sequential-01",
+      "hash": "1e9c354138bc939c8e70ffcb589756bfc4de2cddd3b535b85cccf54db53c669f",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5067,
-      "hash": "7deeeb2f8c9a792aff61b3912e7cc30fd2f9fc335c511fafc93380de580898b1"
+      "elapsedMs": 2803
     },
     {
       "name": "sequential-02",
+      "hash": "eade39a39dba52455530d7aa33faa98b3614319493a72daa182188648a9bcc9b",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 4496,
-      "hash": "bfba509a98ee15f4045b27996301cdf283fe7a9b0bc07f32a24aed164d9a2b14"
+      "elapsedMs": 5039
     },
     {
       "name": "sequential-03",
+      "hash": "68b3a6e876f3b1dae62b3d2ca9e18004fc9d0da400ae1a5837d86744318915b6",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5627,
-      "hash": "f8b874ed87782cd53495766dc6d545b765107f75355035a8f5c1549566264169"
+      "elapsedMs": 5160
     },
     {
       "name": "sequential-04",
+      "hash": "ac939b953d4356686e096468e25c149e133a9ef97ceda45690c7a88fe9beb4ac",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5081,
-      "hash": "2a255d2f63403446ac6b608f01514e8a1df6ad556e929da510944d01f757258d"
+      "elapsedMs": 3923
     },
     {
       "name": "sequential-05",
+      "hash": "801a907c1fc17377fb17282e1de281f69f72c502e94651b0cdd5d6c96e737b28",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 4398,
-      "hash": "49a2f5ede9ab8bcce3fe911b63e8c4a0ee5a9dbcaa34c40f83a1f5f1ed7e3cda"
+      "elapsedMs": 5042
     },
     {
       "name": "sequential-06",
+      "hash": "100b9d97043ceec16c212ccad3739310e1b341d1bc0dab9d879a604a202136d6",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5161,
-      "hash": "f4ada57ba967b7555ffc87be8f6844fcc71c9e45802be81a4cee271adc5907ba"
+      "elapsedMs": 5054
     },
     {
       "name": "sequential-07",
+      "hash": "06ffc5bfb6e0947b83ab39107316fa808029a51429f751eacab13dc05f50d5f1",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5207,
-      "hash": "7befd2c4815c5fbcdf2abac0b880a38ca0d91b3a70cf6cd6585f8c3893fb8feb"
+      "elapsedMs": 5051
     },
     {
       "name": "sequential-08",
+      "hash": "a6553fa079db64ed4788a80be74fc73d97d7e0f4bb052940f02371e5f819693a",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5062,
-      "hash": "ea8d362ffb7571d2c2a3f978f98882820367cf76660fbdaca876dcb732615a00"
+      "elapsedMs": 5277
     },
     {
       "name": "sequential-09",
+      "hash": "94a7b77fb61c11dc70eadfdcf120cdc9a58b1a421cf830cda80ce771581d6b71",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5096,
-      "hash": "e756c2883218c69a735bb03437389f9b430001aa3545e9e71d7c95fad9c778a7"
+      "elapsedMs": 5037
     },
     {
       "name": "sequential-10",
+      "hash": "ef392421d6dc63475f585d2d8fccc510d171efe73b904553c82e552f7f625ead",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5276,
-      "hash": "e5209534688ac8a94ed03d0e73df2f68339b8ddc38e80553a71b142671e28b3f"
+      "elapsedMs": 5081
     },
     {
       "name": "sequential-11",
+      "hash": "0b06889382e13820d592cf401bfcf3c728f11d5f7c1ba5c79848f5186f8d65ea",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5437,
-      "hash": "aad9c739fa1de1da3af32b3e63b5c1d5bfca529c87802e5a4c7149cd6faf9dc8"
+      "elapsedMs": 5030
     },
     {
       "name": "sequential-12",
+      "hash": "86cc1336a6a1f115a607ab135504caf6d82488f9d32368b975a9cc65d6389016",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 4021,
-      "hash": "37ba57788a6c8db8af1d114fe7d0d5de38a831f8e4a380bb185ef9d38ce30355"
+      "elapsedMs": 5038
     },
     {
       "name": "sequential-13",
+      "hash": "6318314ba68d0baec514475c3179392e47160ac8f7cbaf093b77c2c1b40b53dd",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 4996,
-      "hash": "32582aee2a8dc2c4e240add236ecb57e8bcb5d434a545795948aa6a541600530"
+      "elapsedMs": 5037
     },
     {
       "name": "sequential-14",
+      "hash": "147007779e89ddfaa68fb1523a5f1af1ceff8429c2b8d3718c4fee4fcf7bb25d",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 3926,
-      "hash": "3391ad7942e5203c82e64d85175ee0528f17b14a473cda33e57574b23bcdedc7"
+      "elapsedMs": 3924
     },
     {
       "name": "sequential-15",
+      "hash": "3b7044df3fdd6e327dabf7277ddf8c86bc3bed751e7da7b5f543524669803813",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5196,
-      "hash": "3a0c67a34d773e8a58da09a90826238b419d3e61166dbc7e57a7da0223f6d99d"
+      "elapsedMs": 5040
     },
     {
       "name": "sequential-16",
+      "hash": "33c517ff06d5288f484d2c79ab1e8098263c61f69cca1487c27e0e7a0037d333",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5072,
-      "hash": "405b3a3cadd2b1ba0483a4da7f875e89f6b4f4c692a3afde541fa2833a6874d9"
+      "elapsedMs": 5072
     },
     {
       "name": "sequential-17",
+      "hash": "f80fe6a27d678a67b24b42ec8c43e65e2d78d0bb28c226fc97a900015b62d824",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5066,
-      "hash": "e8b612f1a171ec2bb0c2d143d7d9731f465578e742998c617b4f695c1310abca"
+      "elapsedMs": 5189
     },
     {
       "name": "sequential-18",
+      "hash": "22e17104a0fe414fd5117a20e11f840d0757afba5aaa1cbc3c77d862dac02fd0",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 4802,
-      "hash": "bc387e5c2dcfce4a5badc9aa8bf1a421b012f6fc336a7466bbb21d3578b1fd2f"
+      "elapsedMs": 5035
     },
     {
       "name": "sequential-19",
+      "hash": "3fdbb47b7fb32977a2f06059783152a190e9a46cea0c7c073a2a2207a2d320a6",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5061,
-      "hash": "1222e18f287e600bc0388fccfe72c770c3f0ff7e187887a659bd470816e77683"
+      "elapsedMs": 5073
     },
     {
       "name": "sequential-20",
+      "hash": "15c7d3ef136068fdb9e5ebb778d4cbf99db2b076d98def9f81ef12c10be4c931",
+      "note": "One of twenty redemptions that run one after another. They reuse one channel account, so they occupy one ledger each.",
+      "producer": "script",
       "batch": "sequential",
       "attempt": 1,
-      "elapsedMs": 5050,
-      "hash": "a851e95214f3810e30c696a7196ec7c7b7fbdfd0c6c163121e31d221d867477f"
+      "elapsedMs": 5050
     },
     {
       "name": "concurrent-1",
+      "hash": "5764d1b53b5536fc18f86bfe457b16e2384c31b4ca4953b39e496ce9a12187db",
+      "note": "One of five redemptions that run at the same time. They use one channel account each, so one ledger carries all five.",
+      "producer": "script",
       "batch": "concurrent",
       "attempt": 1,
-      "elapsedMs": 5059,
-      "hash": "1394c3efd24b541251eede2315e87494fa3e993e7fa527bdfb90e8caedc43b0c"
+      "elapsedMs": 5046
     },
     {
       "name": "concurrent-2",
+      "hash": "aefba379159d990501ce298cd1b46fe13b5657acb5f8a079c150af9e283312b0",
+      "note": "One of five redemptions that run at the same time. They use one channel account each, so one ledger carries all five.",
+      "producer": "script",
       "batch": "concurrent",
       "attempt": 1,
-      "elapsedMs": 4754,
-      "hash": "c50155cb687aa96f4ff702aac6c745ac45b99dfeabc1c3ed4b8e33c9112da10f"
+      "elapsedMs": 5056
     },
     {
       "name": "concurrent-3",
+      "hash": "2c3e9c1ef1fa10b6748d5bc5b07401a91661e56da61a93b300839de9f81eaea0",
+      "note": "One of five redemptions that run at the same time. They use one channel account each, so one ledger carries all five.",
+      "producer": "script",
       "batch": "concurrent",
       "attempt": 1,
-      "elapsedMs": 5050,
-      "hash": "f6ae57902976152c2cbc2632c10f01ac6256147d7a2520b37c91890aea65ba5b"
+      "elapsedMs": 5042
     },
     {
       "name": "concurrent-4",
+      "hash": "395e7a111e4ed9103f42ea99f3940c92b85403bc864ea2fe74db6acb476f7725",
+      "note": "One of five redemptions that run at the same time. They use one channel account each, so one ledger carries all five.",
+      "producer": "script",
       "batch": "concurrent",
       "attempt": 1,
-      "elapsedMs": 5077,
-      "hash": "023718c2fc117330848ba7c6e1cc4bf1cbaad30ce7246b9cacf1f987bfb8c439"
+      "elapsedMs": 5050
     },
     {
       "name": "concurrent-5",
+      "hash": "94aa10af5ef4e12d99d42a24202dc3d07d601a291cf61155f7fa89b77e6a3f3e",
+      "note": "One of five redemptions that run at the same time. They use one channel account each, so one ledger carries all five.",
+      "producer": "script",
       "batch": "concurrent",
       "attempt": 1,
-      "elapsedMs": 5040,
-      "hash": "d5efa7cd72f6670ff475fb732d63c513219decb545e6a5e9aa433cd1f9f87f0f"
+      "elapsedMs": 5040
     }
   ]
 }

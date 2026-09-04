@@ -1,0 +1,22 @@
+{
+  "name": "@senet/evidence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The archive format of the evidence trees, and the step that writes it",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "types": "./dist/src/index.d.ts",
+  "files": [
+    "dist/src"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "npm run build && node --test \"dist/test/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1"
+  }
+}
