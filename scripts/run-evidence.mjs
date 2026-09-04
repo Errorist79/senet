@@ -185,8 +185,40 @@ async function submitRefused(voucher, recipient, entry, resources, reason, label
   return { ...outcome, recorded };
 }
 
+/**
+ * Every row that this command produces.
+ *
+ * The list exists so that a check can ask what the runner would produce without
+ * spending a transaction to find out. It is derived from the same lifetimes the
+ * run itself walks, so a new lifetime reaches both at once.
+ *
+ * `record` refuses a name that is not here, which is what keeps the list honest.
+ * A declaration that nothing tests is documentation, and documentation drifts
+ * from the code silently.
+ */
+export const PRODUCED_ROWS = Object.freeze([
+  '1a-success',
+  '1b-double-spend-failed',
+  '1c-expired-host-signature-failed',
+  '8-void-success',
+  '8-after-void-failed',
+  'task3-handbuilt',
+  ...Object.keys(LIFETIMES).map((name) => `lifetime-${name}`),
+  'sep7-payment',
+]);
+
+// Answer what this command produces, and spend nothing doing it. A reader of
+// the archive can then ask whether the code still produces every row it holds.
+if (process.argv.includes('--list')) {
+  for (const name of PRODUCED_ROWS) console.log(name);
+  process.exit(0);
+}
+
 const rows = [];
 function record(name, outcome, note) {
+  if (!PRODUCED_ROWS.includes(name)) {
+    throw new Error(`${name} is recorded but the produced list does not name it`);
+  }
   rows.push({ name, hash: outcome.hash, note, producer: 'script' });
   console.log(`${name.padEnd(34)} ${outcome.status.padEnd(8)} ${outcome.hash}`);
   // A refusal is only evidence when it names its cause. The run therefore
@@ -397,6 +429,9 @@ async function readKeptRows() {
 // The payee-presented payment. It calls no contract, so it runs after every
 // voucher row rather than among them.
 const sep7 = await payeePresentedPayment();
+if (!PRODUCED_ROWS.includes(sep7.name)) {
+  throw new Error(`${sep7.name} is recorded but the produced list does not name it`);
+}
 rows.push({
   name: sep7.name, hash: sep7.hash, note: sep7.note, producer: 'script', request: sep7.request,
 });
