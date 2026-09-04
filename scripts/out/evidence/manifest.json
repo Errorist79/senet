@@ -1,0 +1,76 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
+  "rows": [
+    {
+      "name": "1a-success",
+      "hash": "38c87574bc89bdd2d4cf738dd82673404c01eb1b49beff7a0715a83f76490e7c",
+      "note": "One account signs the entry and a second account submits it. The party that submits selects the recipient after the signature exists."
+    },
+    {
+      "name": "1b-double-spend-failed",
+      "hash": "ea99589933c56964b0e3e2e1c37b6e6903aee9c986c2030e1ca464254c0382b2",
+      "note": "The network refuses a second submission of the same signed entry, because it consumed the nonce."
+    },
+    {
+      "name": "1c-expired-host-signature-failed",
+      "hash": "3e20493fdf3d64044d43f83f0232c96e0de68e6a6abd8adeabeef5fed9dbc7e5",
+      "note": "The network refuses an entry whose signature expiration ledger is in the past."
+    },
+    {
+      "name": "8-void-success",
+      "hash": "f372eb736d68824fade8a663e7bec23316d7130d644b6f390e3ecbd04cf6f4a5",
+      "note": "The payer voids the voucher and redeems it to their own address. The nonce is consumed and the balance does not change."
+    },
+    {
+      "name": "8-after-void-failed",
+      "hash": "9812dcb45ab141f3b566849c79e15c6ad2622f277c5e5eda984536d7e6b1c1db",
+      "note": "The network refuses a redemption of a voucher that the payer voided."
+    },
+    {
+      "name": "task3-handbuilt",
+      "hash": "6f99a2b8d03376ac8b3f3b94843acce7338bfd97701447f054228ece434622d8",
+      "note": "A client that never called simulation built this voucher. The redemption succeeds."
+    },
+    {
+      "name": "passkey-redeem-1",
+      "hash": "5909cdadb42f8ee88af3016ceb0edc352791185da88a7865bf35a7b930f54510",
+      "note": "A contract account signs with a secp256r1 passkey signature that its own __check_auth verifies. The recipient differs from the payer."
+    },
+    {
+      "name": "passkey-redeem-2",
+      "hash": "e2bdb88c472deefef4f88c929cd975d2d6b0ac9e00047cd8181ffa8a79a7a8bb",
+      "note": "A second passkey redemption with a secp256r1 signature. The recipient differs from the payer."
+    },
+    {
+      "name": "passkey-redeem-3",
+      "hash": "6d010865a40c918adb0ac16b0bbec17ab4729eecfb0973e0eb25b1b7599f97b3",
+      "note": "A third passkey redemption with a secp256r1 signature, for 33 XLM. The recipient differs from the payer."
+    },
+    {
+      "name": "passkey-void",
+      "hash": "2f03d32d9b6455369f1aa2aa5698ff989571549fb78b31bfc9c806312ad01efe",
+      "note": "A passkey account voids a voucher with a secp256r1 signature. The payer and the recipient are the same address."
+    },
+    {
+      "name": "lifetime-5m",
+      "hash": "fe2d93759051cd191c8c314005e93b3b2a8797652b123edd3e5b51f8c5de1dda",
+      "note": "A voucher with a lifetime of 60 ledgers, about 5 minutes."
+    },
+    {
+      "name": "lifetime-15m",
+      "hash": "b40be09b30355934ca794f557959ccb5a0da3fa6fdf08c4d02dc59c4c5a71b81",
+      "note": "A voucher with a lifetime of 180 ledgers, about 15 minutes. This lifetime is the default."
+    },
+    {
+      "name": "lifetime-1h",
+      "hash": "d26d487e2c553b1d0c2ad696dd30711eb4fc15b231e04fce62a691844f59974d",
+      "note": "A voucher with a lifetime of 720 ledgers, about 1 hour."
+    },
+    {
+      "name": "lifetime-12h",
+      "hash": "9cf3208b5b6b836a43b2777638e847f3149227c9c9899992e2a2903ca2a7f7bf",
+      "note": "A voucher with a lifetime of 8,640 ledgers, about 12 hours. This lifetime equals the cap of the contract."
+    }
+  ]
+}
