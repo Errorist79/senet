@@ -118,6 +118,26 @@ export class AmountWindowError extends VoucherError {
   }
 }
 
+/**
+ * The voucher has too little life left to take.
+ *
+ * This is not the same failure as an expired voucher. The voucher is still
+ * good, and it will not be good for long enough to survive the simulation and
+ * the submission that a redemption needs.
+ */
+export class RemainingLifeError extends VoucherError {
+  constructor(
+    readonly remaining: number,
+    readonly required: number,
+  ) {
+    super(
+      `the voucher has ${remaining} ledgers of life left and a payment needs ` +
+        `${required}. It would expire between the scan and the payment, which ` +
+        `looks the same as a bad voucher. Ask the payer for a new one.`,
+    );
+  }
+}
+
 /** A SEP-7 request does not hold the shape that the standard names. */
 export class UriFormatError extends VoucherError {}
 

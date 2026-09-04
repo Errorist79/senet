@@ -10,10 +10,14 @@ import {
   LEDGER_MEAN_CLOSE_SECONDS,
   LEDGER_TARGET_CLOSE_MS,
   LIFETIMES,
+  MIN_REMAINING_LEDGERS,
+  RemainingLifeError,
   assertAmount,
   assertLifetime,
+  assertRemainingLife,
   estimateLedger,
   offlineExpireAt,
+  remainingLedgers,
 } from '../src/index.js';
 
 test('an estimate with no elapsed time is the ledger the device saw', () => {
@@ -91,4 +95,33 @@ test('an amount one stroop above the cap raises AmountWindowError', () => {
 test('an amount of zero or below raises AmountWindowError', () => {
   assert.throws(() => assertAmount(0n), AmountWindowError);
   assert.throws(() => assertAmount(-1n), AmountWindowError);
+});
+
+test('a voucher with plenty of life left passes', () => {
+  assert.equal(assertRemainingLife(1000, 900), 100);
+  assert.equal(remainingLedgers(1000, 900), 100);
+});
+
+test('a voucher at the limit passes and a shorter one does not', () => {
+  const now = 1000;
+  assert.equal(assertRemainingLife(now + MIN_REMAINING_LEDGERS, now), MIN_REMAINING_LEDGERS);
+  assert.throws(
+    () => assertRemainingLife(now + MIN_REMAINING_LEDGERS - 1, now),
+    (error: unknown) => {
+      assert.ok(error instanceof RemainingLifeError);
+      assert.equal(error.remaining, MIN_REMAINING_LEDGERS - 1);
+      assert.equal(error.required, MIN_REMAINING_LEDGERS);
+      return true;
+    },
+  );
+});
+
+test('a voucher that already expired reports a negative life', () => {
+  assert.equal(remainingLedgers(900, 1000), -100);
+  assert.throws(() => assertRemainingLife(900, 1000), RemainingLifeError);
+});
+
+test('the headroom covers a simulation and a submission', () => {
+  // Each costs about one ledger, and a merchant needs room for both plus slack.
+  assert.ok(MIN_REMAINING_LEDGERS >= 2);
 });

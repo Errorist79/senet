@@ -2,8 +2,9 @@ import {
   CONTRACT_MAX_TTL_LEDGERS,
   LEDGER_ESTIMATE_MARGIN_LEDGERS,
   LEDGER_MEAN_CLOSE_SECONDS,
+  MIN_REMAINING_LEDGERS,
 } from './constants.js';
-import { ExpiryWindowError } from './errors.js';
+import { ExpiryWindowError, RemainingLifeError } from './errors.js';
 
 /**
  * Estimate the current ledger from the last one the device saw.
@@ -50,4 +51,31 @@ export function offlineExpireAt(
   lifetimeLedgers: number,
 ): number {
   return estimateLedger(lastSeenLedger, elapsedSeconds) + assertLifetime(lifetimeLedgers);
+}
+
+/**
+ * The ledgers of life that remain in a voucher.
+ *
+ * The result goes negative once the voucher passes its deadline. A caller that
+ * only shows a number therefore needs no separate check for an expiry.
+ */
+export function remainingLedgers(expireAt: number, currentLedger: number): number {
+  return expireAt - currentLedger;
+}
+
+/**
+ * Refuse a voucher that would expire during the payment.
+ *
+ * A merchant simulates and then submits. A voucher that expires in between
+ * fails in a way that looks the same as a bad voucher. The scanner refuses it
+ * at the scan, where the payer is still there.
+ */
+export function assertRemainingLife(
+  expireAt: number,
+  currentLedger: number,
+  required = MIN_REMAINING_LEDGERS,
+): number {
+  const remaining = remainingLedgers(expireAt, currentLedger);
+  if (remaining < required) throw new RemainingLifeError(remaining, required);
+  return remaining;
 }

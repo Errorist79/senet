@@ -68,6 +68,15 @@ export const CONTRACT_MAX_TTL_LEDGERS = LIFETIMES['12h'];
 export const CONTRACT_MAX_AMOUNT_STROOPS = 1_000_000_000n;
 
 /**
+ * The ledgers of life that a merchant demands before it takes a voucher.
+ *
+ * The merchant path costs one simulation and one submission. A voucher can
+ * expire between the scan and the apply. That failure looks the same to the
+ * merchant as a bad voucher, so the scanner refuses the voucher early instead.
+ */
+export const MIN_REMAINING_LEDGERS = 6;
+
+/**
  * The `max_time_bound` of a submitted transaction, in seconds.
  *
  * This bounds the transaction, not the voucher. It only has to outlast one
