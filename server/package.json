@@ -13,7 +13,6 @@
     "build": "tsc --build",
     "start": "node dist/tools/serve.js",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
-    "load-check": "npm run build && node dist/tools/load-check.js",
     "new-keys": "npm run build && node dist/tools/new-keys.js",
     "app-check": "npm run build && node dist/tools/app-check.js"
   },

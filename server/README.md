@@ -167,27 +167,23 @@ npm run build --workspace @senet/server
 npm test --workspace @senet/server
 ```
 
-## The load check
-
-The load check drives the service against testnet. It mints one voucher per
-redemption, runs a sequential batch and then a concurrent batch, and writes
-every outcome to a file:
-
-```
-ENV_FILE=/path/to/.env npm run load-check --workspace @senet/server -- out.json
-```
+## Measured behaviour
 
 A run on 2026-09-04 against contract
-`CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY`, with six channels,
-redeemed 20 vouchers in sequence and 5 at the same time. All 25 succeeded, and
-no attempt needed a second try.
+`CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY`, with six channel
+accounts, redeemed 20 vouchers in sequence and 5 at the same time. All 25
+succeeded, and no attempt needed a second try. Every redemption declared 47,742
+stroops and the network charged 27,364.
 
-| Batch | Channels used | Median | Declared fee | Fee charged |
-|---|---|---|---|---|
-| sequential, 20 | 1 | 5,027 ms | 47,742 stroops | 27,364 stroops |
-| concurrent, 5 | 5 | 5,011 ms | 47,742 stroops | 27,364 stroops |
+| Batch | Channels used | Median wait |
+|---|---|---|
+| sequential, 20 | 1 | 5,052 ms |
+| concurrent, 5 | 5 | 4,186 ms |
 
 Two rules show in these numbers. The five concurrent redemptions took five
 different channels, and one ledger carried all five. The 20 sequential
-redemptions reused one channel, one per ledger, at the measured mean close
-time.
+redemptions reused one channel, one per ledger, at the measured mean ledger
+close time.
+
+The evidence archive holds the producer that drives these batches, and it keeps
+one row per redemption.
