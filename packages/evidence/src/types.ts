@@ -60,6 +60,37 @@ export interface Delivery {
 }
 
 /**
+ * One payee-presented request, as the payer received it.
+ *
+ * The chain carries the payment: a source, a destination, an amount and a fee.
+ * It carries nothing about the request that asked for the payment. The request
+ * is the artifact this row is about, so it is stored whole, for the same reason
+ * the webhook body is: the claim is that this request existed and that this
+ * payment answered it.
+ *
+ * The signing key is stored beside the request rather than fetched when a check
+ * runs. A later reader can then verify the signature with no network at all,
+ * which is the property that keeps the row readable after the domain changes
+ * its published key or stops answering. `tomlUrl` records where the key was
+ * read, so the stored key stays a claim that a reader can go and test against
+ * the live domain while the domain still exists.
+ *
+ * The two questions are deliberately separate. Did this key sign this request,
+ * which stays answerable for ever. Does the domain still publish this key,
+ * which decays and is allowed to.
+ */
+export interface Sep7Request {
+  /** The request, byte for byte, with its signature. */
+  readonly uri: string;
+  /** The domain that the request names as its origin. */
+  readonly originDomain: string;
+  /** The key that this archive verified the signature against. */
+  readonly signingKey: string;
+  /** Where that key was read, so a reader can test the claim while it lasts. */
+  readonly tomlUrl: string;
+}
+
+/**
  * One row of a manifest.
  *
  * A row needs three fields only: a name, a hash, and one sentence that says
@@ -86,6 +117,8 @@ export interface Row {
   readonly shown?: Shown;
   /** The webhook message that the listener posted for this transaction. */
   readonly delivery?: Delivery;
+  /** The payee-presented request that this payment answered. */
+  readonly request?: Sep7Request;
   /** Which batch of a load check the row belongs to. */
   readonly batch?: string;
   /** The number of the attempt that produced the row. The first attempt is one. */

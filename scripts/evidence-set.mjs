@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Address, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { Address, StrKey, scValToNative, xdr } from '@stellar/stellar-sdk';
 import { TESTNET_HORIZON_URL, TESTNET_RPC_URL, readArchivedRow } from '@senet/evidence';
 
 export {
@@ -280,6 +280,19 @@ export function deriveLoadClaims(dir, manifest) {
 const STROOPS_IN_ONE_XLM = 10_000_000n;
 
 /** The amount that a screen shows for a figure that the chain holds in stroops. */
+/**
+ * Read a decimal amount as stroops.
+ *
+ * An amount carries seven decimal places exactly, so the conversion runs
+ * through text and BigInt. A number would lose the last place on a large
+ * amount, and lose it without saying so.
+ */
+function xlmAsStroops(amount) {
+  if (!/^\d+(\.\d{1,7})?$/.test(amount)) return null;
+  const [whole, fraction = ''] = amount.split('.');
+  return BigInt(whole) * STROOPS_IN_ONE_XLM + BigInt(fraction.padEnd(7, '0'));
+}
+
 function stroopsAsXlm(stroops) {
   if (stroops === null || stroops === undefined) return null;
   const value = BigInt(stroops);
@@ -513,5 +526,122 @@ export function deriveDeliveryClaims(dir, manifest) {
     checked += found.checked;
     for (const problem of found.problems) problems.push(`${row.name}: ${problem}`);
   }
+  return { checked, problems };
+}
+
+/**
+ * Read the terms of a classic payment out of one transaction envelope.
+ *
+ * A payee-presented payment is not a contract call. It is a payment operation,
+ * so the reader that decodes a redemption cannot read one, and this reads the
+ * operation instead. The Soroban RPC holds a classic transaction with its
+ * envelope, result and meta, measured against the network, so a payment row
+ * archives and re-reads exactly as a redemption row does.
+ */
+export function paymentFromEnvelope(envelopeXdr) {
+  if (!envelopeXdr) return null;
+  const transaction = xdr.TransactionEnvelope.fromXDR(envelopeXdr, 'base64').v1().tx();
+  const operation = transaction.operations()[0];
+  if (operation.body().switch().name !== 'payment') return null;
+  const payment = operation.body().paymentOp();
+  const asset = payment.asset();
+  // A payment names a muxed account, and the common case carries a plain
+  // ed25519 key. The decoding is checked against a real testnet payment: the
+  // address below equals the destination that Horizon reports for it. A muxed
+  // destination is a different shape, and this says so rather than reading the
+  // wrong field and producing a plausible address that belongs to nobody.
+  const destination = payment.destination();
+  const kind = destination.switch().name;
+  if (kind !== 'keyTypeEd25519') {
+    return { destination: null, muxedKind: kind, amountStroops: payment.amount().toString(), assetType: asset.switch().name };
+  }
+  return {
+    destination: StrKey.encodeEd25519PublicKey(destination.ed25519()),
+    muxedKind: kind,
+    amountStroops: payment.amount().toString(),
+    assetType: asset.switch().name,
+  };
+}
+
+/**
+ * Compare one payee-presented request against the payment that answered it.
+ *
+ * The request is the artifact and the payment is the fact. This check asks
+ * whether the two agree, and whether the stored key really signed the request.
+ *
+ * The signature check needs no network. The request and the key are both in the
+ * row, so this still answers after the domain changes its key or stops
+ * answering at all. Whether the domain still publishes that key is a different
+ * question, it decays, and `tomlUrl` is where a reader goes to ask it.
+ */
+export function compareRequestToChain(request, payment, horizon, verify) {
+  const problems = [];
+  let checked = 0;
+
+  checked += 1;
+  const verified = verify(request.uri, request.signingKey);
+  if (!verified.verified) {
+    problems.push(`the stored key does not verify the request: ${verified.reason}`);
+  }
+
+  checked += 1;
+  const parsed = new URL(request.uri.replace('web+stellar:', 'https://sep7/'));
+  const declared = parsed.searchParams.get('origin_domain');
+  if (declared !== request.originDomain) {
+    problems.push(`the request names origin_domain ${declared}, and the row says ${request.originDomain}`);
+  }
+
+  checked += 1;
+  if (!request.tomlUrl.includes(request.originDomain)) {
+    problems.push(`the key came from ${request.tomlUrl}, which is not the domain the request names`);
+  }
+
+  if (payment !== null) {
+    checked += 1;
+    if (payment.destination === null) {
+      problems.push(`the payment names a ${payment.muxedKind} destination, which this row cannot read`);
+    }
+    const wanted = parsed.searchParams.get('destination');
+    if (payment.destination !== null && wanted !== payment.destination) {
+      problems.push(`the request asks for ${wanted}, and the payment went to ${payment.destination}`);
+    }
+
+    const askedAmount = parsed.searchParams.get('amount');
+    if (askedAmount !== null) {
+      checked += 1;
+      // Compare in stroops rather than in decimal text. An amount carries seven
+      // decimal places, and a comparison through a floating point number loses
+      // the smallest of them silently. The display formatter is not usable
+      // here either, because it appends the name of the asset.
+      const wantedStroops = xlmAsStroops(askedAmount);
+      if (wantedStroops === null) {
+        problems.push(`the request asks for ${askedAmount}, which is not an amount`);
+      } else if (wantedStroops !== BigInt(payment.amountStroops)) {
+        problems.push(
+          `the request asks for ${wantedStroops} stroops and the payment carried ${payment.amountStroops}`,
+        );
+      }
+    }
+
+    // A request that names no asset asks for the native one. Without this the
+    // amount could match while the payment carried a different asset entirely,
+    // which is a payment that answers nothing.
+    checked += 1;
+    const askedCode = parsed.searchParams.get('asset_code');
+    if (askedCode === null && payment.assetType !== 'assetTypeNative') {
+      problems.push(`the request asks for the native asset and the payment carried ${payment.assetType}`);
+    }
+    if (askedCode !== null && payment.assetType === 'assetTypeNative') {
+      problems.push(`the request asks for ${askedCode} and the payment carried the native asset`);
+    }
+  } else {
+    problems.push('the transaction carries no payment operation, so no request can be answered by it');
+  }
+
+  if (horizon !== null && horizon !== undefined) {
+    checked += 1;
+    if (horizon.successful !== true) problems.push('the payment did not succeed');
+  }
+
   return { checked, problems };
 }
