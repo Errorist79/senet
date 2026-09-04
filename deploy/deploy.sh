@@ -9,8 +9,8 @@
 #   ssh root@HOST 'bash /opt/senet-src/deploy/deploy.sh /opt/senet-src'
 #
 # `git archive HEAD` carries what the repository holds and nothing else. A copy
-# of a working directory would carry a file that nobody committed, and a
-# deployment would then serve code that no reader of the repository can see.
+# of an uncommitted tree would carry a file that nobody committed. A deployment
+# would then serve code that no reader of the repository can see.
 #
 # The script copies the source to /opt/senet, builds it there, and restarts the
 # service. It never writes /opt/senet/.env, so a deployment cannot lose the

@@ -50,6 +50,7 @@ calculation:
 | `scripts/out/evidence/` | The archived proof of every cited transaction. |
 | `scripts/out/load-check/` | The archived record of the cost and throughput run. |
 | `.github/workflows/ci.yml` | The build and the test suites. |
+| `deploy/` | The web server configuration, the service unit and the deployment. |
 
 ## Versions
 
@@ -248,6 +249,63 @@ browser and a phone. They are not part of this path.
 `stellar contract build` reproduces that wasm hash from a clean checkout. A
 `cargo build --release` produces a different artifact, so it does not reproduce
 the deployed contract.
+
+## The public deployment
+
+`https://senet.hoodrun.io` serves the application and the service. A passkey
+binds to the origin that created it. An account made on a phone therefore stays
+valid only while that same name serves the application.
+
+### What runs
+
+| Piece | Where |
+|---|---|
+| The application build | `/opt/senet/app/dist`, which nginx serves. |
+| The service | `senet-api.service`, from `/opt/senet`, on `127.0.0.1:8791`. |
+| The web server | nginx, from `/etc/nginx/sites-available/senet`. |
+| The common headers | `/etc/nginx/snippets/senet-common-headers.conf`. |
+| The keys | `/opt/senet/.env`, which git never carries. |
+| The certificate | Certbot, for `senet.hoodrun.io`. |
+
+The service listens on the loopback interface only. nginx terminates TLS and
+proxies `/api/` to it, so the service never faces the public network itself.
+
+### Redeploy
+
+```bash
+git archive --format=tar HEAD | ssh root@HOST \
+  'rm -rf /opt/senet-src && mkdir -p /opt/senet-src && tar -x -C /opt/senet-src'
+ssh root@HOST 'bash /opt/senet-src/deploy/deploy.sh /opt/senet-src'
+```
+
+`git archive HEAD` carries what the repository holds and nothing else. A copy of
+an uncommitted tree would carry a file that nobody committed. The deployment
+would then serve code that no reader of the repository can see.
+
+The script never writes `/opt/senet/.env`, so a redeploy cannot lose the channel
+keys.
+
+### Check the deployment
+
+```bash
+CHROME_PATH=/path/to/chrome node deploy/verify.mjs
+```
+
+Every check reaches the name over the public network, so it proves what a phone
+sees rather than what the host believes. The command checks that:
+
+- each path answers, and every response carries the three common headers;
+- the web server never caches the worker, and the worker may control the whole
+  origin;
+- `stellar.toml` answers as text and allows another origin;
+- the service names the contract and holds its channel accounts;
+- the application names no relying party other than the host.
+
+With a browser it also loads the page, registers the worker, and reads the
+manifest.
+
+Without `CHROME_PATH` the command runs every other check and says that it
+skipped one.
 
 ## The evidence archive
 

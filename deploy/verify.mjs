@@ -50,8 +50,8 @@ for (const path of PATHS) {
   console.log(`  ${String(response.status).padEnd(4)}${path}`);
 }
 
-// A device that installed an old worker reaches a new build only when the
-// worker itself is never cached.
+// A device that installed an old worker reaches a new build only when the web
+// server never caches the worker.
 const worker = await fetch(`${origin}/sw.js`);
 check(
   (worker.headers.get('cache-control') ?? '').includes('no-store'),
@@ -67,12 +67,30 @@ check(
 );
 check(toml.headers.get('access-control-allow-origin') === '*', 'stellar.toml refuses another origin');
 
+/**
+ * Read one route as JSON, and record a problem when it answers something else.
+ *
+ * A name that serves another site answers HTML here. The check reports that as
+ * a named failure and carries on. A crash tells a reader less than a list of
+ * what is wrong.
+ */
+async function readJson(path) {
+  const response = await fetch(origin + path);
+  const body = await response.text();
+  try {
+    return JSON.parse(body);
+  } catch {
+    problems.push(`${path} answered ${response.status} and no JSON`);
+    return {};
+  }
+}
+
 // The application reads the chain identities from the service, so the service
 // has to answer and to name the contract.
-const config = await (await fetch(`${origin}/api/config`)).json();
+const config = await readJson('/api/config');
 check(typeof config.contractId === 'string' && config.contractId.startsWith('C'),
   'the service names no contract');
-const status = await (await fetch(`${origin}/api/status`)).json();
+const status = await readJson('/api/status');
 check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no channel account');
 
 // A passkey binds to the origin that created it, so the identifier must be the
@@ -101,17 +119,29 @@ if (chromePath === undefined || chromePath === '') {
     const page = await browser.newPage();
     await page.goto(origin, { waitUntil: 'load' });
     const state = await page.evaluate(async () => {
-      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      await navigator.serviceWorker.ready;
+      const secure = window.isSecureContext;
+      let scope = null;
+      let active = false;
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        await navigator.serviceWorker.ready;
+        scope = registration.scope;
+        active = registration.active !== null;
+      } catch (failure) {
+        return { secure, scope: null, active: false, manifest: null, failure: String(failure) };
+      }
       const link = document.querySelector('link[rel="manifest"]');
-      const manifest = link === null ? null : await (await fetch(link.getAttribute('href'))).json();
-      return {
-        secure: window.isSecureContext,
-        scope: registration.scope,
-        active: registration.active !== null,
-        manifest,
-      };
+      let manifest = null;
+      if (link !== null) {
+        try {
+          manifest = await (await fetch(link.getAttribute('href'))).json();
+        } catch {
+          manifest = null;
+        }
+      }
+      return { secure, scope, active, manifest, failure: null };
     });
+    if (state.failure !== null) problems.push(`the worker did not register: ${state.failure}`);
     check(state.secure, 'the page is not a secure context, so no passkey works there');
     check(state.active, 'the service worker did not become active');
     check(state.scope === `${origin}/`, `the worker controls ${state.scope} and not the whole origin`);
