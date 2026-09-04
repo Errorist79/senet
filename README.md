@@ -75,6 +75,19 @@ npm install && npm test     # the library tests
 `rust-toolchain.toml` pins the Rust version and the Wasm target, so `rustup`
 installs both on the first build.
 
+## The deployed contract
+
+| | |
+|---|---|
+| Contract | `CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY` |
+| Wasm hash | `c93a39a97541555caf3136dfa13dc33e1592ce492a07ad2f00d050352f98bf55` |
+| Amount cap | 1,000,000,000 stroops, which is 100 XLM |
+| Lifetime cap | 8,640 ledgers, which is about 12 hours |
+
+`stellar contract build` reproduces that wasm hash from a clean checkout. A
+`cargo build --release` produces a different artifact, so it does not reproduce
+the deployed contract.
+
 ## The evidence archive
 
 Testnet resets, and the RPC server keeps about seven days of history. A
@@ -82,15 +95,43 @@ transaction hash is therefore not a durable citation. Every cited transaction
 is archived in this repository, with its envelope, its result, its meta and its
 diagnostic events, plus the summary that Horizon holds.
 
-One command refreshes the whole archive:
+One command produces the whole set on testnet and archives it:
+
+```bash
+node scripts/run-evidence.mjs
+```
+
+The command needs four funded testnet accounts and the contract identifier.
+`.env.example` names every value, and `.env` holds them.
+
+The command produces ten rows:
+
+- the redemption whose recipient the submitter selects after the signature;
+- the refused replay of that same entry;
+- the refused entry whose signature expired;
+- the void;
+- the refused redemption after the void;
+- a voucher that a client built with no network call;
+- the four lifetimes.
+
+A refused row lands on chain as a failed transaction, so each refusal is a
+public hash. The command reads the diagnostic events of every refused row. It
+then checks that the network refused the row for the stated reason.
+
+Four rows come from a passkey, and the command keeps them as they are. A script
+cannot produce them, because a WebAuthn signature needs a person and a device.
+Each kept row names the contract that held it.
+
+A second command refreshes the archive of the current set. It produces no
+transaction:
 
 ```bash
 node scripts/archive-evidence.mjs
 ```
 
-The command reads `scripts/out/evidence/manifest.json`, which names each
-transaction and states what the transaction shows. The command writes one file
-for each row into `scripts/out/evidence/`.
+Both commands read `scripts/out/evidence/manifest.json`, which names each
+transaction and states what the transaction shows. They write one file for each
+row into `scripts/out/evidence/`.
 
 A row that the RPC server no longer holds keeps its Horizon summary, but it
 carries no meta. The command names such a row. The command then returns a
