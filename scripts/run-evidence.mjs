@@ -49,6 +49,37 @@ const REASON_NONCE_CONSUMED = 'nonce already exists for address';
 /** The reason that the network gives when the signature of an entry is old. */
 const REASON_SIGNATURE_EXPIRED = 'signature has expired';
 
+/**
+ * Every row that this command produces.
+ *
+ * The list exists so that a check can ask what the runner would produce without
+ * spending a transaction to find out. It is derived from the same lifetimes the
+ * run itself walks, so a new lifetime reaches both at once.
+ *
+ * `record` refuses a name that is not here, which is what keeps the list honest.
+ * A declaration that nothing tests is documentation, and documentation drifts
+ * from the code silently.
+ */
+export const PRODUCED_ROWS = Object.freeze([
+  '1a-success',
+  '1b-double-spend-failed',
+  '1c-expired-host-signature-failed',
+  '8-void-success',
+  '8-after-void-failed',
+  'task3-handbuilt',
+  ...Object.keys(LIFETIMES).map((name) => `lifetime-${name}`),
+  'sep7-payment',
+]);
+
+// Answer what this command produces, and spend nothing doing it. This stands
+// above every read of configuration on purpose. Asking what a command would
+// produce needs no keys, no network and no environment file, and a reader who
+// has cloned the repository and set nothing up must still get an answer.
+if (process.argv.includes('--list')) {
+  for (const name of PRODUCED_ROWS) console.log(name);
+  process.exit(0);
+}
+
 loadEnv();
 
 const server = new rpc.Server(RPC_URL);
@@ -183,35 +214,6 @@ async function submitRefused(voucher, recipient, entry, resources, reason, label
     throw new Error(`${label}: the network refused this row, but not for "${reason}"`);
   }
   return { ...outcome, recorded };
-}
-
-/**
- * Every row that this command produces.
- *
- * The list exists so that a check can ask what the runner would produce without
- * spending a transaction to find out. It is derived from the same lifetimes the
- * run itself walks, so a new lifetime reaches both at once.
- *
- * `record` refuses a name that is not here, which is what keeps the list honest.
- * A declaration that nothing tests is documentation, and documentation drifts
- * from the code silently.
- */
-export const PRODUCED_ROWS = Object.freeze([
-  '1a-success',
-  '1b-double-spend-failed',
-  '1c-expired-host-signature-failed',
-  '8-void-success',
-  '8-after-void-failed',
-  'task3-handbuilt',
-  ...Object.keys(LIFETIMES).map((name) => `lifetime-${name}`),
-  'sep7-payment',
-]);
-
-// Answer what this command produces, and spend nothing doing it. A reader of
-// the archive can then ask whether the code still produces every row it holds.
-if (process.argv.includes('--list')) {
-  for (const name of PRODUCED_ROWS) console.log(name);
-  process.exit(0);
 }
 
 const rows = [];
