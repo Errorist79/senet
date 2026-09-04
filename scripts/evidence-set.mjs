@@ -129,6 +129,11 @@ function signatureScheme(signature) {
 export async function describeRedeem(hash) {
   const described = await describeTransaction(hash);
   if (described === null) return null;
+  // A transaction that deploys an account calls no contract function, so the
+  // reader asks what kind of host function it carries before it reads one.
+  if (described.hostFunction !== 'hostFunctionTypeInvokeContract') {
+    return { ...described, functionName: null, redeem: null };
+  }
   const result = await rpcTransaction(hash);
   const transaction = xdr.TransactionEnvelope.fromXDR(result.envelopeXdr, 'base64').v1().tx();
   const invocation = transaction.operations()[0].body().invokeHostFunctionOp()
@@ -164,13 +169,28 @@ export async function describeTransaction(hash) {
   if (!result.envelopeXdr) return null;
   const transaction = xdr.TransactionEnvelope.fromXDR(result.envelopeXdr, 'base64').v1().tx();
   const operation = transaction.operations()[0].body().invokeHostFunctionOp();
-  const invoked = operation.hostFunction().invokeContract().contractAddress();
-  const credentials = operation.auth()[0].credentials();
+  const hostFunction = operation.hostFunction().switch().name;
+  // A deployment names no contract, because the contract does not exist yet.
+  const contractId = hostFunction === 'hostFunctionTypeInvokeContract'
+    ? Address.fromScAddress(operation.hostFunction().invokeContract().contractAddress()).toString()
+    : null;
+  const entry = operation.auth()[0];
+  if (entry === undefined) {
+    return { hostFunction, contractId, payer: null, credentialType: null, signature: null };
+  }
+  const credentials = entry.credentials();
+  if (credentials.switch().value !== 1 && credentials.switch().value !== 2) {
+    return {
+      hostFunction, contractId, payer: null,
+      credentialType: credentials.switch().name, signature: null,
+    };
+  }
   const addressCredentials = credentials.switch().value === 2
     ? credentials.addressV2()
     : credentials.address();
   return {
-    contractId: Address.fromScAddress(invoked).toString(),
+    hostFunction,
+    contractId,
     payer: Address.fromScAddress(addressCredentials.address()).toString(),
     credentialType: credentials.switch().value === 2 ? 'ADDRESS_V2' : 'ADDRESS',
     signature: signatureScheme(addressCredentials.signature()),
@@ -259,7 +279,11 @@ function stroopsAsXlm(stroops) {
 function namesTheSame(shown, full) {
   const parts = shown.split('\u2026');
   if (parts.length !== 2) return shown === full;
-  return full.startsWith(parts[0]) && full.endsWith(parts[1]);
+  const [head, tail] = parts;
+  // A head or a tail that is empty matches almost anything, so a value shortened
+  // that far proves nothing and the check refuses it.
+  if (head.length + tail.length < 8) return false;
+  return full.startsWith(head) && full.endsWith(tail);
 }
 
 /**

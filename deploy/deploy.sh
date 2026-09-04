@@ -21,8 +21,8 @@
 #   /opt/senet/.env               the keys, which no deployment replaces
 #
 # The order of the two swaps is the point. The service goes first and the
-# application second, so the application never asks the service for a setting
-# that the running service does not serve yet. The application reads its chain
+# application second. The application therefore never asks for a value that the
+# service it talks to does not serve yet. The application reads its chain
 # settings from `/api/config` at start. An application that arrives first
 # therefore meets a service that answers without them, and account creation
 # fails while the page still looks healthy.
@@ -51,9 +51,14 @@ RELEASE="$TARGET/releases/$STAMP"
 
 echo "==> building release $STAMP"
 mkdir -p "$RELEASE"
+# Each pattern that names one directory carries a leading slash, which anchors
+# it to the root of the transfer. Without that anchor rsync matches the name at
+# any depth, so `target/` would also drop a directory of that name inside a
+# package. `node_modules` and `.git` stay unanchored on purpose, because they
+# appear at every depth.
 rsync -a --delete \
-  --exclude '.git/' --exclude 'node_modules/' --exclude 'target/' \
-  --exclude '.env' --exclude 'scripts/out/' \
+  --exclude '.git/' --exclude 'node_modules/' --exclude '/target/' \
+  --exclude '/.env' --exclude '/scripts/out/' \
   "$SOURCE"/ "$RELEASE"/
 cd "$RELEASE"
 npm install --no-audit --no-fund

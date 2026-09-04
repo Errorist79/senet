@@ -12,7 +12,7 @@
 
 import { launch } from 'puppeteer-core';
 // The name that the deployed release declares. A commit is the only thing that
-// changes it, which is what makes it worth checking against the origin.
+// changes it, and that is why a check against the origin is worth having.
 import { RP_ID } from '@senet/server';
 // The typed errors, so the check asks the bundle for the vocabulary that the
 // library declares rather than for a list written out here.
@@ -105,9 +105,9 @@ check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no chann
 // the application uses, so it is an early warning and not a proof.
 //
 // It compares the origin against the constant that the deployed release
-// declares. A constant is worth checking because only a commit changes it. A
-// value that an operator supplies is worth much less: an operator who moves the
-// name supplies the new name, the two agree, and the check passes while the
+// declares. A constant earns a check because only a commit changes it. A value
+// that an operator supplies earns much less. An operator who moves the name
+// supplies the new name. The two then agree, and the check passes while the
 // move goes unrecorded.
 const host = new URL(origin).hostname;
 check(RP_ID === host,
@@ -123,15 +123,15 @@ if (typeof config.rpId === 'string') {
 // The merchant screen shows the name of a typed error, so the bundle has to
 // carry that vocabulary as text. A bundler renames a class, and a name taken
 // from the constructor then reaches a person as two meaningless letters. Every
-// unit test still passes, because Node minifies nothing, so the fault lives in
-// the artifact alone and only a check against the artifact finds it.
+// unit test still passes, because Node minifies nothing. The fault lives in the
+// artifact alone, and only a check against the artifact finds it.
 const bundleText = await (await fetch(`${origin}/app.js`)).text();
 const errorNames = Object.keys(core).filter((name) => name.endsWith('Error'));
 check(errorNames.length > 0, 'the library declares no typed error, so this check reads nothing');
 // The bundle carries only the errors that the application can raise, because
-// the bundler drops the rest. So the count means nothing, and the presence of
-// any name means everything: a bundler that renames a class renames every one,
-// and none of the names would survive.
+// the bundler drops the rest. The count therefore means nothing. The presence
+// of any name means everything, because a bundler that renames a class renames
+// every one, and no name at all would survive.
 const carried = errorNames.filter((name) => bundleText.includes(name));
 check(carried.length > 0,
   `the bundle carries no text for any of the ${errorNames.length} typed errors, `

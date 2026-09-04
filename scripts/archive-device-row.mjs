@@ -25,7 +25,10 @@ import {
 } from './evidence-set.mjs';
 
 /** The screens that a device row can come from. */
-const SCREENS = ['payer', 'merchant'];
+const SCREENS = ['account', 'payer', 'merchant'];
+
+/** How many characters of a hash name a row that carries no voucher. */
+const HASH_NAME_LENGTH = 12;
 
 function usage(problem) {
   console.error(`${problem}\n`);
@@ -67,6 +70,12 @@ function readArguments(argv) {
   return options;
 }
 
+/** What an account row shows. A deployment carries no voucher and no recipient. */
+function noteForAccount() {
+  return 'A person created an account on a phone. The passkey of that phone is '
+    + 'the only key that signs for it.';
+}
+
 /** What the row shows, taken from the transaction rather than from a person. */
 function noteFor(redeem) {
   if (redeem.payer === redeem.recipient) {
@@ -87,21 +96,33 @@ if (described === null) {
   console.error('The RPC server keeps about seven days, so an older run needs Horizon.');
   process.exit(1);
 }
-if (described.redeem === null) {
-  console.error(`${options.hash} calls ${described.functionName}, and not redeem`);
+// The account screen deploys an account, which calls no contract function. Every
+// other screen redeems, and a row from one of those has to be a redemption.
+const isAccount = options.screen === 'account';
+if (!isAccount && described.redeem === null) {
+  const called = described.functionName ?? described.hostFunction;
+  console.error(`${options.hash} carries ${called}, and a ${options.screen} row needs a redeem`);
+  process.exit(1);
+}
+if (isAccount && described.redeem !== null) {
+  console.error(`${options.hash} is a redemption, so it is not an account row`);
   process.exit(1);
 }
 
 const configuredContract = process.env.CONTRACT_ID;
 const { redeem } = described;
-const name = `device-${options.screen}-${redeem.voucherId}`;
+// A redemption takes its name from the voucher that both parties share. A
+// deployment has no voucher, so it takes the first characters of its own hash.
+const name = isAccount
+  ? `device-account-${options.hash.slice(0, HASH_NAME_LENGTH)}`
+  : `device-${options.screen}-${redeem.voucherId}`;
 const row = {
   name,
   hash: options.hash,
-  note: options.note ?? noteFor(redeem),
+  note: options.note ?? (isAccount ? noteForAccount() : noteFor(redeem)),
   producer: 'device',
   screen: options.screen,
-  contractId: described.contractId,
+  ...(described.contractId === null ? {} : { contractId: described.contractId }),
   shown: { title: options.title, advice: options.advice, values: options.values },
 };
 
@@ -114,12 +135,18 @@ const shown = compareShownToChain(options.values, horizon, options.hash);
 console.log(`\nthis command would write ${name}`);
 console.log(`  into        scripts/out/device-check/`);
 console.log(`  hash        ${options.hash}`);
-console.log(`  contract    ${described.contractId}`);
-console.log(`  signature   ${described.signature}${described.signature === 'secp256r1' ? '' : '   NOT A PASSKEY'}`);
-console.log(`  payer       ${redeem.payer}`);
-console.log(`  recipient   ${redeem.recipient}${redeem.payer === redeem.recipient ? '   the payer voided it' : ''}`);
-console.log(`  amount      ${redeem.amount} stroops`);
-console.log(`  voucher     ${redeem.voucherId}`);
+console.log(`  contract    ${described.contractId ?? 'none, this transaction deploys one'}`);
+// The account that pays for a deployment signs it. The passkey of the new
+// account signs nothing here, so a note about the scheme would mislead.
+console.log(`  signature   ${described.signature}${isAccount || described.signature === 'secp256r1' ? '' : '   NOT A PASSKEY'}`);
+if (isAccount) {
+  console.log(`  deployer    ${described.payer}`);
+} else {
+  console.log(`  payer       ${redeem.payer}`);
+  console.log(`  recipient   ${redeem.recipient}${redeem.payer === redeem.recipient ? '   the payer voided it' : ''}`);
+  console.log(`  amount      ${redeem.amount} stroops`);
+  console.log(`  voucher     ${redeem.voucherId}`);
+}
 console.log(`  ledger      ${horizon?.ledger ?? 'unknown'}`);
 console.log(`  outcome     ${horizon?.successful === true ? 'SUCCESS' : 'FAILED'}`);
 console.log(`  note        ${row.note}`);
@@ -127,7 +154,8 @@ console.log(`  screen      ${options.title} / ${options.advice}`);
 console.log(`  figures     ${shown.checked} compared against the chain`);
 for (const problem of shown.problems) console.log(`  PROBLEM     ${problem}`);
 
-if (configuredContract !== undefined && described.contractId !== configuredContract) {
+if (configuredContract !== undefined && described.contractId !== null
+  && described.contractId !== configuredContract) {
   console.log(`  NOTE        this contract is not the one that .env names, ${configuredContract}`);
 }
 
@@ -145,7 +173,7 @@ const manifest = fs.existsSync(path.join(DEVICE_CHECK_DIR, 'manifest.json'))
   ? readManifest(DEVICE_CHECK_DIR)
   : {
       network: process.env.NETWORK_PASSPHRASE ?? Networks.TESTNET,
-      contractId: described.contractId,
+      contractId: described.contractId ?? configuredContract ?? '',
       producedAt: new Date().toISOString(),
       rows: [],
     };
