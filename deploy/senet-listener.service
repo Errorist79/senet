@@ -23,7 +23,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/senet/service
-ExecStart=/usr/bin/node server/dist/tools/listen.js
+# `forever` is the argument that keeps the listener polling. Without it the
+# listener reads to the end of the chain and exits, which is the mode that a
+# written path uses so that every step of that path is a command that ends.
+# A unit that omitted it would exit with status 0 every few seconds and restart
+# for ever, and the exit status below would never fire, because the failure
+# that status names would never be the one that ended the process.
+ExecStart=/usr/bin/node server/dist/tools/listen.js forever
 Environment=ENV_FILE=/opt/senet/.env
 Environment=LISTENER_STATE_FILE=/opt/senet/state/listener.json
 
