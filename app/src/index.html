@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101418" />
+    <title>Senet</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1 class="brand">Senet</h1>
+      <p class="ledger" id="ledger">ledger unknown</p>
+    </header>
+
+    <main class="screen">
+      <h2 class="screen-title">Take a payment</h2>
+      <p class="screen-note">
+        Paste the voucher that the payer shows. The camera arrives with the
+        scanner.
+      </p>
+
+      <form class="form" id="merchant-form">
+        <label class="field">
+          <span class="field-label">Voucher</span>
+          <textarea
+            class="field-input field-payload"
+            id="merchant-payload"
+            rows="6"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="The signed authorization entry, in base64"
+          ></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Account that receives the funds</span>
+          <input
+            class="field-input"
+            id="merchant-recipient"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="G…"
+          />
+        </label>
+
+        <button class="submit" id="merchant-submit" type="submit">Take the payment</button>
+      </form>
+
+      <div class="result-panel" id="merchant-result"></div>
+    </main>
+
+    <footer class="bar bar-foot">
+      <p class="chain" id="chain" data-state="reading">reading the service</p>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

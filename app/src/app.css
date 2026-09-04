@@ -1,0 +1,200 @@
+/* The application's whole style. One file, because there is one screen. */
+
+:root {
+  --ink: #e8ecf1;
+  --ink-dim: #93a1b1;
+  --ground: #101418;
+  --raised: #182029;
+  --line: #263140;
+  --good: #4ec17f;
+  --bad: #e2685f;
+  --wait: #d9a441;
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bar-foot {
+  margin-top: auto;
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+}
+
+.brand {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ledger,
+.chain {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chain[data-state='offline'] {
+  color: var(--wait);
+}
+
+.screen {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 22px 18px 32px;
+}
+
+.screen-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.screen-note {
+  margin: 0 0 22px;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.field-input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field-input:focus {
+  outline: 2px solid var(--ink-dim);
+  outline-offset: 1px;
+}
+
+.field-payload {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  resize: vertical;
+  word-break: break-all;
+}
+
+.submit {
+  padding: 13px 16px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--ground);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.result-panel {
+  margin-top: 22px;
+}
+
+.waiting {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+.result {
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  padding: 16px;
+  background: var(--raised);
+}
+
+.result-good {
+  border-left-color: var(--good);
+}
+
+.result-bad {
+  border-left-color: var(--bad);
+}
+
+.result-wait {
+  border-left-color: var(--wait);
+}
+
+.result-title {
+  margin: 0 0 4px;
+  font-size: 19px;
+}
+
+.result-advice {
+  margin: 0 0 14px;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+.detail {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.detail-label {
+  flex: 0 0 128px;
+  color: var(--ink-dim);
+}
+
+.detail-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+.detail-link {
+  margin-left: auto;
+  color: var(--ink-dim);
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@senet/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Senet application, in payer mode and merchant mode",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit",
+    "test": "npm run check && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "esbuild": "0.28.2"
+  }
+}

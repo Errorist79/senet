@@ -11,3 +11,8 @@ export * from './horizon.js';
 export * from './channels.js';
 export * from './limits.js';
 export * from './feepayer.js';
+export * from './http/transport.js';
+export * from './http/budget.js';
+export * from './http/read.js';
+export * from './http/redeem.js';
+export * from './http/router.js';

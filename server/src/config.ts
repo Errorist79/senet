@@ -10,6 +10,9 @@ export const TESTNET_RPC_URL = 'https://soroban-testnet.stellar.org';
 /** Horizon, which serves the balance of a classic account. */
 export const TESTNET_HORIZON_URL = 'https://horizon-testnet.stellar.org';
 
+/** The service that creates and funds a testnet account. */
+export const TESTNET_FRIENDBOT_URL = 'https://friendbot.stellar.org';
+
 /** Everything that the service needs to run. */
 export interface ServerConfig {
   /** The chain identities that the library binds a voucher to. */

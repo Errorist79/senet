@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AmountWindowError,
+  CONTRACT_MAX_AMOUNT_STROOPS,
   CONTRACT_MAX_TTL_LEDGERS,
   DEFAULT_LIFETIME_LEDGERS,
   ExpiryWindowError,
@@ -8,6 +10,7 @@ import {
   LEDGER_MEAN_CLOSE_SECONDS,
   LEDGER_TARGET_CLOSE_MS,
   LIFETIMES,
+  assertAmount,
   assertLifetime,
   estimateLedger,
   offlineExpireAt,
@@ -66,4 +69,26 @@ test('a lifetime of zero or less raises ExpiryWindowError', () => {
   assert.throws(() => assertLifetime(0), ExpiryWindowError);
   assert.throws(() => assertLifetime(-1), ExpiryWindowError);
   assert.throws(() => assertLifetime(1.5), ExpiryWindowError);
+});
+
+test('an amount at the cap passes', () => {
+  assert.equal(assertAmount(CONTRACT_MAX_AMOUNT_STROOPS), CONTRACT_MAX_AMOUNT_STROOPS);
+  assert.equal(assertAmount(1n), 1n);
+});
+
+test('an amount one stroop above the cap raises AmountWindowError', () => {
+  assert.throws(
+    () => assertAmount(CONTRACT_MAX_AMOUNT_STROOPS + 1n),
+    (error: unknown) => {
+      assert.ok(error instanceof AmountWindowError);
+      assert.equal(error.amount, CONTRACT_MAX_AMOUNT_STROOPS + 1n);
+      assert.equal(error.maxAmount, CONTRACT_MAX_AMOUNT_STROOPS);
+      return true;
+    },
+  );
+});
+
+test('an amount of zero or below raises AmountWindowError', () => {
+  assert.throws(() => assertAmount(0n), AmountWindowError);
+  assert.throws(() => assertAmount(-1n), AmountWindowError);
 });

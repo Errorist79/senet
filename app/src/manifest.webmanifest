@@ -1,0 +1,19 @@
+{
+  "name": "Senet",
+  "short_name": "Senet",
+  "description": "Payer-presented offline QR payments on Stellar testnet",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#101418",
+  "theme_color": "#101418",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

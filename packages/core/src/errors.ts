@@ -104,6 +104,20 @@ export class ExpiryWindowError extends VoucherError {
   }
 }
 
+/** The amount falls outside the window that the contract accepts. */
+export class AmountWindowError extends VoucherError {
+  constructor(
+    readonly amount: bigint,
+    readonly maxAmount: bigint,
+  ) {
+    super(
+      `the voucher carries ${amount} stroops and the contract accepts 1 to ` +
+        `${maxAmount}. The contract would refuse the redeem after the payer ` +
+        `signed it.`,
+    );
+  }
+}
+
 /** The installed `@stellar/stellar-sdk` is not the version this code reads. */
 export class SdkVersionError extends VoucherError {
   constructor(

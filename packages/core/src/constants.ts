@@ -58,6 +58,16 @@ export const DEFAULT_LIFETIME_LEDGERS = LIFETIMES['15m'];
 export const CONTRACT_MAX_TTL_LEDGERS = LIFETIMES['12h'];
 
 /**
+ * The largest voucher that the deployed contract accepts, in stroops.
+ *
+ * The contract stores its own `max_amount` and refuses a larger voucher. The
+ * refusal arrives after the payer signed and after the merchant scanned, so
+ * the library refuses first. This constant must equal the deployed value, and
+ * the service compares the two when it starts.
+ */
+export const CONTRACT_MAX_AMOUNT_STROOPS = 1_000_000_000n;
+
+/**
  * The `max_time_bound` of a submitted transaction, in seconds.
  *
  * This bounds the transaction, not the voucher. It only has to outlast one

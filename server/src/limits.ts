@@ -1,5 +1,9 @@
 import { Account, Contract, Keypair, TransactionBuilder, rpc, scValToNative } from '@stellar/stellar-sdk';
-import { CONTRACT_MAX_TTL_LEDGERS, TX_TIMEOUT_SECONDS } from '@senet/core';
+import {
+  CONTRACT_MAX_AMOUNT_STROOPS,
+  CONTRACT_MAX_TTL_LEDGERS,
+  TX_TIMEOUT_SECONDS,
+} from '@senet/core';
 import type { ServerConfig } from './config.js';
 import { errorText } from './outcomes.js';
 
@@ -40,14 +44,14 @@ export class ContractLimitsUnreadableError extends Error {
 export class ContractLimitsMismatchError extends Error {
   constructor(
     readonly contractId: string,
-    readonly deployedMaxTtlLedgers: number,
-    readonly expectedMaxTtlLedgers: number,
+    readonly limit: 'max_ttl_ledgers' | 'max_amount',
+    readonly deployed: string,
+    readonly expected: string,
   ) {
     super(
-      `contract ${contractId} accepts ${deployedMaxTtlLedgers} ledgers of lifetime ` +
-        `and this build offers up to ${expectedMaxTtlLedgers}. A payer would sign a ` +
-        `voucher that the contract then refuses. Deploy a contract that matches, or ` +
-        `change the lifetimes that this build offers.`,
+      `contract ${contractId} holds ${limit} ${deployed} and this build holds ` +
+        `${expected}. A payer would sign a voucher that the contract then refuses. ` +
+        `Deploy a contract that matches, or change the limit that this build holds.`,
     );
     this.name = new.target.name;
   }
@@ -112,20 +116,29 @@ export async function readContractLimits(
 }
 
 /**
- * Refuse a contract whose lifetime ceiling differs from this build's.
+ * Refuse a contract whose limits differ from this build's.
  *
- * The library refuses a lifetime above `CONTRACT_MAX_TTL_LEDGERS` before the
- * payer signs. That check is worth nothing when the deployed contract holds a
- * different number, and contract code cannot tell the library which number it
- * holds. One read at start turns a mismatch that nobody would see into a
- * refusal to start.
+ * The library refuses a lifetime and an amount outside its own window before
+ * the payer signs. Those checks are worth nothing when the deployed contract
+ * holds different numbers, and contract code cannot tell the library which
+ * numbers it holds. One read at start turns a mismatch that nobody would see
+ * into a refusal to start.
  */
 export function assertContractLimits(contractId: string, limits: ContractLimits): void {
   if (limits.maxTtlLedgers !== CONTRACT_MAX_TTL_LEDGERS) {
     throw new ContractLimitsMismatchError(
       contractId,
-      limits.maxTtlLedgers,
-      CONTRACT_MAX_TTL_LEDGERS,
+      'max_ttl_ledgers',
+      String(limits.maxTtlLedgers),
+      String(CONTRACT_MAX_TTL_LEDGERS),
+    );
+  }
+  if (limits.maxAmountStroops !== CONTRACT_MAX_AMOUNT_STROOPS) {
+    throw new ContractLimitsMismatchError(
+      contractId,
+      'max_amount',
+      limits.maxAmountStroops.toString(),
+      CONTRACT_MAX_AMOUNT_STROOPS.toString(),
     );
   }
 }

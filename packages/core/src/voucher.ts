@@ -7,7 +7,8 @@ import {
   xdr,
 } from '@stellar/stellar-sdk';
 import type { VoucherConfig } from './config.js';
-import { VoucherFormatError } from './errors.js';
+import { CONTRACT_MAX_AMOUNT_STROOPS } from './constants.js';
+import { AmountWindowError, VoucherFormatError } from './errors.js';
 import { assertAddressV2, assertDeadlinesAligned } from './invariants.js';
 
 /** The contract function that a voucher authorizes. */
@@ -60,6 +61,20 @@ export type SignEntry = (
   entry: xdr.SorobanAuthorizationEntry,
   validUntilLedgerSeq: number,
 ) => Promise<xdr.SorobanAuthorizationEntry>;
+
+/**
+ * Refuse an amount that the contract will not accept.
+ *
+ * The contract compares the amount against its stored `max_amount` and refuses
+ * a larger one. It also refuses zero and a negative amount. Both refusals
+ * arrive after the payer signed, so the library refuses first.
+ */
+export function assertAmount(amount: bigint): bigint {
+  if (amount < 1n || amount > CONTRACT_MAX_AMOUNT_STROOPS) {
+    throw new AmountWindowError(amount, CONTRACT_MAX_AMOUNT_STROOPS);
+  }
+  return amount;
+}
 
 /** The arguments of a `redeem` call, in declaration order. */
 export function redeemArgs(voucher: Voucher, recipient: string): xdr.ScVal[] {
@@ -132,6 +147,7 @@ export function buildVoucherEntry(
   voucher: Voucher,
   nonce: bigint,
 ): xdr.SorobanAuthorizationEntry {
+  assertAmount(voucher.amount);
   return new xdr.SorobanAuthorizationEntry({
     credentials: xdr.SorobanCredentials.sorobanCredentialsAddressV2(
       new xdr.SorobanAddressCredentials({

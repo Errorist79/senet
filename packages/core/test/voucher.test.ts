@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Address, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import {
+  AmountWindowError,
+  CONTRACT_MAX_AMOUNT_STROOPS,
   CredentialTypeError,
   DeadlineMismatchError,
   TESTNET_CONFIG,
@@ -155,4 +157,11 @@ test('two draws differ', () => {
   const draws = new Set<bigint>();
   for (let i = 0; i < 64; i += 1) draws.add(randomNonce());
   assert.equal(draws.size, 64);
+});
+
+test('the builder refuses an amount that the contract would reject', () => {
+  const tooLarge = { ...voucher, amount: CONTRACT_MAX_AMOUNT_STROOPS + 1n };
+  assert.throws(() => buildVoucherEntry(config, tooLarge, nonce), AmountWindowError);
+  const zero = { ...voucher, amount: 0n };
+  assert.throws(() => buildVoucherEntry(config, zero, nonce), AmountWindowError);
 });

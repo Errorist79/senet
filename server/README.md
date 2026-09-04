@@ -116,6 +116,50 @@ The keys live in a `.env` file on the host, and never in the repository.
 `.env.example` at the repository root lists every variable. Set `ENV_FILE` when
 the working directory is not the one that holds the file.
 
+## Fresh keys
+
+The service inherits no key from anywhere. One command creates every account
+that it needs and funds each one:
+
+```
+npm run --silent new-keys --workspace @senet/server > .env
+chmod 600 .env
+```
+
+The tool creates the channel accounts, a payer and a recipient. It asks
+friendbot to fund each account. It then waits until Horizon reports a balance,
+so a key that it prints is a key that works. It writes no file, and it can
+therefore never lose a key that a `.env` already holds. `CHANNEL_COUNT` sets the number of
+channel accounts, and the default is six.
+
+## Routes
+
+The service answers under `/api/`. It listens on the loopback interface, and
+the web server in front of it terminates TLS and proxies that prefix.
+
+| Route | What it does |
+|---|---|
+| `GET /api/config` | the network, the contract and the token |
+| `GET /api/ledger` | the latest ledger, and when the service read it |
+| `GET /api/balance?address=` | one account's native balance, in stroops |
+| `GET /api/status` | the channel balances, the ones under the floor, and the contract limits |
+| `POST /api/redeem` | one redeem, with `entryXdr` and `recipient` |
+
+`POST /api/redeem` takes the terms out of the signed entry and never out of the
+request. A request that also carried an amount could disagree with the entry,
+and the payer signed the entry. The caller supplies only the recipient, which
+the entry deliberately omits.
+
+A failure always takes one shape, `{"error":{"code","message"}}`, and a client
+branches on the code. A refusal from the library carries the name of its own
+error class, such as `CredentialTypeError` or `DeadlineMismatchError`. The
+client therefore learns which rule the entry broke.
+
+Every request counts against a budget per client, per minute: 12 on the routes
+that pay a network fee, and 120 on the routes that cost nothing on chain. The
+service pays a fee for every submission that it accepts. A route with no budget
+is therefore a way to spend the channel accounts down.
+
 ## Build and test
 
 ```

@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CONTRACT_MAX_TTL_LEDGERS, LIFETIMES } from '@senet/core';
+import {
+  CONTRACT_MAX_AMOUNT_STROOPS,
+  CONTRACT_MAX_TTL_LEDGERS,
+  LIFETIMES,
+} from '@senet/core';
 import { ContractLimitsMismatchError, assertContractLimits } from '../src/index.js';
 import type { ContractLimits } from '../src/index.js';
 
 const CONTRACT = 'CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY';
 
-/** Limits with a chosen lifetime ceiling. */
+/** Limits with a chosen lifetime ceiling, and the amount cap that agrees. */
 function limitsWith(maxTtlLedgers: number): ContractLimits {
-  return { maxAmountStroops: 1_000_000_000n, maxTtlLedgers };
+  return { maxAmountStroops: CONTRACT_MAX_AMOUNT_STROOPS, maxTtlLedgers };
 }
 
 test('a contract that matches this build passes', () => {
@@ -23,8 +27,9 @@ test('a contract with a shorter ceiling stops the service', () => {
     () => assertContractLimits(CONTRACT, limitsWith(LIFETIMES['1h'])),
     (error: unknown) => {
       assert.ok(error instanceof ContractLimitsMismatchError);
-      assert.equal(error.deployedMaxTtlLedgers, LIFETIMES['1h']);
-      assert.equal(error.expectedMaxTtlLedgers, CONTRACT_MAX_TTL_LEDGERS);
+      assert.equal(error.limit, 'max_ttl_ledgers');
+      assert.equal(error.deployed, String(LIFETIMES['1h']));
+      assert.equal(error.expected, String(CONTRACT_MAX_TTL_LEDGERS));
       assert.equal(error.contractId, CONTRACT);
       return true;
     },
@@ -42,4 +47,20 @@ test('a contract with a longer ceiling also stops the service', () => {
 
 test('the longest lifetime on offer equals the ceiling that the check reads', () => {
   assert.equal(CONTRACT_MAX_TTL_LEDGERS, LIFETIMES['12h']);
+});
+
+test('a contract with another amount cap stops the service', () => {
+  assert.throws(
+    () =>
+      assertContractLimits(CONTRACT, {
+        maxAmountStroops: CONTRACT_MAX_AMOUNT_STROOPS + 1n,
+        maxTtlLedgers: CONTRACT_MAX_TTL_LEDGERS,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ContractLimitsMismatchError);
+      assert.equal(error.limit, 'max_amount');
+      assert.equal(error.deployed, (CONTRACT_MAX_AMOUNT_STROOPS + 1n).toString());
+      return true;
+    },
+  );
 });

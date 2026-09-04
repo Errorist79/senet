@@ -55,6 +55,11 @@ export interface RedeemResult {
   readonly detail: string;
 }
 
+/** One redeem, with the terms that the signed entry carried. */
+export interface RedeemRecord extends RedeemResult {
+  readonly voucher: DecodedVoucher;
+}
+
 /** The fields that every stage carries, so no result grows key by key. */
 const EMPTY: Omit<RedeemResult, 'outcome' | 'stage' | 'detail'> = {
   hash: null,
@@ -204,9 +209,9 @@ export class FeePayer {
   async redeem(
     entry: xdr.SorobanAuthorizationEntry,
     recipient: string,
-  ): Promise<RedeemResult> {
+  ): Promise<RedeemRecord> {
     const voucher = readVoucher(this.config.voucher, entry);
-    return this.withChannel(voucher, entry, recipient);
+    return { ...(await this.withChannel(voucher, entry, recipient)), voucher };
   }
 
   /** Hold one channel, and try again only where a retry cannot spend twice. */

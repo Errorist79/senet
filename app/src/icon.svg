@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Senet">
+  <rect width="192" height="192" rx="42" fill="#101418" />
+  <g fill="none" stroke="#e8ecf1" stroke-width="10" stroke-linecap="square">
+    <rect x="42" y="42" width="108" height="108" rx="8" />
+    <path d="M70 70h20v20H70z" fill="#e8ecf1" stroke="none" />
+    <path d="M102 70h20v20h-20z" fill="#e8ecf1" stroke="none" />
+    <path d="M70 102h20v20H70z" fill="#e8ecf1" stroke="none" />
+  </g>
+</svg>

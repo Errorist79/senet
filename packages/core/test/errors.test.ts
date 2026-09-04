@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AmountWindowError,
   CredentialTypeError,
   DeadlineMismatchError,
   ExpiryWindowError,
@@ -27,6 +28,7 @@ const errors: readonly VoucherError[] = [
   new CredentialTypeError(1, 9, 2, 10),
   new DeadlineMismatchError(1000, 2000),
   new ExpiryWindowError(9000, 8640),
+  new AmountWindowError(2_000_000_000n, 1_000_000_000n),
   new SdkVersionError('17.0.1', 16, 3),
 ];
 
@@ -47,6 +49,7 @@ test('every error names its own class', () => {
       'CredentialTypeError',
       'DeadlineMismatchError',
       'ExpiryWindowError',
+      'AmountWindowError',
       'SdkVersionError',
     ],
   );
@@ -83,4 +86,10 @@ test('an SDK version error names the version that it needs', () => {
   assert.equal(error.found, '17.0.1');
   assert.equal(error.expectedMajor, 16);
   assert.equal(error.expectedMinorMin, 3);
+});
+
+test('an amount window error names the amount and the cap', () => {
+  const error = new AmountWindowError(2_000_000_000n, 1_000_000_000n);
+  assert.equal(error.amount, 2_000_000_000n);
+  assert.equal(error.maxAmount, 1_000_000_000n);
 });
