@@ -102,6 +102,16 @@ async function main(): Promise<void> {
     }
     console.log(`signed in  ${recovered}`);
 
+    // A sign in returns the account and no voucher. The screen must say so,
+    // because a person who reads nothing assumes that everything came back.
+    const notice = await page.evaluate(
+      () => document.querySelector('#account-panel .notice')?.textContent ?? '',
+    );
+    if (!notice.includes('does not have the vouchers')) {
+      throw new Error('the screen implies that the sign in restored everything');
+    }
+    console.log('said       what the sign in gives back, and what it does not');
+
     if (recovered !== created) {
       throw new Error(`the sign in found ${recovered}, and the account was ${created}`);
     }

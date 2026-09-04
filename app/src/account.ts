@@ -73,8 +73,45 @@ export function startAccountScreen(): void {
     return account.origin === null || account.origin === window.location.origin;
   }
 
+  /**
+   * What a sign in gives back, and what it does not.
+   *
+   * A sign in returns the account and the funds. It returns no voucher,
+   * because a voucher exists only on the device that made it.
+   *
+   * That costs the person no money. A voucher reserves nothing, and the chain
+   * never hears of it until somebody redeems it. A voucher that nobody holds
+   * is never redeemed, and the funds stay where they are.
+   *
+   * One case needs care, and it is the reason this text exists. A person who
+   * kept a copy of a code can still redeem it. The payer voids a voucher by
+   * redeeming it to their own address, and that needs the entry that the
+   * device lost. So the wipe removes the remedy rather than the money, and it
+   * lasts until the voucher expires.
+   */
+  function recoveryNotice(): HTMLElement {
+    const box = make('div', 'notice');
+    box.append(
+      make('p', 'notice-line', 'This device has your account and your funds again.'),
+      make(
+        'p',
+        'notice-line',
+        'It does not have the vouchers that you made before. That costs you ' +
+          'nothing, because a voucher holds no funds until somebody redeems it.',
+      ),
+      make(
+        'p',
+        'notice-line',
+        'One case needs care. Did you show a code to somebody who kept a copy? ' +
+          'That person can still use it, and this device can no longer void it. ' +
+          'It stops when the voucher expires.',
+      ),
+    );
+    return box;
+  }
+
   /** Draw the account, and read what it holds when the network answers. */
-  async function show(account: StoredAccount): Promise<void> {
+  async function show(account: StoredAccount, recovered = false): Promise<void> {
     form.hidden = true;
     signInBox.hidden = true;
     const wrongName = !belongsHere(account);
@@ -120,6 +157,8 @@ export function startAccountScreen(): void {
       });
       box.append(forget);
     }
+
+    if (recovered) box.append(recoveryNotice());
 
     fill(panel, box);
     await refreshBalance(account, balance);
@@ -209,7 +248,7 @@ export function startAccountScreen(): void {
     signIn.disabled = true;
     fill(panel, make('p', 'waiting', 'Your device is asking you to choose a passkey.'));
     try {
-      await show(await signInAccount(chain));
+      await show(await signInAccount(chain), true);
       showDeviceFact();
     } catch (caught) {
       showProblem(panel, signInReason(caught));

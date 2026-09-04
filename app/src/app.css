@@ -479,3 +479,21 @@ body {
   color: var(--ink-dim);
   font-size: 14px;
 }
+
+.notice {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(217, 164, 65, 0.12);
+  border-left: 3px solid var(--wait);
+}
+
+.notice-line {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.notice-line:last-child {
+  margin-bottom: 0;
+}
