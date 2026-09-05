@@ -91,7 +91,24 @@ function check(condition, message) {
 function exportHead() {
   rmSync(EXPORT_DIR, { recursive: true, force: true });
   mkdirSync(EXPORT_DIR, { recursive: true });
-  const archive = execFileSync('git', ['archive', 'HEAD'], { cwd: ROOT, maxBuffer: 1 << 28 });
+  let archive;
+  try {
+    archive = execFileSync('git', ['archive', 'HEAD'], {
+      cwd: ROOT,
+      maxBuffer: 1 << 28,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch {
+    // A tag on the remote produces a downloadable archive, so a reader can
+    // arrive holding a folder rather than a checkout. That reader met a stack
+    // trace here. This check compares the archive against the history of the
+    // repository, and a folder carries no history, so it says what it needs.
+    console.error('this check needs a git checkout, and this folder is not one.');
+    console.error('It compares the evidence against the history of this repository.');
+    console.error('A downloaded archive carries the files and none of the history.');
+    console.error('Clone the repository, then run this command inside the clone.');
+    process.exit(1);
+  }
   execFileSync('tar', ['-x', '-C', EXPORT_DIR], { input: archive });
 }
 
@@ -122,7 +139,8 @@ function producedBy(command) {
 try {
   exportHead();
 
-  console.log(`reading HEAD, unpacked into ${path.relative(ROOT, EXPORT_DIR)}\n`);
+  console.log(`reading HEAD, unpacked into ${path.relative(ROOT, EXPORT_DIR)}`);
+  console.log('this needs the repository and nothing else, so its answer is about the product\n');
 
   const trees = treesInExport();
   console.log(`HEAD holds ${trees.length} archive trees\n`);

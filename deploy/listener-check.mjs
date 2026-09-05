@@ -161,7 +161,11 @@ const statePath = process.argv[2] ?? process.env['LISTENER_STATE_FILE'] ?? DEFAU
 const rpcUrl = process.env['RPC_URL'] ?? DEFAULT_RPC_URL;
 
 console.log(`reading ${statePath}`);
-console.log(`asking  ${rpcUrl}\n`);
+console.log(`asking  ${rpcUrl}`);
+// Say whose machine this describes. This project cited the figures from this
+// check as facts about the product for a week. They are facts about one
+// deployment, and a reader at a terminal is the person who needs to know it.
+console.log('this reports on the deployment that holds that file, and not on the product\n');
 
 const state = readState(statePath);
 if (state.problem !== undefined) {

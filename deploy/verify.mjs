@@ -167,7 +167,8 @@ function outOfReach(what) {
   console.log(`  NOT REACHED ${what}`);
 }
 
-console.log(`checking ${origin}\n`);
+console.log(`checking ${origin}`);
+console.log('this reads a running origin, so anybody can run it against ours\n');
 
 // A fetch over HTTPS fails when the certificate is absent, expired, or issued
 // for another name, so this also checks the certificate.
