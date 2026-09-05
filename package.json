@@ -12,7 +12,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "check-language": "node scripts/check-language.mjs",
+    "test": "npm run check-language && npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "@nuintun/qrcode": "5.0.3",
