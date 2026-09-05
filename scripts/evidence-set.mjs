@@ -13,8 +13,10 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Address, StrKey, scValToNative, xdr } from '@stellar/stellar-sdk';
-import { TESTNET_HORIZON_URL, TESTNET_RPC_URL, readArchivedRow } from '@senet/evidence';
+import { Address, Networks, StrKey, scValToNative, xdr } from '@stellar/stellar-sdk';
+import {
+  TESTNET_HORIZON_URL, TESTNET_RPC_URL, archiveRow, readArchivedRow, readManifest, writeManifest,
+} from '@senet/evidence';
 
 export {
   archiveManifest, archiveRow, readArchivedRow, readManifest, writeManifest,
@@ -32,6 +34,9 @@ export const HORIZON_URL = process.env.HORIZON_URL ?? TESTNET_HORIZON_URL;
 
 /** The endpoints that the archive step reads a transaction from. */
 export const ENDPOINTS = Object.freeze({ rpcUrl: RPC_URL, horizonUrl: HORIZON_URL });
+
+/** How many characters of a hash name a row that carries no voucher. */
+const HASH_NAME_LENGTH = 12;
 
 /**
  * Read `.env` at the root of the repository into the process environment.
@@ -682,4 +687,162 @@ export async function publishesTheKey(request) {
     };
   }
   return { published: true, reason: null };
+}
+
+/**
+ * Archive one row that a person made on a screen.
+ *
+ * Two commands need this and they differ in four values: the tree they write
+ * to, the word that names who made the row, the prefix on a row's name, and
+ * the sentences that describe what the row shows. Everything else was written
+ * twice, once for a phone and once for a browser, so it lives here once.
+ *
+ * A caller passes `argv` rather than reading it here, so this stays a function
+ * and not a second entry point.
+ */
+export async function archiveScreenRow(settings) {
+  const { dir, producer, namePrefix, producedBy, notes, argv, screens } = settings;
+
+  const usage = (problem) => {
+    console.error(`${problem}\n`);
+    console.error(`  node ${producedBy} <hash> --screen <name> \\`);
+    console.error('    --title "<what the screen said>" --advice "<the sentence under it>" \\');
+    console.error('    [--value "Label=value"] [--note "<what this row shows>"] [--write]');
+    console.error(`\n  a screen is one of: ${screens.join(', ')}`);
+    process.exit(1);
+  };
+
+  const options = { values: {}, write: false };
+  const [hash, ...rest] = argv;
+  if (hash === undefined) usage('name the transaction hash');
+  options.hash = hash;
+  for (let index = 0; index < rest.length; index += 1) {
+    const flag = rest[index];
+    if (flag === '--write') {
+      options.write = true;
+      continue;
+    }
+    const value = rest[index + 1];
+    if (value === undefined) usage(`${flag} carries no value`);
+    index += 1;
+    if (flag === '--screen') options.screen = value;
+    else if (flag === '--title') options.title = value;
+    else if (flag === '--advice') options.advice = value;
+    else if (flag === '--note') options.note = value;
+    else if (flag === '--value') {
+      const split = value.indexOf('=');
+      if (split < 1) usage(`--value takes "Label=value", and it carries ${value}`);
+      options.values[value.slice(0, split)] = value.slice(split + 1);
+    } else usage(`${flag} is not an option of this command`);
+  }
+  if (!/^[0-9a-f]{64}$/.test(options.hash)) usage(`${options.hash} is not a transaction hash`);
+  if (options.screen === undefined) usage('name the screen with --screen');
+  if (!screens.includes(options.screen)) usage(`--screen takes one of: ${screens.join(', ')}`);
+  if (options.title === undefined) usage('give the title with --title');
+  if (options.advice === undefined) usage('give the sentence with --advice');
+
+  const described = await describeRedeem(options.hash);
+  if (described === null) {
+    console.error(`the network holds no transaction ${options.hash}`);
+    console.error('A hash that a screen showed reaches the network within a few seconds.');
+    console.error('The RPC server keeps about seven days, so an older run needs Horizon.');
+    process.exit(1);
+  }
+  // The account screen deploys an account, which calls no contract function.
+  // Every other screen redeems, so a row from one of those has to be one.
+  const isAccount = options.screen === 'account';
+  if (!isAccount && described.redeem === null) {
+    const called = described.functionName ?? described.hostFunction;
+    console.error(`${options.hash} carries ${called}, and a ${options.screen} row needs a redeem`);
+    process.exit(1);
+  }
+  if (isAccount && described.redeem !== null) {
+    console.error(`${options.hash} is a redemption, so it is not an account row`);
+    process.exit(1);
+  }
+
+  const configuredContract = process.env.CONTRACT_ID;
+  const { redeem } = described;
+  // A redemption takes its name from the voucher that both parties share. A
+  // deployment has no voucher, so it takes the first characters of its hash.
+  const name = isAccount
+    ? `${namePrefix}-account-${options.hash.slice(0, HASH_NAME_LENGTH)}`
+    : `${namePrefix}-${options.screen}-${redeem.voucherId}`;
+  const row = {
+    name,
+    hash: options.hash,
+    note: options.note ?? (isAccount ? notes.account : notes.redeem(redeem)),
+    producer,
+    screen: options.screen,
+    ...(described.contractId === null ? {} : { contractId: described.contractId }),
+    shown: { title: options.title, advice: options.advice, values: options.values },
+  };
+
+  // The archive step needs the Horizon summary to compare a figure that a
+  // person read, so the preview asks for it before anything reaches disk.
+  const summary = await fetch(`${ENDPOINTS.horizonUrl}/transactions/${options.hash}`);
+  const horizon = summary.ok ? await summary.json() : null;
+  const shown = compareShownToChain(options.values, horizon, options.hash);
+
+  console.log(`\nthis command would write ${name}`);
+  console.log(`  into        ${path.relative(ROOT, dir)}/`);
+  console.log(`  hash        ${options.hash}`);
+  console.log(`  contract    ${described.contractId ?? 'none, this transaction deploys one'}`);
+  // The account that pays for a deployment signs it. The passkey of the new
+  // account signs nothing here, so a note about the scheme would mislead.
+  const passkey = isAccount || described.signature === 'secp256r1';
+  console.log(`  signature   ${described.signature}${passkey ? '' : '   NOT A PASSKEY'}`);
+  if (isAccount) {
+    console.log(`  deployer    ${described.payer}`);
+  } else {
+    const voided = redeem.payer === redeem.recipient ? '   the payer voided it' : '';
+    console.log(`  payer       ${redeem.payer}`);
+    console.log(`  recipient   ${redeem.recipient}${voided}`);
+    console.log(`  amount      ${redeem.amount} stroops`);
+    console.log(`  voucher     ${redeem.voucherId}`);
+  }
+  console.log(`  ledger      ${horizon?.ledger ?? 'unknown'}`);
+  console.log(`  outcome     ${horizon?.successful === true ? 'SUCCESS' : 'FAILED'}`);
+  console.log(`  note        ${row.note}`);
+  console.log(`  screen      ${options.title} / ${options.advice}`);
+  console.log(`  figures     ${shown.checked} compared against the chain`);
+  for (const problem of shown.problems) console.log(`  PROBLEM     ${problem}`);
+
+  if (configuredContract !== undefined && described.contractId !== null
+    && described.contractId !== configuredContract) {
+    console.log(`  NOTE        this contract is not the one that .env names, ${configuredContract}`);
+  }
+
+  if (shown.problems.length > 0) {
+    console.error('\nnothing written. A figure on the screen does not match the chain.');
+    process.exit(1);
+  }
+
+  if (!options.write) {
+    console.log('\nnothing written. Add --write to archive this row.');
+    process.exit(0);
+  }
+
+  const manifest = fs.existsSync(path.join(dir, 'manifest.json'))
+    ? readManifest(dir)
+    : {
+        network: process.env.NETWORK_PASSPHRASE ?? Networks.TESTNET,
+        contractId: described.contractId ?? configuredContract ?? '',
+        producedAt: new Date().toISOString(),
+        rows: [],
+      };
+
+  const rows = manifest.rows.filter((each) => each.name !== name).concat([row]);
+  rows.sort((left, right) => left.name.localeCompare(right.name));
+  const written = { ...manifest, producedAt: new Date().toISOString(), producedBy, rows };
+
+  await archiveRow(dir, row, written.contractId, ENDPOINTS);
+  writeManifest(dir, written);
+
+  const checked = deriveShownClaims(dir, written);
+  console.log(`\narchived ${name}`);
+  console.log(`  the tree now holds ${written.rows.length} rows`);
+  console.log(`  ${checked.checked} figures across the tree match the chain`);
+  for (const problem of checked.problems) console.log(`  PROBLEM ${problem}`);
+  if (checked.problems.length > 0) process.exitCode = 1;
 }
