@@ -15,6 +15,12 @@
     "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "@nuintun/qrcode": "5.0.3",
+    "@undecaf/zbar-wasm": "0.11.0",
+    "@zxing/library": "0.23.0",
+    "jsqr": "1.4.0",
+    "rxing-wasm": "0.5.7",
+    "typescript": "5.9.3",
+    "zxing-wasm": "3.1.3"
   }
 }
