@@ -10,7 +10,7 @@
   },
   "types": "./dist/src/index.d.ts",
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build --force",
     "start": "node dist/tools/serve.js",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
     "new-keys": "npm run build && node dist/tools/new-keys.js",

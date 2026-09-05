@@ -13,7 +13,7 @@
     "dist/src"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build --force",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\""
   },
   "dependencies": {
