@@ -86,10 +86,25 @@ export const PRODUCED_ROWS = Object.freeze([
   'sep7-payment',
 ]);
 
-// The answer to `--list` names the lifetimes and imports none of them, so this
-// is where the copy meets its source. A lifetime that reaches the library and not the
-// list stops the run. Otherwise the run would quietly produce a row that no
-// listing names.
+// Answer what this command produces, and spend nothing doing it. This stands
+// above every read of configuration, and above the check below that reads the
+// library. A question about what a command produces needs no keys, no network
+// and no environment file. A reader who has cloned and set nothing up must
+// still get an answer.
+//
+// It also stands above the library on purpose. The library resolves to built
+// output, and a build can be older than the source it came from. A listing
+// that read the table below would answer from a stale build. The archive
+// beside it comes from a commit, so the two would agree for the wrong reason.
+if (process.argv.includes('--list')) {
+  for (const name of PRODUCED_ROWS) console.log(name);
+  process.exit(0);
+}
+
+// This is where the copy of the lifetime names meets its source. A lifetime
+// that reaches the library and not the list stops the run, before it spends
+// anything. Otherwise the run would quietly produce a row that no listing
+// names.
 const missing = Object.keys(LIFETIMES).filter((name) => !LIFETIME_NAMES.includes(name));
 const extra = LIFETIME_NAMES.filter((name) => !(name in LIFETIMES));
 if (missing.length > 0 || extra.length > 0) {
@@ -99,15 +114,6 @@ if (missing.length > 0 || extra.length > 0) {
   );
 }
 
-// Answer what this command produces, and spend nothing doing it. This stands
-// above every read of configuration on purpose. A question about what a
-// command produces needs no keys, no network and no environment file. A reader
-// who
-// has cloned the repository and set nothing up must still get an answer.
-if (process.argv.includes('--list')) {
-  for (const name of PRODUCED_ROWS) console.log(name);
-  process.exit(0);
-}
 
 loadEnv();
 
