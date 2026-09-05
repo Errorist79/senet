@@ -15,6 +15,28 @@
 // This check reads both sides from `HEAD` rather than from the working tree.
 // The repository makes its promise to somebody who clones it. A producer that
 // exists only in an editor is a producer that they never get.
+//
+// WHAT THIS COMPARES, AND WHAT IT LEAVES ALONE
+//
+// It compares one thing: the set of row names that a producer says it makes,
+// against the set of row names that the archive holds. Both directions, so a
+// row with no producer fails, and a producer with no row fails.
+//
+// It does not compare the `note` on a row. A note is a person's sentence about
+// what the row shows, and it is not a fact that the run derives. Both archive
+// commands offer `--note` on the command line, which invites a person to write
+// one. A check that held a note against the sentence its producer carries
+// today would refuse a row that says what somebody meant it to say.
+//
+// That leaves a real gap, and naming it is the point of this paragraph. A
+// producer and its archive can drift apart on prose alone, and nothing here
+// notices. It happened. Somebody rewrote a note in `run-evidence.mjs` while
+// the committed row kept the old wording. This check reported zero failures
+// throughout, because it never read that field.
+//
+// So a clean report from this command says that every row names live code. It
+// does not say that every word in the archive is current, and no check in this
+// repository says that.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -166,7 +188,13 @@ try {
   }
 
   console.log(`\n${failures} failed, ${exempt} rows exempt because a person made them`);
-  if (failures === 0) console.log('every row in the archive names code that HEAD still carries');
+  if (failures === 0) {
+    console.log('every row in the archive names code that HEAD still carries');
+    // The boundary travels with the result. A reader who sees only the line
+    // above takes it for more than it says. That is how a check that covers
+    // less than a reader believes stays comfortable.
+    console.log('this compares row names only, and never the note on a row');
+  }
 } finally {
   rmSync(EXPORT_DIR, { recursive: true, force: true });
 }
