@@ -32,8 +32,21 @@ export function badRequest(code: string, message: string): RequestError {
  *
  * The service binds to the loopback interface. The only thing that reaches it
  * is the web server in front of it, and that server sets `X-Forwarded-For`.
- * The header is trustworthy here in a way that it would not be on a public
- * socket. The first entry names the original client.
+ * The header is trustworthy here in a way that it is not on a public socket.
+ *
+ * This function reads the first entry of the header. That entry names the real
+ * client only while the web server replaces the header. One directive carries
+ * that guarantee:
+ *
+ *     proxy_set_header X-Forwarded-For $remote_addr;
+ *
+ * `$remote_addr` is the address that opened the connection to the web server,
+ * and a client cannot set it. The form that appends,
+ * `$proxy_add_x_forwarded_for`, puts the address that the client sent in front
+ * of the real one. Under that form the first entry is a value that the caller
+ * chooses, and every budget that counts requests for each address becomes
+ * evadable. A test reads the configuration that the host serves and refuses
+ * the form that appends.
  */
 export function clientAddress(request: IncomingMessage): string {
   const forwarded = request.headers['x-forwarded-for'];
