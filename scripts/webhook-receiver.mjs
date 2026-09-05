@@ -7,13 +7,13 @@
 // the request rather than a note that a request happened.
 //
 // It stores the body byte for byte. A receiver that parsed the message and
-// stored the fields would record what it understood, and the claim in the
-// evidence is that a particular message arrived, not that a reader of it
-// reached particular conclusions.
+// stored the fields would record only what it understood. The evidence claims
+// that a particular message arrived. It does not claim that a reader of that
+// message reached particular conclusions.
 //
 // `--accept N` accepts the first N messages and refuses the rest with a 503.
-// A proof of the cursor needs a receiver that stops, because the property under
-// test is what the listener does when a delivery does not land.
+// A proof of the cursor needs a receiver that stops. The property under test
+// is what the listener does when a delivery does not land.
 //
 // It is a capture tool for a measured run. It is not the merchant's endpoint
 // and it authenticates nobody.
@@ -32,7 +32,7 @@ const DEFAULT_PORT = 8792;
 /** The loopback address. The receiver never faces the public network. */
 const HOST = '127.0.0.1';
 
-/** A body larger than this is refused rather than held in memory. */
+/** This receiver refuses a body larger than this, and never holds it. */
 const BODY_LIMIT_BYTES = 64 * 1024;
 
 function readArguments(argv) {
@@ -107,8 +107,9 @@ let count = 0;
 const server = createServer(async (request, response) => {
   const receivedAt = new Date().toISOString();
   // Only a POST carries a message. A caller that waits for this receiver to
-  // come up asks with a GET, and a readiness probe must never be counted as a
-  // delivery. A capture tool that records its own caller measures itself.
+  // come up asks with a GET. This receiver must never count a readiness probe
+  // as a delivery. A capture tool that records its own caller measures
+  // itself.
   if (request.method !== 'POST') {
     response.writeHead(204).end();
     return;
@@ -139,9 +140,9 @@ const server = createServer(async (request, response) => {
     body: body.toString('utf8'),
   };
 
-  // A receiver that refuses is what holds the listener in place, and a proof of
-  // the cursor needs that state on purpose. The capture is still written, so a
-  // refused message is on record as having been offered.
+  // A receiver that refuses holds the listener in place, and a proof of the
+  // cursor needs that state on purpose. This still writes the capture, so the
+  // record shows that somebody offered the message and this refused it.
   if (count >= options.acceptLimit) {
     const refusedFile = path.join(options.dir, `refused-${digest.slice(0, 8)}.json`);
     writeFileSync(refusedFile, `${JSON.stringify(delivery, null, 2)}\n`);
@@ -159,8 +160,8 @@ const server = createServer(async (request, response) => {
 
   // The listener treats a failed post as undelivered and retries, so this
   // answer decides whether the cursor moves. It answers only after the capture
-  // reaches the disk, because a message that this command accepted and lost is
-  // a message that nothing will send again.
+  // reaches the disk. Nothing sends a message again once this command accepts
+  // it, so an accepted message that this command loses leaves no trace.
   response.writeHead(204).end();
 });
 

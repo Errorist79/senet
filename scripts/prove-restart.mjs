@@ -3,7 +3,7 @@
 //   node scripts/prove-restart.mjs
 //
 // The promise has two halves and a stop between them. A restart must not repeat
-// a redemption that a receiver already accepted, and it must not skip one that
+// a redemption that a receiver already accepted. It must not skip one that
 // happened while the listener was not running. Those two pull against each
 // other: a cursor stored too early repeats, and a cursor stored too late skips.
 //
@@ -35,12 +35,11 @@ const PORT = 8893;
  * How many ledgers of history the proof reads.
  *
  * One getEvents request scans about ten thousand ledgers and then answers,
- * measured against this network. A request that starts further back than that
- * returns an empty page with a cursor, and the empty page means that nothing
+ * measured against this network. A request that starts further back returns an
+ * empty page with a cursor. That empty page means that nothing
  * matched inside the scanned span rather than that the chain holds no more
- * events. The proof therefore reads a window that one request covers, so a
- * single run of the listener reaches the events rather than stopping short of
- * them.
+ * events. The proof therefore reads a window that one request covers. A single
+ * run of the listener then reaches the events, and it does not stop short.
  */
 const HISTORY_LEDGERS = 9_000;
 
@@ -132,9 +131,9 @@ console.log(`contract ${contractId}`);
 console.log(`reading from ledger ${from} to ${health.result.latestLedger}`);
 console.log(`captures in ${CAPTURE_DIR}\n`);
 
-// Check the premise before measuring anything. A proof that runs against a
-// window with no redemption in it reports that nothing repeated and nothing
-// was skipped, which is true and worthless.
+// Check the premise first, and measure nothing until it holds. A proof that
+// runs against a window with no redemption in it reports that nothing repeated
+// and that it skipped nothing. Both are true and worthless.
 const available = await (await fetch(rpcUrl, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -203,7 +202,7 @@ console.log(`  the rewind delivered ${afterRewind.length} messages\n`);
 
 // Phase 3. The honest restart. The cursor goes back to where phase 1 left it,
 // the receiver accepts everything, and the listener runs again.
-console.log('phase 3: the cursor is restored, and the listener starts again');
+console.log('phase 3: the cursor goes back, and the listener starts again');
 writeFileSync(STATE_FILE, `${JSON.stringify(held)}\n`);
 rmSync(CAPTURE_DIR, { recursive: true, force: true });
 mkdirSync(CAPTURE_DIR, { recursive: true });

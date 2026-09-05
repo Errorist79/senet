@@ -291,7 +291,7 @@ const STROOPS_IN_ONE_XLM = 10_000_000n;
  *
  * An amount carries seven decimal places exactly, so the conversion runs
  * through text and BigInt. A number would lose the last place on a large
- * amount, and lose it without saying so.
+ * amount, and it would give no sign that it did.
  */
 function xlmAsStroops(amount) {
   if (!/^\d+(\.\d{1,7})?$/.test(amount)) return null;
@@ -389,7 +389,7 @@ const DELIVERED_FIELDS = Object.freeze([
   // A voucher identifier is 64 bits and an amount is 128, and both pass the
   // range that a JSON number holds exactly. The listener sends them as decimal
   // text for that reason, so this check demands the text. A value that arrives
-  // as a number compares equal here while it is already corrupt, which is the
+  // as a number compares equal here while it is already corrupt. That is the
   // one failure that a comparison of values alone cannot see.
   ['voucher_id', 'string', (redeem) => redeem.voucherId],
   ['amount', 'string', (redeem) => redeem.amount],
@@ -409,9 +409,9 @@ const EVENT_ID_SHAPE = /^\d{19}-\d{10}$/;
  * carry: every field agrees with a chain that we did not write, and the message
  * arrived after the ledger that carries the event closed.
  *
- * It does not test authenticity, and it must not be read as testing it. A
- * composed message that agrees with the chain passes. What fails is a message
- * that reports a redemption differently from the network, one whose bytes
+ * It does not test authenticity, and nobody may read it as a test of that. A
+ * composed message that agrees with the chain passes. Three messages fail:
+ * one that reports a redemption differently from the network, one whose bytes
  * changed after capture, and one that claims to arrive before its own event.
  */
 export function compareDeliveryToChain(delivery, redeem, horizon, hash) {
@@ -469,8 +469,8 @@ export function compareDeliveryToChain(delivery, redeem, horizon, hash) {
     problems.push(`the message reports tx_hash ${reported}, and the row cites ${hash}`);
   }
 
-  // The deduplication key. A repeat of a delivery is expected under at-least-once
-  // delivery, and a reader can only drop the repeat if the key arrived with it.
+  // The deduplication key. At-least-once delivery repeats a message, and a
+  // reader can drop the repeat only when the key arrived with it.
   checked += 1;
   const eventId = message.event_id;
   if (eventId === undefined) problems.push('the message names no event_id, so no reader can drop a repeat');
@@ -485,8 +485,8 @@ export function compareDeliveryToChain(delivery, redeem, horizon, hash) {
       problems.push(`the message reports ledger ${message.ledger}, and the chain says ${horizon.ledger}`);
     }
 
-    // The listener sends the close time as well, so the message can be checked
-    // against the chain without a second read of it later.
+    // The listener sends the close time as well, so a reader can check the
+    // message against the chain without a second read of it later.
     if (horizon.created_at !== null && message.ledger_closed_at !== undefined) {
       checked += 1;
       if (Date.parse(String(message.ledger_closed_at)) !== Date.parse(horizon.created_at)) {
@@ -541,8 +541,8 @@ export function deriveDeliveryClaims(dir, manifest) {
  * A payee-presented payment is not a contract call. It is a payment operation,
  * so the reader that decodes a redemption cannot read one, and this reads the
  * operation instead. The Soroban RPC holds a classic transaction with its
- * envelope, result and meta, measured against the network, so a payment row
- * archives and re-reads exactly as a redemption row does.
+ * envelope, result and meta, measured against the network. A payment row
+ * therefore archives and re-reads exactly as a redemption row does.
  */
 export function paymentFromEnvelope(envelopeXdr) {
   if (!envelopeXdr) return null;
@@ -552,10 +552,10 @@ export function paymentFromEnvelope(envelopeXdr) {
   const payment = operation.body().paymentOp();
   const asset = payment.asset();
   // A payment names a muxed account, and the common case carries a plain
-  // ed25519 key. The decoding is checked against a real testnet payment: the
-  // address below equals the destination that Horizon reports for it. A muxed
-  // destination is a different shape, and this says so rather than reading the
-  // wrong field and producing a plausible address that belongs to nobody.
+  // ed25519 key. A real testnet payment checks this decode: the address below
+  // equals the destination that Horizon reports for it. A muxed destination
+  // has a different shape. This says so, rather than reading the wrong field
+  // and giving back a plausible address that belongs to nobody.
   const destination = payment.destination();
   const kind = destination.switch().name;
   if (kind !== 'keyTypeEd25519') {
@@ -641,7 +641,7 @@ export function compareRequestToChain(request, payment, horizon, verify) {
       problems.push(`the request asks for ${askedCode} and the payment carried the native asset`);
     }
   } else {
-    problems.push('the transaction carries no payment operation, so no request can be answered by it');
+    problems.push('the transaction carries no payment operation, so it answers no request');
   }
 
   if (horizon !== null && horizon !== undefined) {
@@ -661,8 +661,8 @@ export function compareRequestToChain(request, payment, horizon, verify) {
  * the domain rotates its key, and it fails when nobody published the key at all.
  *
  * The second failure is the one worth having. A row can carry a request that
- * verifies perfectly against a key that no wallet could ever find, and every
- * check that needs no network would pass while the row proved nothing about
+ * verifies perfectly against a key that no wallet could ever find. Every
+ * check that needs no network would pass, while the row proved nothing about
  * the deployment. That state is not imaginary. It reached the archive once,
  * and this function is what found it.
  */
@@ -692,10 +692,15 @@ export async function publishesTheKey(request) {
 /**
  * Archive one row that a person made on a screen.
  *
- * Two commands need this and they differ in four values: the tree they write
- * to, the word that names who made the row, the prefix on a row's name, and
- * the sentences that describe what the row shows. Everything else was written
- * twice, once for a phone and once for a browser, so it lives here once.
+ * Two commands need this, and they differ in four values:
+ *
+ * - the tree that they write to
+ * - the word for who made the row
+ * - the prefix on a row's name
+ * - the sentences that describe what the row shows
+ *
+ * Somebody wrote everything else twice, once for a phone and once for a
+ * browser. It lives here once.
  *
  * A caller passes `argv` rather than reading it here, so this stays a function
  * and not a second entry point.

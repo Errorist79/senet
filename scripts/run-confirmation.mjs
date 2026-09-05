@@ -12,7 +12,7 @@
 // posts. Redeeming again here would duplicate the machinery that produces those
 // rows, and two copies of it would disagree the first time one changed.
 //
-// What a row proves is written into the archive's own type. The message agrees
+// The archive's own type carries what a row proves. The message agrees
 // with a transaction that we did not write, and it arrived after the ledger
 // that carries the event closed. It is not proof that a particular listener
 // sent it, and the archive says so rather than letting a reader assume more.
@@ -27,12 +27,13 @@ import {
 } from './evidence-set.mjs';
 
 /**
- * The rows that this command produces, one for each redemption it confirms.
+ * The rows that this command produces, one for each redemption that it
+ * confirms.
  *
- * The names follow the evidence rows they confirm, so a reader can put the two
- * side by side. The list is fixed rather than discovered, because a check that
- * asks what this command produces must get an answer with no network, no keys
- * and no environment file.
+ * The names follow the evidence rows that they confirm, so a reader can put
+ * the two side by side. This file names the list rather than discovering it. A
+ * check that asks what this command produces must get an answer with no
+ * network, no keys and no environment file.
  */
 export const PRODUCED_ROWS = Object.freeze([
   'confirm-1a-success',
@@ -160,7 +161,7 @@ try {
 }
 
 if (listener.code !== 0) {
-  console.error('the listener did not finish, so no message can be archived');
+  console.error('the listener did not finish, so this command archives no message');
   console.error(listener.output.split('\n').slice(-6).join('\n'));
   process.exit(1);
 }
@@ -210,4 +211,4 @@ const checked = deriveDeliveryClaims(CONFIRM_CHECK_DIR, manifest);
 console.log(`\n${checked.checked} comparisons against the chain`);
 for (const problem of checked.problems) console.log(`  PROBLEM ${problem}`);
 if (checked.problems.length > 0) process.exitCode = 1;
-else console.log(`every message agrees with the transaction it reports`);
+else console.log(`every message agrees with the transaction that it reports`);

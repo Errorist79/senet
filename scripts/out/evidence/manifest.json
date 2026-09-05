@@ -25,7 +25,7 @@
     {
       "name": "8-void-success",
       "hash": "d47af140f93a67a8b792a22a34602fd60021605f485148a978a1fdfbdba438ce",
-      "note": "The payer voids the voucher and redeems it to their own address. The nonce is consumed and the balance does not change.",
+      "note": "The payer voids the voucher and redeems it to their own address. The redemption spends the nonce, and the balance does not change.",
       "producer": "script"
     },
     {

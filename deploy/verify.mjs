@@ -13,9 +13,9 @@
 // skipped, in the summary and not only in passing.
 //
 // `--complete` refuses a run that skipped anything. Use it on the host, where
-// every file and the browser are present. A release that a person tags, and a
-// reproduction on a clean machine, both need the whole suite rather than the
-// part of it that the machine happened to allow.
+// every file and the browser are present. A release that a person tags needs
+// the whole suite. So does a reproduction on a clean machine. Neither wants
+// the part of the suite that the machine happened to allow.
 
 import { launch } from 'puppeteer-core';
 // The name that the deployed release declares. A commit is the only thing that
@@ -30,8 +30,8 @@ import { fileURLToPath } from 'node:url';
 /**
  * The identity of the release that this checker runs from.
  *
- * The service runs from one link and the web server serves another, so a
- * release that this file sits inside is the one the service runs. Comparing it
+ * The service runs from one link and the web server serves another. A release
+ * that holds this file is therefore the one that the service runs. Comparing it
  * against the identity that the origin serves shows a skew between the two.
  */
 const SERVICE_RELEASE = fileURLToPath(new URL('../app/dist/release.json', import.meta.url));
@@ -86,8 +86,8 @@ const ALWAYS_ON_SCREEN = Object.freeze([
  *
  * This list held three entries. Two of them, the size line and the level
  * control, named a measurement surface that the application no longer carries.
- * A selector that can never match makes a check that can never fail, and the
- * block that held it ran for nobody, so neither fact ever reached a person.
+ * A selector that can never match makes a check that can never fail. The block
+ * that held it ran for nobody, so neither fact ever reached a person.
  *
  * The block runs now. The check stores a voucher and paints it, so a selector
  * that goes stale takes the run down with it.
@@ -104,18 +104,18 @@ const args = process.argv.slice(2);
 const COMPLETE = args.includes('--complete');
 const origin = args.find((one) => !one.startsWith('--')) ?? DEFAULT_ORIGIN;
 /**
- * How many checks this suite is allowed to leave out of reach.
+ * How many checks this suite may leave out of reach.
  *
  * `outOfReach` names something that no setup can supply, so `--complete`
- * cannot refuse it the way it refuses a skip. That makes it the one place
- * where a check can stop running and nothing complains. It is how a check goes
- * quiet: the size line and the level control sat in such a block with
- * selectors that could no longer match anything, and because the block ran for
- * nobody, neither fact ever reached a person.
+ * cannot refuse it the way that it refuses a skip. That makes it the one place
+ * where a check can stop and nothing complains. It is how a check goes quiet.
+ * The size line and the level control sat in such a block, with selectors that
+ * could no longer match anything. The block ran for nobody, so neither fact
+ * ever reached a person.
  *
- * The number is zero. Every check in this suite reaches its subject today, and
- * the last one that did not now stores a voucher and paints it rather than
- * waiting for a person to mint one.
+ * The number is zero. Every check in this suite reaches its subject today.
+ * The last one that did not now stores a voucher and paints it, rather than a
+ * wait for a person to mint one.
  *
  * A new entry pushes the total past zero and `--complete` refuses the run.
  * Raising this number is an edit to this line, it shows in a diff, and whoever
@@ -137,11 +137,11 @@ function check(holds, message) {
 /**
  * Record a check that did not run.
  *
- * A skipped check counts nothing and reports nothing, so the closing number
- * shrinks and the closing sentence still says that everything answered. That
- * happened: `CHROME_PATH` was set and not exported, the whole browser check
- * fell away, and the run said it answered every check over twenty fewer of
- * them. A skip is now a fact that the summary carries, and `--complete`
+ * A skipped check counts nothing and reports nothing, so the final number
+ * shrinks and the last sentence still says that everything answered. That
+ * happened once. Somebody set `CHROME_PATH` and did not export it. The whole
+ * browser check fell away, and the run said that it answered every check over
+ * twenty fewer of them. A skip is now a fact that the summary carries, and `--complete`
  * refuses the run outright.
  */
 function skip(what) {
@@ -158,9 +158,9 @@ function skip(what) {
  * no setup supplies, because the run would have to mint a voucher with a
  * passkey, and no unattended run does that.
  *
- * Keep this list at the two entries it has. Anything a person can fix by
- * running the command differently is a skip, and moving it here to make a run
- * pass is the exact fault that this pair exists to stop.
+ * Keep this list at the two entries that it has. Anything a person can repair
+ * by a different command line is a skip. A move into this list, to make a run
+ * pass, is the exact fault that this pair exists to stop.
  */
 function outOfReach(what) {
   unreachable.push(what);
@@ -185,7 +185,7 @@ for (const path of PATHS) {
 const worker = await fetch(`${origin}/sw.js`);
 check(
   (worker.headers.get('cache-control') ?? '').includes('no-store'),
-  'sw.js may be cached, so a new build cannot reach a device that holds the old worker',
+  'a cache may hold sw.js, so a new build cannot reach a device that holds the old worker',
 );
 check(worker.headers.get('service-worker-allowed') === '/', 'sw.js may not control the origin');
 
@@ -225,25 +225,29 @@ check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no chann
 
 // The listener, as the origin reports it.
 //
-// Everything here is read from outside the host, through the status route. The
-// route is a view of the file that the listener writes, and the two live in
-// different processes, so this asks whether the view carries anything at all.
+// This reads everything here from outside the host, through the status route.
+// The route is a view of the file that the listener writes, and the two live
+// in different processes. So this asks whether the view carries anything at
+// all.
+//
 // A route that answers with nothing while the listener runs is the failure
-// worth catching here: it means the writer and the reader name different
+// worth a check here. It means that the writer and the reader name different
 // files, and it looks perfectly healthy until somebody needs it.
 //
-// The state itself is judged on the host by `deploy/listener-check.mjs`, which
+// `deploy/listener-check.mjs` judges the state itself on the host, and it
 // reads the file rather than the view. That check stays there on purpose. A
 // reader that could only reach the route would learn nothing about a healthy
 // listener whenever the service in front of it was down.
 // The forwarded header, read from the configuration this host serves.
 //
-// The service identifies a caller by the first entry of that header and keys
-// its budget on it, so the header has to be set by the web server rather than
-// appended to what a caller sent. The deployment refuses to install a
-// configuration that appends. This asks a different question: whether the
-// configuration the host is serving right now still says so, which catches an
-// edit made on the host rather than in a commit.
+// The service identifies a caller by the first entry of that header, and it
+// keys its budget on that entry. The web server must therefore set the header
+// rather than append to what a caller sent.
+//
+// The deployment refuses to install a configuration that appends. This asks a
+// different question: whether the configuration that the host serves right now
+// still says so. That catches an edit made on the host rather than in a
+// commit.
 //
 // It is a host-side read. Every other line here comes from outside the host,
 // and this one cannot, because the file is not public. It says so rather than
@@ -254,8 +258,8 @@ const SETS = /^[ \t]*proxy_set_header[ \t]+X-Forwarded-For[ \t]+\$remote_addr/m;
 if (existsSync(SERVED_NGINX)) {
   const served = readFileSync(SERVED_NGINX, 'utf8');
   // `check` here speaks only when it fails, so the message describes the fault
-  // rather than the healthy state. The healthy state is reported below, with
-  // the other facts, because a host-side read has to say that it is one.
+  // rather than the healthy state. The report below names the healthy state,
+  // beside the other facts, because a host-side read has to say that it is one.
   check(SETS.test(served) && !APPENDS.test(served),
     APPENDS.test(served)
       ? 'the served configuration appends to X-Forwarded-For, so a caller names itself'
@@ -273,7 +277,7 @@ if (listener !== null) {
       : `the status route names the cursor ${listener.cursor}`);
   check(listener.stuckOn === null,
     listener.stuckOn === null
-      ? 'the listener is not held on an event that it cannot deliver'
+      ? 'the listener does not hold the cursor on an event that it cannot deliver'
       : `the listener cannot deliver ${listener.stuckOn}`);
   check(typeof listener.ageMs === 'number' && listener.ageMs <= LISTENER_AGE_MAX_MS,
     typeof listener.ageMs === 'number'
@@ -306,9 +310,9 @@ if (typeof config.rpId === 'string') {
   skip('the relying party that the service serves, because it serves none');
 }
 
-// The origin names the commit it serves. A content search cannot tell a release
-// that lacks a change from a check that looks for the wrong string, so a
-// deployment answers the question instead of leaving it to inference.
+// The origin names the commit that it serves. A content search cannot tell a
+// release that lacks a change from a check that looks for the wrong string.
+// A deployment therefore answers the question, and nobody infers it.
 const release = await readJson('/release.json');
 check(typeof release.commit === 'string' && /^[0-9a-f]{40}$/.test(release.commit),
   `the origin names no commit, and it answered ${JSON.stringify(release.commit)}`);
@@ -359,7 +363,7 @@ console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
 if (existsSync(SERVED_NGINX)) {
   const served = readFileSync(SERVED_NGINX, 'utf8');
   console.log(`  forwarded ${SETS.test(served) && !APPENDS.test(served) ? 'set from the connection' : 'NOT set from the connection'}`
-    + '   read on the host, from the configuration it serves');
+    + '   read on the host, from the configuration that it serves');
 }
 console.log(`  listener ${listener?.cursor ?? 'no cursor'}`
   + `${listener?.stuckOn === null || listener?.stuckOn === undefined ? '' : `, stuck on ${listener.stuckOn}`}`
@@ -410,7 +414,7 @@ if (chromePath === undefined || chromePath === '') {
     // The application reads its chain settings from the service at start. A
     // service that is older than the application answers without some of them,
     // and the page then loads and looks healthy while account creation refuses.
-    // Only the running application shows that, so the check reads its own words.
+    // Only an application that runs shows that, so the check reads its own words.
     const started = await page.evaluate(() => ({
       text: document.body.innerText,
       chain: window.localStorage.getItem('senet.chain'),
@@ -427,16 +431,16 @@ if (chromePath === undefined || chromePath === '') {
       check(manifest[field] !== undefined, `the manifest names no ${field}`);
     }
     check(Array.isArray(manifest.icons) && manifest.icons.length > 0, 'the manifest holds no icon');
-    // Geometry, which reading text cannot answer. A line that falls out of frame
-    // renders correct text in a place that nobody can photograph, so the check
-    // measures where each element sits rather than what it says.
+    // Geometry, which a reader of text cannot answer. A line that falls out of
+    // frame renders correct text in a place that nobody can photograph. So the
+    // check measures where each element sits, rather than what it says.
     await page.setViewport(PHONE);
 
     // A code appears only after a payer mints one, and no unattended run signs
     // a passkey. The panel that draws it does not need one: it reads a stored
     // voucher and paints its payload. So the check stores a voucher of the size
-    // that a passkey really produces, and the code it measures is the code a
-    // payer sees.
+    // that a passkey really produces. The code that it measures is then the
+    // code that a payer sees.
     //
     // This is why the block below runs at all. It used to sit out of reach, and
     // two of the three elements it named had stopped existing without anything

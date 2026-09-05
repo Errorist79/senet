@@ -10,17 +10,19 @@
 // Lag here is not a traffic signal. It is purely a stall signal, and every
 // state it reports is an incident.
 //
-// That holds because a poll which matches no event still returns a cursor at
-// the chain head, and the listener stores the position at the end of every
-// batch including an empty one. The cursor therefore tracks the head while
-// nothing is redeemed. A listener that is behind has stopped, or it holds the
-// cursor because it cannot deliver, and the report below names which.
+// That holds for two reasons. A poll which matches no event still returns a
+// cursor at the chain head. The listener also stores the position at the end
+// of every batch, including an empty one. The cursor therefore tracks the head
+// while nobody redeems a voucher.
 //
-// This is worth stating plainly, because an operator who thinks lag might mean
-// quiet traffic will wait before acting, and the waiting is the expensive part.
+// So a listener that is behind has stopped, or it holds the cursor because it
+// cannot deliver. The report below names which one.
 //
-// The last number is the time left to repair a failure, which is how long the
-// RPC still keeps what the listener has not read.
+// This is worth stating plainly. An operator who thinks that lag might mean
+// quiet traffic waits before it acts, and that wait is the expensive part.
+//
+// The last number is the time left to repair a failure. It is how long the RPC
+// keeps the events that the listener did not read.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 
@@ -47,8 +49,8 @@ const SECONDS_PER_LEDGER = 5;
  * How far behind the chain the cursor may fall before this check fails.
  *
  * Ten minutes of ledgers. A poller that reads every few seconds stays within a
- * handful, so this value catches a stopped listener without failing on one slow
- * poll.
+ * handful. This value therefore catches a stopped listener, and it does not
+ * fail on one slow poll.
  */
 const LAG_LEDGERS_MAX = 120;
 
@@ -56,20 +58,20 @@ const LAG_LEDGERS_MAX = 120;
  * How long the state file may go untouched before this check fails.
  *
  * A running listener stores the cursor after every batch, including a batch
- * with no events, so the file changes even while nothing is redeemed. A file
- * that has not changed for this long means the listener is not running.
+ * with no events, so the file changes even while nobody redeems a voucher.
+ * A file older than this means that the listener does not run.
  *
  * This reads the modification time rather than a stamp inside the file. A
- * process that has stopped writing cannot refresh either one, but a process
- * with a stuck writer could still refresh a stamp it holds in memory.
+ * process that stopped its writes cannot refresh either one. A process with a
+ * stuck writer can still refresh a stamp that it holds in memory.
  */
 const STATE_AGE_MAX_MS = 10 * 60 * 1000;
 
-// The margin that the cursor keeps inside the retained range is reported below
-// rather than checked. It cannot be a gate. The lag and the margin add up to
-// the retention window itself, so a margin small enough to matter needs a lag
-// of more than a hundred thousand ledgers, and the lag check fails at 120. A
-// gate that another gate always reaches first proves nothing.
+// This reports the margin that the cursor keeps inside the retained range,
+// rather than checking it. It cannot be a gate. The lag and the margin add up
+// to the retention window itself. A margin small enough to matter therefore
+// needs a lag of more than a hundred thousand ledgers, and the lag check fails
+// at 120. A gate that another gate always reaches first proves nothing.
 //
 // The number is still worth printing, because it answers the question that an
 // operator asks after a failure: how long is there to repair this before the
@@ -82,7 +84,7 @@ function check(condition, message) {
   if (!condition) failures += 1;
 }
 
-/** Read the state file, or say why it cannot be read. */
+/** Read the state file, or say why this cannot read it. */
 function readState(path) {
   if (!existsSync(path)) {
     return { problem: `${path} does not exist, so the listener has never stored a cursor` };
@@ -99,17 +101,17 @@ function readState(path) {
   }
   const { cursor, stuckOn } = parsed;
   const stuck = typeof stuckOn === 'string' ? stuckOn : null;
-  // A listener that is refused before it delivers anything has no cursor to
+  // A listener that a receiver refuses before it delivers anything has no cursor to
   // store, so it stores the stuck event alone. That file is not malformed. It
-  // is the state this check exists to name, and a reader that demanded a
-  // cursor would report the shape of the file instead of the fault.
+  // is the state this check exists to name. A reader that demanded a cursor
+  // would report the shape of the file instead of the fault.
   if (typeof cursor !== 'string') {
     if (stuck === null) return { problem: `${path} names no cursor and no stall` };
     return { cursor: null, stuckOn: stuck, changedAtMs: statSync(path).mtimeMs };
   }
   // The age comes from the modification time of the file and not from a time
-  // written inside it. The listener writes the position and nothing else, and
-  // a stamp that a process writes about itself is a claim, while the time the
+  // written inside it. The listener writes the position and nothing else.
+  // A stamp that a process writes about itself is a claim. The time that the
   // kernel recorded for the write is a fact.
   return { cursor, stuckOn: stuck, changedAtMs: statSync(path).mtimeMs };
 }
@@ -209,13 +211,15 @@ console.log(`  written   ${new Date(state.changedAtMs).toISOString()}\n`);
 
 // A quiet chain does not make the listener look behind. A poll that matches no
 // event still returns a cursor at the chain head, measured against this
-// contract over a silent window, so the cursor tracks the head while nothing is
-// redeemed. Lag therefore never reports quiet traffic. It reports a listener
-// that stopped, or one that is holding the cursor because it cannot deliver.
-// Both are incidents, which is what makes this check worth gating on.
+// contract over a silent window. The cursor therefore tracks the head while
+// nobody redeems a voucher.
+//
+// Lag never reports quiet traffic. It reports a listener that stopped, or one
+// that holds the cursor because it cannot deliver. Both are incidents, and
+// that is what makes this check worth a gate.
 check(state.stuckOn === null,
   state.stuckOn === null
-    ? 'the listener is not held on an event that it cannot deliver'
+    ? 'the listener does not hold the cursor on an event that it cannot deliver'
     : `the listener cannot deliver event ${state.stuckOn}, and it holds the cursor there`);
 
 check(cursorLedger <= range.latestLedger,

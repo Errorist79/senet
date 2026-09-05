@@ -1,4 +1,4 @@
-// Ask whether the code in the repository can still produce the archive it holds.
+// Ask whether the code in the repository still produces the archive that it holds.
 //
 //   node scripts/check-reproducible.mjs
 //
@@ -13,8 +13,8 @@
 // and nothing said so.
 //
 // This check reads both sides from `HEAD` rather than from the working tree.
-// The promise is made to somebody who clones the repository, and a producer
-// that exists only in an editor is a producer they do not get.
+// The repository makes its promise to somebody who clones it. A producer that
+// exists only in an editor is a producer that they never get.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -22,12 +22,12 @@ import path from 'node:path';
 import { ROOT } from './evidence-set.mjs';
 
 /**
- * Where `HEAD` is unpacked.
+ * Where this check unpacks `HEAD`.
  *
- * It sits inside the repository on purpose. Node finds a package by walking up
- * from the file that imports it, so an export placed here resolves against the
- * dependencies that are already installed, and the check needs no install of
- * its own.
+ * It sits inside the repository on purpose. Node finds a package when it walks
+ * up from the file that imports it. An export placed here therefore resolves
+ * against the dependencies that the repository already installed, and this
+ * check needs no install of its own.
  */
 const EXPORT_DIR = path.join(ROOT, '.reproducible-check');
 
@@ -38,16 +38,16 @@ const ARCHIVE_ROOT = path.join('scripts', 'out');
 /**
  * Find every archive tree in the export, and read the producer each one names.
  *
- * The list of producers is discovered rather than carried. A list inside this
- * file is read from the copy that happens to be running, so a producer added at
- * HEAD and missing from a stale copy leaves a whole tree silently unchecked.
- * That is not hypothetical: the first version of this check carried a list of
- * two while the repository held four trees, and it reported no failures over
- * forty four percent of the rows.
+ * This check finds the producers rather than carrying a list of them. A list
+ * inside this file would come from the copy that happens to run. A producer
+ * that HEAD holds, and a stale copy lacks, would then leave a whole tree
+ * unchecked and quiet. That is not hypothetical. The first version of this
+ * check carried a list of two while the repository held four trees. It
+ * reported no failures over forty four percent of the rows.
  *
- * Discovering them from the export leaves only this script unbootstrapped, and
- * a stale script is a loud failure rather than a quiet gap, because it is one
- * file that either runs or does not.
+ * A search of the export leaves only this one script to trust. A stale script
+ * is a loud failure rather than a quiet gap, because it is one file that
+ * either runs or does not.
  */
 function treesInExport() {
   const root = path.join(EXPORT_DIR, ARCHIVE_ROOT);
@@ -76,9 +76,10 @@ function exportHead() {
 /**
  * Ask a producer which rows it would write.
  *
- * The producer answers for itself rather than being searched for names. A
- * search finds a string that looks like a row name and misses one that the code
- * builds from parts, and it cannot tell a live name from one in a comment.
+ * The producer answers for itself, and this check searches no source for
+ * names. A search finds a string that looks like a row name, and it misses one
+ * that the code builds from parts. It also cannot tell a live name from a name
+ * in a comment.
  *
  * A listing must answer from the export alone. That is stronger than needing no
  * environment file, and it rules out one thing that is easy to miss: a value
@@ -108,8 +109,8 @@ try {
     const manifest = JSON.parse(readFileSync(path.join(EXPORT_DIR, tree, 'manifest.json'), 'utf8'));
 
     // A tree that names no producer is the gap this check exists to close. It
-    // fails here rather than being skipped, because a skipped tree reads as a
-    // tree with nothing wrong.
+    // fails here, and this check never skips it, because a skipped tree reads
+    // as a tree with nothing wrong.
     const command = manifest.producedBy;
     if (typeof command !== 'string' || command === '') {
       check(false, `${tree} names no producer, so nothing can say whether HEAD still makes its ${manifest.rows.length} rows`);
@@ -142,9 +143,9 @@ try {
         // above: the tree names a producer and that producer answers. There is
         // nothing further to test here, so this reports rather than pretends.
         //
-        // It used to assert that the device command existed, which passed for
-        // every tree while being true of only one. A row from a browser check
-        // is not archived by the device command, and the line said it was.
+        // An earlier version asserted that the device command existed, which
+        // passed for every tree while it held for only one. The device command
+        // archives no row from a browser check, and the line said otherwise.
         exempt += 1;
         console.log(`  --    ${row.name} is a ${row.producer} row, and ${command} cannot name it before the run`);
         continue;

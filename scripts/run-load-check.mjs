@@ -42,8 +42,9 @@ function label(batch, index, total) {
 /**
  * Every row that this command produces.
  *
- * Derived from the same counts and the same naming that the run itself uses, so
- * a change to either reaches the list without anybody remembering to edit it.
+ * This list comes from the same counts and the same names that the run itself
+ * uses. A change to either therefore reaches the list, and nobody has to
+ * remember to edit it.
  */
 export const PRODUCED_ROWS = Object.freeze([
   ...Array.from({ length: SEQUENTIAL_COUNT }, (_, i) => label('sequential', i, SEQUENTIAL_COUNT)),
@@ -51,8 +52,8 @@ export const PRODUCED_ROWS = Object.freeze([
 ]);
 
 // Answer what this command produces before it reads a key or opens a socket.
-// A reader who has cloned the repository and set nothing up still gets an
-// answer, which is the whole point of asking.
+// A reader who cloned the repository and set nothing up still gets an answer,
+// which is the whole point of the question.
 if (process.argv.includes('--list')) {
   for (const name of PRODUCED_ROWS) console.log(name);
   process.exit(0);

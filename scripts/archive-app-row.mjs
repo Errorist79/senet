@@ -1,9 +1,9 @@
 // Archive one row that a person made in a browser, against the public name.
 //
 // A script cannot produce such a row. The application builds the transaction
-// in the page, a passkey signs it, and what a person carries back is the hash
-// and what the screen said. Everything else sits in the transaction, so this
-// command reads it from the network and compares the two.
+// in the page, and a passkey signs it. A person carries back the hash and what
+// the screen said. Everything else sits in the transaction, so this command
+// reads it from the network and compares the two.
 //
 //   node scripts/archive-app-row.mjs <hash> \
 //     --screen merchant \
@@ -27,8 +27,8 @@ const SCREENS = ['account', 'payer', 'merchant'];
 // This command produces no fixed set of rows, and that is the honest answer
 // rather than a missing one. Every row here comes from a hash that a person
 // carried back from a browser, so the names cannot be known before the run.
-// The rows it writes are marked as browser rows, and a check exempts those on
-// the ground that no script can produce a passkey signature.
+// This command marks each row that it writes as a browser row, and a check
+// exempts those, because no script can produce a passkey signature.
 if (process.argv.includes('--list')) process.exit(0);
 
 loadEnv();

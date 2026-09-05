@@ -2,16 +2,19 @@
 //
 //   CHROME_PATH=/path/to/chrome node deploy/scan-check.mjs [perModule] [origin]
 //
-// Every other check here runs the decoder in node. That proves the library and
-// it does not prove the application: the base64 that the build writes in, the
-// middle square that the loop cuts, the frame that the page asks for, and the
-// loop that now waits for a decode are all browser code, and none of them runs
-// under node.
+// Every other check here runs the decoder in node. That proves the library. It
+// does not prove the application. These four parts are browser code, and node
+// runs none of them:
 //
-// This check feeds Chrome a video file that holds a version 23 symbol, at a
-// stated number of pixels for each module, and then drives the merchant screen
-// exactly as a merchant drives it. A read here means the whole chain works. It
-// says nothing about a lens, which is what a phone is for.
+// - the base64 that the build writes in;
+// - the middle square that the loop cuts;
+// - the frame that the page asks for;
+// - the loop that now waits for a decode.
+//
+// This check feeds Chrome a video file. The file holds a version 23 symbol, at
+// a stated number of pixels for each module. The check then drives the merchant
+// screen exactly as a merchant drives it. A read here means the whole chain
+// works. It says nothing about a lens, which is what a phone is for.
 //
 // The symbol carries random bytes rather than a signed voucher, because no
 // unattended run can sign one. The merchant screen therefore refuses it, and

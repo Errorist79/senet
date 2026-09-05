@@ -30,8 +30,9 @@ import {
   verifyUri,
 } from '@senet/core';
 // The domain that this deployment serves under. A request names it as its
-// origin, and a wallet reads the signing key from that domain's file, so the
-// value has to be the one the deployment declares rather than a second copy.
+// origin, and a wallet reads the signing key from that domain's file. The
+// value must be the one that the deployment declares, and never a second
+// copy.
 import { RP_ID } from '@senet/server';
 import {
   ENDPOINTS, EVIDENCE_DIR, RPC_URL, archiveManifest, describeTransaction, loadEnv, readManifest,
@@ -53,22 +54,22 @@ const REASON_SIGNATURE_EXPIRED = 'signature has expired';
  * The lifetimes that this run walks, named here rather than imported.
  *
  * The names below decide four row names, and a listing has to answer from the
- * export alone. An imported value does not: a package resolves through the
- * installed dependencies, which point at the working tree, so a listing that
- * read this table from the package would report the names on somebody's desk
- * while the archive it is compared against came from a commit.
+ * export alone. An imported value cannot. A package resolves through the
+ * installed dependencies, and those point at the working tree. A listing that
+ * read this table from the package would report the names on somebody's desk,
+ * while the archive beside it came from a commit.
  *
- * The assertion further down holds this equal to the table it mirrors, so the
- * copy cannot drift into a lie.
+ * The assertion further down holds this equal to the table that it mirrors, so
+ * the copy cannot drift into a lie.
  */
 const LIFETIME_NAMES = Object.freeze(['5m', '15m', '1h', '12h']);
 
 /**
  * Every row that this command produces.
  *
- * The list exists so that a check can ask what the runner would produce without
- * spending a transaction to find out. It is derived from the same lifetimes the
- * run itself walks, so a new lifetime reaches both at once.
+ * The list exists so that a check can ask what the runner would produce, and
+ * spend no transaction to find out. It follows the same lifetimes that the run
+ * itself walks, so a new lifetime reaches both at once.
  *
  * `record` refuses a name that is not here, which is what keeps the list honest.
  * A declaration that nothing tests is documentation, and documentation drifts
@@ -85,9 +86,10 @@ export const PRODUCED_ROWS = Object.freeze([
   'sep7-payment',
 ]);
 
-// The listing names the lifetimes without importing them, so this is where the
-// copy meets its source. A lifetime added to the library and not to the list
-// stops the run rather than quietly producing a row that no listing names.
+// The answer to `--list` names the lifetimes and imports none of them, so this
+// is where the copy meets its source. A lifetime that reaches the library and not the
+// list stops the run. Otherwise the run would quietly produce a row that no
+// listing names.
 const missing = Object.keys(LIFETIMES).filter((name) => !LIFETIME_NAMES.includes(name));
 const extra = LIFETIME_NAMES.filter((name) => !(name in LIFETIMES));
 if (missing.length > 0 || extra.length > 0) {
@@ -98,8 +100,9 @@ if (missing.length > 0 || extra.length > 0) {
 }
 
 // Answer what this command produces, and spend nothing doing it. This stands
-// above every read of configuration on purpose. Asking what a command would
-// produce needs no keys, no network and no environment file, and a reader who
+// above every read of configuration on purpose. A question about what a
+// command produces needs no keys, no network and no environment file. A reader
+// who
 // has cloned the repository and set nothing up must still get an answer.
 if (process.argv.includes('--list')) {
   for (const name of PRODUCED_ROWS) console.log(name);
@@ -120,15 +123,15 @@ const config = {
 const payer = Keypair.fromSecret(requireEnv('PAYER_SECRET'));
 /** The submitter, who pays the network fee and selects the recipient. */
 const submitter = Keypair.fromSecret(requireEnv('SUBMITTER_SECRET'));
-// Read every remaining variable now rather than where it is used. The last row
-// of this run is a payment, and a run that spent ten transactions before it
-// discovered a missing key would leave those ten on the chain with nothing
-// archived to cite them.
+// Read every remaining variable now, and not at the point of use. The last row
+// of this run is a payment. A run that spent ten transactions before it found
+// a missing key would leave those ten on the chain, with no archive to cite
+// them.
 requireEnv('MERCHANT_ADDRESS');
 requireEnv('SEP7_SIGNING_SECRET');
-// A merchant receives an amount and signs nothing, so each one is an address
-// and not a secret. Every use below passes the address to the contract as the
-// recipient argument.
+// A merchant receives an amount and signs nothing, so each merchant here is an
+// address and not a secret. Every use below passes the address to the contract
+// as the recipient argument.
 /** The first recipient, who stands for a merchant. */
 const merchant = requireEnv('MERCHANT_ADDRESS');
 /** The second recipient, who receives a refused attempt. */
@@ -258,11 +261,12 @@ function record(name, outcome, note) {
  * Produce the payee-presented payment that the evidence promises.
  *
  * The merchant asks and the payer answers, which is the standard direction and
- * the opposite of a voucher. The request is signed by the key that this
- * domain's file publishes, so a wallet can tell that the domain asked.
+ * the opposite of a voucher. The key that this domain's file publishes signs
+ * the request, so a wallet can tell that the domain asked.
  *
- * The payment is a classic payment operation and not a contract call, so the
- * row it produces is read by a different decoder from every other row here.
+ * The payment is a classic payment operation and not a contract call. A
+ * different decoder therefore reads the row that it produces, and no other row
+ * here needs that decoder.
  */
 async function payeePresentedPayment() {
   const signingKey = Keypair.fromSecret(requireEnv('SEP7_SIGNING_SECRET'));
@@ -273,9 +277,9 @@ async function payeePresentedPayment() {
     buildPayUri({ destination: merchant, amount, originDomain: RP_ID }),
     signingKey.secret(),
   );
-  // Verify before paying. A request that this domain's own key cannot verify is
-  // not evidence of anything, and paying first would put a transaction on the
-  // chain that no row could honestly cite.
+  // Verify first, and pay after. A request that this domain's own key cannot
+  // verify is evidence of nothing. A payment before that check would put a
+  // transaction on the chain that no row could honestly cite.
   const verified = verifyUri(request, signingKey.publicKey());
   if (!verified.verified) {
     throw new Error(`the request that this domain signed does not verify: ${verified.reason}`);
@@ -368,7 +372,7 @@ const voidOutcome = await submitAccepted(voided, payer.publicKey(), voidEntry, '
 record(
   '8-void-success',
   voidOutcome,
-  'The payer voids the voucher and redeems it to their own address. The nonce is consumed and the balance does not change.',
+  'The payer voids the voucher and redeems it to their own address. The redemption spends the nonce, and the balance does not change.',
 );
 record(
   '8-after-void-failed',

@@ -28,8 +28,8 @@ const SCREENS = ['account', 'payer', 'merchant'];
 // This command produces no fixed set of rows, and that is the honest answer
 // rather than a missing one. Every row here comes from a hash that a person
 // carried back from a phone, so the names cannot be known before the run. The
-// rows it writes are marked as device rows, and a check exempts those on the
-// ground that no script can produce a passkey signature.
+// command marks each row that it writes as a device row, and a check exempts
+// those, because no script can produce a passkey signature.
 if (process.argv.includes('--list')) process.exit(0);
 
 loadEnv();
