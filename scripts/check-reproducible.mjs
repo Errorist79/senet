@@ -144,8 +144,8 @@ function producedBy(command) {
  * rule and nothing that keeps it. Every row that said the gate passes rested on
  * a file that the artifact does not carry.
  *
- * A note recorded that gap and nobody acted on it for two weeks. A note is read
- * once, by somebody who already cares. This asks on every run.
+ * A note recorded that gap and nobody acted on it for two weeks. Somebody who
+ * already cares reads a note once. This check asks on every run.
  */
 function gateInExport() {
   const gate = path.join(EXPORT_DIR, 'scripts', 'check-language.mjs');
