@@ -135,6 +135,16 @@ export interface Manifest {
   readonly contractId: string;
   /** When the command produced the set. */
   readonly producedAt: string;
+  /**
+   * The command that produced this set, as a path in the repository.
+   *
+   * A tree that names its own producer lets a check ask that command what it
+   * makes, rather than a check carrying a list of every producer. A list has to
+   * be edited whenever a producer is added, and a list that somebody forgets to
+   * edit leaves a tree silently unchecked, which is the failure this field
+   * removes.
+   */
+  readonly producedBy?: string;
   /** The figures that the set claims, for a set that measures something. */
   readonly summary?: Readonly<Record<string, string | number | boolean | null>>;
   readonly rows: readonly Row[];

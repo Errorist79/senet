@@ -199,6 +199,7 @@ const manifest = {
   network: process.env.NETWORK_PASSPHRASE ?? Networks.TESTNET,
   contractId: evidence.contractId,
   producedAt: new Date().toISOString(),
+  producedBy: 'scripts/run-confirmation.mjs',
   rows,
 };
 writeManifest(CONFIRM_CHECK_DIR, manifest);

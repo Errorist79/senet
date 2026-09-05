@@ -444,6 +444,7 @@ const manifest = {
   network: config.network,
   contractId,
   producedAt: new Date().toISOString(),
+  producedBy: 'scripts/run-evidence.mjs',
   rows: [...rows, ...kept],
 };
 writeManifest(EVIDENCE_DIR, manifest);

@@ -34,6 +34,28 @@ const AMOUNT_STROOPS = 1_000_000n;
 /** The lifetime of each voucher. The run finishes long before it passes. */
 const LIFETIME_LEDGERS = LIFETIMES['15m'];
 
+function label(batch, index, total) {
+  const width = String(total).length;
+  return `${batch}-
+/**
+ * Every row that this command produces.
+ *
+ * Derived from the same counts and the same naming that the run itself uses, so
+ * a change to either reaches the list without anybody remembering to edit it.
+ */
+export const PRODUCED_ROWS = Object.freeze([
+  ...Array.from({ length: SEQUENTIAL_COUNT }, (_, i) => label('sequential', i, SEQUENTIAL_COUNT)),
+  ...Array.from({ length: CONCURRENT_COUNT }, (_, i) => label('concurrent', i, CONCURRENT_COUNT)),
+]);
+
+// Answer what this command produces before it reads a key or opens a socket.
+// A reader who has cloned the repository and set nothing up still gets an
+// answer, which is the whole point of asking.
+if (process.argv.includes('--list')) {
+  for (const name of PRODUCED_ROWS) console.log(name);
+  process.exit(0);
+}
+
 loadEnv();
 const config = readConfig();
 const payer = Keypair.fromSecret(requireEnv('PAYER_SECRET'));
@@ -79,10 +101,9 @@ function row(name, batch, result) {
   };
 }
 
-function label(batch, index, total) {
-  const width = String(total).length;
-  return `${batch}-${String(index + 1).padStart(width, '0')}`;
+${String(index + 1).padStart(width, '0')}`;
 }
+
 
 const server = new rpc.Server(config.rpcUrl);
 const feePayer = await new FeePayer(config).start();
@@ -132,6 +153,7 @@ const manifest = {
   network: config.voucher.network,
   contractId: config.voucher.contractId,
   producedAt: new Date().toISOString(),
+  producedBy: 'scripts/run-load-check.mjs',
   summary: {
     sequential: SEQUENTIAL_COUNT,
     concurrent: CONCURRENT_COUNT,

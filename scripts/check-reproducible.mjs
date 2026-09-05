@@ -17,7 +17,7 @@
 // that exists only in an editor is a producer they do not get.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './evidence-set.mjs';
 
@@ -34,11 +34,31 @@ const EXPORT_DIR = path.join(ROOT, '.reproducible-check');
 /** The command that archives a row which no script can produce. */
 const DEVICE_COMMAND = 'scripts/archive-device-row.mjs';
 
-/** The producers, and how to ask each one what it makes. */
-const PRODUCERS = Object.freeze([
-  { command: 'scripts/run-evidence.mjs', tree: path.join('scripts', 'out', 'evidence') },
-  { command: 'scripts/run-confirmation.mjs', tree: path.join('scripts', 'out', 'confirm-check') },
-]);
+/** Where the archive trees live, relative to the root of the repository. */
+const ARCHIVE_ROOT = path.join('scripts', 'out');
+
+/**
+ * Find every archive tree in the export, and read the producer each one names.
+ *
+ * The list of producers is discovered rather than carried. A list inside this
+ * file is read from the copy that happens to be running, so a producer added at
+ * HEAD and missing from a stale copy leaves a whole tree silently unchecked.
+ * That is not hypothetical: the first version of this check carried a list of
+ * two while the repository held four trees, and it reported no failures over
+ * forty four percent of the rows.
+ *
+ * Discovering them from the export leaves only this script unbootstrapped, and
+ * a stale script is a loud failure rather than a quiet gap, because it is one
+ * file that either runs or does not.
+ */
+function treesInExport() {
+  const root = path.join(EXPORT_DIR, ARCHIVE_ROOT);
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(ARCHIVE_ROOT, entry.name))
+    .filter((tree) => existsSync(path.join(EXPORT_DIR, tree, 'manifest.json')));
+}
 
 let failures = 0;
 function check(condition, message) {
@@ -73,24 +93,36 @@ try {
   exportHead();
   console.log(`reading HEAD, unpacked into ${path.relative(ROOT, EXPORT_DIR)}\n`);
 
-  for (const producer of PRODUCERS) {
-    const manifestPath = path.join(EXPORT_DIR, producer.tree, 'manifest.json');
-    if (!existsSync(manifestPath)) {
-      check(false, `${producer.tree} holds no manifest at HEAD`);
+  const trees = treesInExport();
+  console.log(`HEAD holds ${trees.length} archive trees\n`);
+
+  for (const tree of trees) {
+    const manifest = JSON.parse(readFileSync(path.join(EXPORT_DIR, tree, 'manifest.json'), 'utf8'));
+
+    // A tree that names no producer is the gap this check exists to close. It
+    // fails here rather than being skipped, because a skipped tree reads as a
+    // tree with nothing wrong.
+    const command = manifest.producedBy;
+    if (typeof command !== 'string' || command === '') {
+      check(false, `${tree} names no producer, so nothing can say whether HEAD still makes its ${manifest.rows.length} rows`);
       continue;
     }
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    if (!existsSync(path.join(EXPORT_DIR, command))) {
+      check(false, `${tree} names ${command}, which HEAD does not carry`);
+      continue;
+    }
 
     let claimed;
     try {
-      claimed = producedBy(producer.command);
+      claimed = producedBy(command);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      check(false, `${producer.command} cannot say what it produces: ${detail.split('\n')[0]}`);
+      check(false, `${command} cannot say what it produces: ${detail.split('\n')[0]}`);
       continue;
     }
-    console.log(`  ${producer.command} produces ${claimed.length} rows`);
-    console.log(`  ${producer.tree} holds ${manifest.rows.length} rows\n`);
+    console.log(`  ${command} produces ${claimed.length} rows`);
+    console.log(`  ${tree} holds ${manifest.rows.length} rows\n`);
+    const producer = { command, tree };
 
     for (const row of manifest.rows) {
       // A device row is one that no script can produce, because a passkey needs
