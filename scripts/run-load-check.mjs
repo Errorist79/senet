@@ -36,7 +36,9 @@ const LIFETIME_LEDGERS = LIFETIMES['15m'];
 
 function label(batch, index, total) {
   const width = String(total).length;
-  return `${batch}-
+  return `${batch}-${String(index + 1).padStart(width, '0')}`;
+}
+
 /**
  * Every row that this command produces.
  *
@@ -99,9 +101,6 @@ function row(name, batch, result) {
     attempt: result.attempt,
     elapsedMs: result.elapsedMs,
   };
-}
-
-${String(index + 1).padStart(width, '0')}`;
 }
 
 
