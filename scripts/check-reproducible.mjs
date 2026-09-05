@@ -31,9 +31,6 @@ import { ROOT } from './evidence-set.mjs';
  */
 const EXPORT_DIR = path.join(ROOT, '.reproducible-check');
 
-/** The command that archives a row which no script can produce. */
-const DEVICE_COMMAND = 'scripts/archive-device-row.mjs';
-
 /** Where the archive trees live, relative to the root of the repository. */
 const ARCHIVE_ROOT = path.join('scripts', 'out');
 
@@ -62,6 +59,7 @@ function treesInExport() {
 }
 
 let failures = 0;
+let exempt = 0;
 function check(condition, message) {
   console.log(`  ${condition ? 'ok  ' : 'FAIL'}  ${message}`);
   if (!condition) failures += 1;
@@ -139,8 +137,16 @@ try {
       // a person. It is reproducible in the sense that matters: a command takes
       // the hash a person carried back and rebuilds the row from the chain.
       if (row.producer === 'device' || row.producer === 'browser') {
-        check(existsSync(path.join(EXPORT_DIR, DEVICE_COMMAND)),
-          `${row.name} is a ${row.producer} row, and ${DEVICE_COMMAND} exists to archive it`);
+        // A person made this row, so its name arrives with the run and no
+        // listing can carry it in advance. The gate for such a row is the one
+        // above: the tree names a producer and that producer answers. There is
+        // nothing further to test here, so this reports rather than pretends.
+        //
+        // It used to assert that the device command existed, which passed for
+        // every tree while being true of only one. A row from a browser check
+        // is not archived by the device command, and the line said it was.
+        exempt += 1;
+        console.log(`  --    ${row.name} is a ${row.producer} row, and ${command} cannot name it before the run`);
         continue;
       }
       check(claimed.includes(row.name),
@@ -158,7 +164,7 @@ try {
     }
   }
 
-  console.log(`\n${failures} failed`);
+  console.log(`\n${failures} failed, ${exempt} rows exempt because a person made them`);
   if (failures === 0) console.log('every row in the archive names code that HEAD still carries');
 } finally {
   rmSync(EXPORT_DIR, { recursive: true, force: true });
