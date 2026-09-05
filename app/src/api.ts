@@ -303,3 +303,29 @@ export async function requestPayment(
   const fields = await call('/payee-request', body);
   return { uri: text(fields, 'uri'), originDomain: text(fields, 'originDomain') };
 }
+
+/** What one payment of a payee-presented request produced. */
+export interface PayReply {
+  readonly outcome: string;
+  readonly hash: string | null;
+  readonly ledger: number | null;
+  readonly to: string;
+  readonly amountStroops: string;
+}
+
+/** Pay a request that a passkey authorized. */
+export async function submitPayment(request: {
+  from: string;
+  to: string;
+  amountStroops: string;
+  entryXdr: string;
+}): Promise<PayReply> {
+  const fields = await call('/pay', request);
+  return {
+    outcome: text(fields, 'outcome'),
+    hash: textOrNothing(fields, 'hash'),
+    ledger: countOrNothing(fields, 'ledger'),
+    to: text(fields, 'to'),
+    amountStroops: text(fields, 'amountStroops'),
+  };
+}

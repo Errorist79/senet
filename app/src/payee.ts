@@ -1,9 +1,12 @@
-import { requestPayment } from './api.js';
+import { requestPayment, submitPayment } from './api.js';
 import { CODE_SIZE } from './config.js';
 import { detail, element, fill, make, short } from './dom.js';
 import { drawToCanvas, encodeBytes } from './qr.js';
-import { getAccount } from './store.js';
+import { getAccount, getChain, getLedger } from './store.js';
 import { judgeRequest, judgementText, readRequest } from './verify.js';
+import { LIFETIMES, randomNonce, signPayment } from '@senet/core';
+import { passkeySigner } from './passkey.js';
+import { xlm } from './dom.js';
 
 /**
  * The payee-presented screen.
@@ -113,7 +116,88 @@ export function startPayeeScreen(): () => void {
           box.append(detail(name, value.length > 16 ? short(value) : value, value));
         }
       }
+      // A request that the domain refused is never payable. A person may pay
+      // the other three. Two of them mean that nobody vouched, which differs
+      // from somebody's word failing.
+      if (judged.kind !== 'refused') addPayButton(box, uri, request.fields);
       fill(readPanel, box);
+    } catch (caught) {
+      showProblem(readPanel, reason(caught));
+    }
+  }
+
+  /** Offer to pay a request, from this device's account. */
+  function addPayButton(
+    box: HTMLElement,
+    uri: string,
+    fields: Readonly<Record<string, string>>,
+  ): void {
+    const to = fields['destination'];
+    const asked = fields['amount'];
+    if (to === undefined || asked === undefined || asked === '') return;
+    const button = document.createElement('button');
+    button.className = 'submit';
+    button.type = 'button';
+    button.textContent = `Pay ${asked} XLM`;
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      void pay(to, asked, box, uri);
+    });
+    box.append(button);
+  }
+
+  /**
+   * Pay one request from this device's account.
+   *
+   * The passkey signs an authorization for a transfer, and the service pays
+   * the network fee. The amount and the destination come from the request that
+   * the screen judged. Nothing here comes from a field that a person typed, so
+   * the payment matches what the judgement covered.
+   */
+  async function pay(
+    to: string,
+    asked: string,
+    box: HTMLElement,
+    uri: string,
+  ): Promise<void> {
+    const account = getAccount();
+    const chain = getChain();
+    const seen = getLedger();
+    if (account === null || chain === null) {
+      showProblem(readPanel, 'This device holds no account, so it can pay nothing.');
+      return;
+    }
+    if (seen === null) {
+      // The deadline needs a ledger. A device that saw none cannot date the
+      // end of its own authorization.
+      showProblem(readPanel, 'This device knows no ledger, so it cannot date a payment.');
+      return;
+    }
+    const stroops = BigInt(Math.round(Number(asked) * 10_000_000));
+    box.append(make('p', 'confirming', `Paying ${asked} XLM. Your device will ask you to confirm.`));
+    try {
+      const entry = await signPayment(
+        { network: chain.network, contractId: chain.contractId, tokenId: chain.tokenId },
+        { from: account.contractId, to, amount: stroops, expireAt: seen.sequence + LIFETIMES['15m'] },
+        randomNonce(),
+        passkeySigner(chain),
+      );
+      const paid = await submitPayment({
+        from: account.contractId,
+        to,
+        amountStroops: stroops.toString(),
+        entryXdr: entry.toXDR('base64'),
+      });
+      const done = make('div', `result result-${paid.outcome === 'SUCCESS' ? 'good' : 'bad'}`);
+      done.append(
+        make('h2', 'result-title', paid.outcome === 'SUCCESS' ? 'Paid' : 'Not paid'),
+        make('p', 'result-advice', `${xlm(paid.amountStroops)} to ${short(paid.to)}.`),
+        detail('Outcome', paid.outcome),
+      );
+      if (paid.hash !== null) done.append(detail('Transaction', short(paid.hash), paid.hash));
+      fill(readPanel, done);
+      // The request stays on the screen, so a person can read what they paid.
+      uriField.value = uri;
     } catch (caught) {
       showProblem(readPanel, reason(caught));
     }
