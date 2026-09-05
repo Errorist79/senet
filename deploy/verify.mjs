@@ -167,12 +167,13 @@ const APPENDS = /^[ \t]*proxy_set_header[ \t]+X-Forwarded-For[ \t]+\$proxy_add_x
 const SETS = /^[ \t]*proxy_set_header[ \t]+X-Forwarded-For[ \t]+\$remote_addr/m;
 if (existsSync(SERVED_NGINX)) {
   const served = readFileSync(SERVED_NGINX, 'utf8');
+  // `check` here speaks only when it fails, so the message describes the fault
+  // rather than the healthy state. The healthy state is reported below, with
+  // the other facts, because a host-side read has to say that it is one.
   check(SETS.test(served) && !APPENDS.test(served),
     APPENDS.test(served)
       ? 'the served configuration appends to X-Forwarded-For, so a caller names itself'
-      : SETS.test(served)
-        ? 'the served configuration sets X-Forwarded-For from the connection   read on the host'
-        : 'the served configuration does not set X-Forwarded-For at all');
+      : 'the served configuration does not set X-Forwarded-For from the connection');
 } else {
   console.log(`  SKIPPED the forwarded header, because ${SERVED_NGINX} is not readable from here`);
 }
@@ -260,6 +261,11 @@ console.log(`\n  commit   ${release.commit ?? 'the origin names none'}`);
 console.log(`  release  ${release.release ?? 'unnamed'}, published ${release.publishedAt ?? 'at an unknown time'}`);
 console.log(`  contract ${config.contractId}`);
 console.log(`  channels ${Object.keys(status.channels ?? {}).length}`);
+if (existsSync(SERVED_NGINX)) {
+  const served = readFileSync(SERVED_NGINX, 'utf8');
+  console.log(`  forwarded ${SETS.test(served) && !APPENDS.test(served) ? 'set from the connection' : 'NOT set from the connection'}`
+    + '   read on the host, from the configuration it serves');
+}
 console.log(`  listener ${listener?.cursor ?? 'no cursor'}`
   + `${listener?.stuckOn === null || listener?.stuckOn === undefined ? '' : `, stuck on ${listener.stuckOn}`}`
   + '   read from outside the host, through the status route');
