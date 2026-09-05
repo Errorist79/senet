@@ -86,6 +86,13 @@ function noteFor(redeem) {
     + 'code and redeemed it to an address that the payer never saw.';
 }
 
+// This command produces no fixed set of rows, and that is the honest answer
+// rather than a missing one. Every row here comes from a hash that a person
+// carried back from a phone, so the names cannot be known before the run. The
+// rows it writes are marked as device rows, and a check exempts those on the
+// ground that no script can produce a passkey signature.
+if (process.argv.includes('--list')) process.exit(0);
+
 loadEnv();
 const options = readArguments(process.argv.slice(2));
 
@@ -180,7 +187,12 @@ const manifest = fs.existsSync(path.join(DEVICE_CHECK_DIR, 'manifest.json'))
 
 const rows = manifest.rows.filter((each) => each.name !== name).concat([row]);
 rows.sort((left, right) => left.name.localeCompare(right.name));
-const written = { ...manifest, producedAt: new Date().toISOString(), rows };
+const written = {
+  ...manifest,
+  producedAt: new Date().toISOString(),
+  producedBy: 'scripts/archive-device-row.mjs',
+  rows,
+};
 
 await archiveRow(DEVICE_CHECK_DIR, row, written.contractId, ENDPOINTS);
 writeManifest(DEVICE_CHECK_DIR, written);
