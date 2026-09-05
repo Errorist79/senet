@@ -251,8 +251,12 @@ for (const file of files) {
       /working directory|working tree|signing key|relying party|funding service/i.test(text);
     // `anything` and its family merely end in those three letters. This rule
     // looks for a verb that stands as a noun, and those words are pronouns.
+    //
+    // Each word stands between boundaries. Without them `thing` covers every
+    // word of that family. It covers `breathing` and `clothing` as well, and
+    // those are the words that this rule exists to catch.
     const notGerund =
-      /following|during|remaining|being|ceiling|string|keyring|thing|nothing|anything|something|everything/i;
+      /\b(following|during|remaining|being|ceiling|string|keyring|thing|nothing|anything|something|everything)\b/i;
     if (gerund && !compound && !notGerund.test(gerund[0])) {
       add(rel, n, `review -ing form "${gerund[0]}"`, text);
     }
