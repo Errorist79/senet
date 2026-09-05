@@ -35,15 +35,16 @@ export interface Shown {
  * claim is not what the message says, it is that the message arrived. The body
  * is the delivered artifact rather than a copy of a chain value.
  *
- * What this proves and what it does not. A later check parses the body, reads
- * the same transaction from the network and compares every field, then checks
- * that the message arrived after the ledger closed. A body that disagrees with
- * the chain fails, and so does one that claims to arrive before the event it
- * describes existed. That is consistency and ordering against a source that we
- * did not write.
+ * What this proves and what it does not. A later check parses the body and
+ * reads the same transaction from the network. It compares every field, and it
+ * checks that the message arrived after the ledger closed.
  *
- * It is not authenticity. Nobody can tell a captured message from a composed
- * one by looking at the bytes, and this archive does not pretend otherwise.
+ * A body that disagrees with the chain fails. So does one that claims to arrive
+ * before its own event existed. That is consistency and order, against a source
+ * that we did not write.
+ *
+ * It is not authenticity. The bytes of a captured message and the bytes of a
+ * composed one look the same, and this archive does not pretend otherwise.
  */
 export interface Delivery {
   /** When the receiver read the message. */
@@ -64,20 +65,22 @@ export interface Delivery {
  *
  * The chain carries the payment: a source, a destination, an amount and a fee.
  * It carries nothing about the request that asked for the payment. The request
- * is the artifact this row is about, so it is stored whole, for the same reason
- * the webhook body is: the claim is that this request existed and that this
- * payment answered it.
+ * is the artifact that this row is about. This row therefore keeps the whole
+ * request, for the same reason that it keeps the whole webhook body: the claim
+ * is that this request existed, and that this payment answered it.
  *
- * The signing key is stored beside the request rather than fetched when a check
- * runs. A later reader can then verify the signature with no network at all,
- * which is the property that keeps the row readable after the domain changes
- * its published key or stops answering. `tomlUrl` records where the key was
- * read, so the stored key stays a claim that a reader can go and test against
- * the live domain while the domain still exists.
+ * This row keeps the signing key beside the request, rather than a check
+ * fetching that key when it runs. A later reader can then verify the signature
+ * with no network at all. That property keeps the row readable after the domain
+ * changes its published key, or stops answering.
  *
- * The two questions are deliberately separate. Did this key sign this request,
+ * `tomlUrl` records where this archive read the key. The stored key therefore
+ * stays a claim that a reader can test against the live domain, for as long as
+ * the domain exists.
+ *
+ * The two questions are separate on purpose. Did this key sign this request,
  * which stays answerable for ever. Does the domain still publish this key,
- * which decays and is allowed to.
+ * which decays, and which may decay.
  */
 export interface Sep7Request {
   /** The request, byte for byte, with its signature. */
@@ -86,7 +89,7 @@ export interface Sep7Request {
   readonly originDomain: string;
   /** The key that this archive verified the signature against. */
   readonly signingKey: string;
-  /** Where that key was read, so a reader can test the claim while it lasts. */
+  /** Where this archive read that key, so a reader can test the claim. */
   readonly tomlUrl: string;
 }
 
@@ -139,20 +142,20 @@ export interface Manifest {
    * The command that writes this set, as a path in the repository.
    *
    * A tree that names its own producer lets a check ask that command what it
-   * makes, rather than a check carrying a list of every producer. A list has to
-   * be edited whenever a producer is added, and a list that somebody forgets to
-   * edit leaves a tree silently unchecked, which is the failure this field
-   * removes.
+   * makes. The alternative is a check that carries a list of every producer.
+   * Somebody must edit such a list whenever a producer arrives, and a list that
+   * somebody forgets to edit leaves a tree silently unchecked. This field
+   * removes that failure.
    *
-   * It says which command writes the file, and not that one run made every row
-   * in it. Some sets are built up over many runs: a command that archives one
-   * row at a time reads the set, adds a row and writes the whole file back, so
-   * rows from earlier runs stay. The field is true of such a set because that
-   * command wrote the file it sits in.
+   * It says which command writes the file. It does not say that one run made
+   * every row in it. A command grows some sets over many runs: it reads the
+   * set, adds one row, and writes the whole file back, so rows from earlier
+   * runs stay. The field is true of such a set, because that command wrote the
+   * file that it sits in.
    *
-   * It is therefore false until that command has written the file. Adding it by
-   * hand to a set that no command writes makes a check pass on a claim that
-   * nothing supports, which is the failure the check exists to find.
+   * The field is therefore false until that command writes the file. A hand
+   * that adds it to a set which no command writes makes a check pass on a claim
+   * that nothing supports. That is the failure this check exists to find.
    */
   readonly producedBy?: string;
   /** The figures that the set claims, for a set that measures something. */

@@ -354,8 +354,8 @@ then checks that the network refused the row for the stated reason.
 
 ### A row that a person produces on a phone
 
-A script cannot produce a redemption that a passkey signed, so a person makes
-one on a phone and carries back the hash and what the screen said. One command
+A script cannot produce a redemption that a passkey signed. A person makes one
+on a phone, and carries back the hash and the words on the screen. One command
 turns that into a row:
 
 ```bash

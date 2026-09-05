@@ -23,20 +23,38 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The trees that the walk reads, and the single files beside them. */
-const TARGETS = ['packages', 'server', 'app', 'scripts', 'deploy'];
-const EXTRA = ['package.json', 'tsconfig.base.json', '.env.example'];
+const TARGETS = ['packages', 'server', 'app', 'scripts', 'deploy', 'contracts', '.github'];
+// Files that no target directory holds. `README.md` is the most public document
+// in this repository and the first thing a stranger reads, and no target
+// reached it until somebody looked. The two workspace documents sit inside
+// targets already, so the walk finds them.
+const EXTRA = [
+  'package.json', 'tsconfig.base.json', '.env.example', 'README.md',
+  'Cargo.toml', 'rust-toolchain.toml',
+];
 
 /**
- * Directory names that the walk does not open.
+ * Directories of build output, by name.
  *
- * The first three hold installed, built or generated files. Nobody wrote the
- * prose in them, so no rule applies to them.
- *
- * `evidence` differs. It names a source package, and the walk skips it only
- * because that package holds 16 findings today. Delete the name when somebody
- * fixes them. A skip with no stated reason is how a directory stays unread.
+ * A directory with one of these names holds installed or built files wherever
+ * it sits. Nobody writes prose in one, so the name alone is enough.
  */
-const SKIP = new Set(['node_modules', 'dist', 'fixtures', 'evidence']);
+const BUILD_OUTPUT = new Set(['node_modules', 'dist', 'target']);
+
+/**
+ * Directories that a person decided to leave out, by path.
+ *
+ * A name matches at any depth, and a new directory that shares a word with an
+ * old one then disappears without a word. That happened here. The name
+ * `evidence` was in the list for a source package, and it took the generated
+ * tree `scripts/out/evidence` with it, while the three trees beside that one
+ * stayed in the walk. Nobody chose that, and nothing reported it.
+ *
+ * A path names one directory and nothing else. The report below names each of
+ * these and counts the files that it hides, so a skip is as visible as a
+ * suspension.
+ */
+const SKIPPED = ['packages/core/test/fixtures', 'server/test/fixtures'];
 
 const BANNED_WORDS = [
   // language-rules: off
@@ -63,8 +81,8 @@ const PERFECT = new RegExp(`\\b(has|have|had)\\s+(not\\s+|never\\s+|already\\s+)
 // and a Stellar information file write their prose in `#` comments. One
 // extractor therefore reads all four. The report below names any other kind
 // that a caller hands over, because a silent refusal reads as a clean file.
-const SCANNABLE = /\.(ts|md|json|mjs|css|html|webmanifest|sh|conf|service|toml)$/;
-const HASH_COMMENT = /\.(sh|conf|service|toml)$/;
+const SCANNABLE = /\.(ts|md|json|mjs|css|html|webmanifest|sh|conf|service|toml|rs|yml|yaml)$/;
+const HASH_COMMENT = /\.(sh|conf|service|toml|yml|yaml)$/;
 // The type rules read code. A Markdown file holds code inside a fence, and the
 // prose complement below leaves the fence, so the rules still reach a sample.
 const CODE = /\.(ts|mjs|md)$/;
@@ -83,15 +101,23 @@ const SUSPEND_ON = /language-rules:\s*on/;
 
 const findings = [];
 const suspended = [];
+const skipped = [];
 const add = (file, line, rule, text) =>
   findings.push({ file, line, rule, text: text.trim().slice(0, 110) });
 
-function walk(dir, out = []) {
+function walk(dir, out = [], record = true) {
   for (const name of fs.readdirSync(dir)) {
-    if (SKIP.has(name)) continue;
     const full = path.join(dir, name);
-    if (fs.statSync(full).isDirectory()) walk(full, out);
-    else if (SCANNABLE.test(name)) out.push(full);
+    if (fs.statSync(full).isDirectory()) {
+      if (BUILD_OUTPUT.has(name)) continue;
+      const rel = path.relative(ROOT, full);
+      if (SKIPPED.includes(rel)) {
+        // Read the skipped tree anyway, to say how many files the skip hides.
+        if (record) skipped.push({ tree: rel, files: walk(full, [], false).length });
+        continue;
+      }
+      walk(full, out, record);
+    } else if (SCANNABLE.test(name)) out.push(full);
   }
   return out;
 }
@@ -146,7 +172,7 @@ function proseLines(file, lines) {
       out.push([n, raw, false]);
       return;
     }
-    const m = raw.match(/^\s*(?:\/\/|\/\*\*?|\*)\s?(.*)$/);
+    const m = raw.match(/^\s*(?:\/\/[\/!]?|\/\*\*?|\*)\s?(.*)$/);
     if (m && m[1] !== undefined && !/^\/$/.test(m[1])) { out.push([n, m[1], false]); return; }
     // A test title and an error message are prose that a reader sees.
     for (const lit of raw.matchAll(/'([^'\\]{12,})'|`([^`$\\]{12,})`/g)) {
@@ -262,6 +288,9 @@ for (const file of files) {
 // files hold one, and how many lines it covers.
 for (const one of suspended) {
   console.log(`${one.file} suspends the rules over ${one.lines} lines`);
+}
+for (const one of skipped) {
+  console.log(`${one.tree} is out of the walk and hides ${one.files} files`);
 }
 
 if (!findings.length) {

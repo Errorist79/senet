@@ -136,8 +136,35 @@ function producedBy(command) {
   return output.split('\n').map((line) => line.trim()).filter((line) => line !== '');
 }
 
+/**
+ * Ask whether HEAD carries the gate that enforces the language rules.
+ *
+ * The gate ran for two weeks from a directory that git never tracked, through
+ * a hook that git tracks no more. A stranger who cloned this repository got the
+ * rule and nothing that keeps it. Every row that said the gate passes rested on
+ * a file that the artifact does not carry.
+ *
+ * A note recorded that gap and nobody acted on it for two weeks. A note is read
+ * once, by somebody who already cares. This asks on every run.
+ */
+function gateInExport() {
+  const gate = path.join(EXPORT_DIR, 'scripts', 'check-language.mjs');
+  if (!existsSync(gate)) {
+    check(false, 'HEAD does not carry scripts/check-language.mjs, so a clone cannot check its own text');
+    return;
+  }
+  try {
+    execFileSync('node', [gate], { cwd: EXPORT_DIR, encoding: 'utf8' });
+    check(true, 'the language gate runs from HEAD alone and reports clean');
+  } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : String(caught);
+    check(false, `the language gate refuses HEAD: ${detail.split('\n')[0]}`);
+  }
+}
+
 try {
   exportHead();
+  gateInExport();
 
   console.log(`reading HEAD, unpacked into ${path.relative(ROOT, EXPORT_DIR)}`);
   console.log('this needs the repository and nothing else, so its answer is about the product\n');
