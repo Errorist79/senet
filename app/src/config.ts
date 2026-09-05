@@ -84,3 +84,6 @@ export const CONFIRM_POLL_MS = 1_000;
  * as untestable.
  */
 export const CONFIRM_TIMEOUT_MS = 20_000;
+
+/** The width that a code is drawn at, in CSS pixels. One value, two screens. */
+export const CODE_SIZE = 320;

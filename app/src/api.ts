@@ -286,3 +286,20 @@ export async function fetchRedemption(voucherId: string): Promise<Redemption | n
     event_id: eventId,
   };
 }
+
+/** One signed payee-presented request, and the domain that vouches for it. */
+export interface PayeeRequest {
+  readonly uri: string;
+  readonly originDomain: string;
+}
+
+/** Ask the service to sign a request for a payment to this account. */
+export async function requestPayment(
+  destination: string,
+  amount: string,
+  msg: string,
+): Promise<PayeeRequest> {
+  const body = msg === '' ? { destination, amount } : { destination, amount, msg };
+  const fields = await call('/payee-request', body);
+  return { uri: text(fields, 'uri'), originDomain: text(fields, 'originDomain') };
+}

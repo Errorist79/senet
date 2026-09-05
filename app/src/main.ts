@@ -5,6 +5,7 @@ import { showBuildFact, showDeviceFact, showLedgerFact, showServiceFact } from '
 import { LEDGER_REFRESH_MS } from './config.js';
 import { element } from './dom.js';
 import { startMerchantScreen } from './merchant.js';
+import { startPayeeScreen } from './payee.js';
 import { startPayerScreen } from './payer.js';
 import { getChain, setChain, setLedger } from './store.js';
 
@@ -17,7 +18,7 @@ import { getChain, setChain, setLedger } from './store.js';
  */
 
 /** The screens that this build carries. */
-const SCREENS = ['account', 'payer', 'merchant', 'camera'] as const;
+const SCREENS = ['account', 'payer', 'merchant', 'payee', 'camera'] as const;
 
 /**
  * The screens that the navigation leads to.
@@ -26,7 +27,7 @@ const SCREENS = ['account', 'payer', 'merchant', 'camera'] as const;
  * payer or a merchant does. The merchant screen offers it where a person needs
  * it, which is next to a camera that reads nothing.
  */
-const NAV_SCREENS = ['account', 'payer', 'merchant'] as const;
+const NAV_SCREENS = ['account', 'payer', 'merchant', 'payee'] as const;
 
 type ScreenName = (typeof SCREENS)[number];
 
@@ -160,6 +161,7 @@ async function start(): Promise<void> {
   startAccountScreen();
   startPayerScreen();
   refreshers.set('merchant', startMerchantScreen());
+  refreshers.set('payee', startPayeeScreen());
   startCameraReport();
   showDeviceFact();
 

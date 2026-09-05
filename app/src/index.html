@@ -19,6 +19,7 @@
       <button class="nav-button" id="nav-account" type="button">Account</button>
       <button class="nav-button" id="nav-payer" type="button">Pay</button>
       <button class="nav-button" id="nav-merchant" type="button">Take a payment</button>
+      <button class="nav-button" id="nav-payee" type="button">Ask to be paid</button>
     </nav>
 
     <main>
@@ -146,6 +147,49 @@
         <button class="link-button" id="merchant-report" type="button">
           The camera will not read a code
         </button>
+      </section>
+
+      <section class="screen" id="screen-payee" hidden>
+        <h2 class="screen-title">Ask to be paid</h2>
+        <p class="screen-note">
+          Make a payment request and show it. A wallet checks that this domain
+          signed it, so a payer knows where the money goes.
+        </p>
+
+        <form class="form" id="payee-form">
+          <div class="destination">
+            <span class="field-label">Pay to</span>
+            <span class="destination-value" id="payee-destination"></span>
+          </div>
+          <label class="field">
+            <span class="field-label">Amount in XLM</span>
+            <input class="field-input" id="payee-amount" type="text" inputmode="decimal"
+              autocomplete="off" placeholder="1.5" />
+          </label>
+          <label class="field">
+            <span class="field-label">A note for the payer</span>
+            <input class="field-input" id="payee-message" type="text" autocomplete="off"
+              placeholder="Two coffees" />
+          </label>
+          <button class="submit" id="payee-ask" type="submit">Make the request</button>
+        </form>
+
+        <div class="result-panel" id="payee-panel"></div>
+
+        <form class="form" id="payee-read-form">
+          <details class="fallback">
+            <summary class="fallback-summary">Read a payment request</summary>
+            <label class="field">
+              <span class="field-label">The request</span>
+              <textarea class="field-input field-payload" id="payee-uri" rows="4"
+                spellcheck="false" autocomplete="off"
+                placeholder="web+stellar:pay?..."></textarea>
+            </label>
+            <button class="submit submit-quiet" type="submit">Check this request</button>
+          </details>
+        </form>
+
+        <div class="result-panel" id="payee-read-panel"></div>
       </section>
 
       <section class="screen" id="screen-camera" hidden>

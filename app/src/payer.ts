@@ -16,6 +16,7 @@ import type { LifetimeName, Voucher, VoucherConfig } from '@senet/core';
 import { ServiceError, submitRedeem } from './api.js';
 import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
 import { ERROR_CORRECTION, PLANNED_MAX_VERSION, encodeBytes, drawToCanvas } from './qr.js';
+import { CODE_SIZE } from './config.js';
 import type { ErrorCorrection } from './qr.js';
 import { passkeySigner } from './passkey.js';
 import { getAccount, getChain, getLedger, getVouchers, setVouchers } from './store.js';
@@ -33,7 +34,7 @@ import type { StoredChain, StoredVoucher } from './store.js';
  */
 
 /** How wide the code is drawn, in CSS pixels. */
-const CODE_SIZE = 320;
+
 
 /**
  * TEMPORARY. The error correction level is a control on this screen only so
