@@ -9,9 +9,15 @@
 // under node.
 //
 // This check feeds Chrome a video file that holds a version 23 symbol, at a
-// stated number of pixels for each module. The camera report screen then reads
-// it through exactly the path that a phone uses. A read here means the whole
-// chain works. It says nothing about a lens, which is what a phone is for.
+// stated number of pixels for each module, and then drives the merchant screen
+// exactly as a merchant drives it. A read here means the whole chain works. It
+// says nothing about a lens, which is what a phone is for.
+//
+// The symbol carries random bytes rather than a signed voucher, because no
+// unattended run can sign one. The merchant screen therefore refuses it, and
+// the refusal is the proof: the scanner read the bytes off the camera and
+// handed them to the voucher reader, which is the whole path under test. A
+// camera that reads nothing produces no refusal at all.
 
 import { existsSync, writeFileSync } from 'node:fs';
 import { launch } from 'puppeteer-core';
@@ -27,6 +33,9 @@ const PAYLOAD_BYTES = 792;
 const QUIET_MODULES = 4;
 /** How many frames the file holds. Chrome plays it and then repeats it. */
 const FRAMES = 60;
+
+/** How long the check waits for the scanner to read one frame. */
+const READ_TIMEOUT_MS = 30_000;
 
 /** Pixels for each module that the video carries. The caller may name one. */
 const PER_MODULE = Number(process.argv[2] ?? 3);
@@ -118,40 +127,43 @@ async function main() {
     });
 
     await page.goto(ORIGIN, { waitUntil: 'networkidle2' });
-    // The camera report is one of the screens. Open it the way a person does.
-    await page.evaluate(() => {
-      const link = [...document.querySelectorAll('a, button')].find((one) =>
-        /camera/i.test(one.textContent ?? ''),
-      );
-      if (link instanceof HTMLElement) link.click();
-    });
-    await page.waitForSelector('#report-find', { visible: true, timeout: 10_000 });
-    await page.click('#report-find');
-    // One measurement watches for six seconds. Give it that and a margin.
-    // `first read` appears only in a measurement. An earlier version of this
-    // check waited for `sharpness`, which also appears in the list of
-    // constraints that a browser accepts, so it stopped before the measurement.
-    await page.waitForFunction(
-      () => (document.getElementById('report-output')?.textContent ?? '').includes('first read'),
-      { timeout: 40_000 },
-    );
-    const report = await page.evaluate(
-      () => document.getElementById('report-output')?.textContent ?? '',
-    );
-    console.log('\n' + report.trim() + '\n');
+    await page.waitForSelector('#nav-merchant', { visible: true, timeout: 10_000 });
+    await page.click('#nav-merchant');
+    await page.waitForSelector('#merchant-scan', { visible: true, timeout: 10_000 });
 
-    const read = /read\s+(\d+) of (\d+) frames/.exec(report);
-    const pitch = /module\s+(.+)/.exec(report);
-    const decoded = read === null ? 0 : Number(read[1]);
-    console.log(`decoded ${decoded} frames`);
-    if (pitch !== null) console.log(`module line: ${pitch[1]}`);
+    const startedAt = Date.now();
+    await page.click('#merchant-scan');
+    // The scanner stops itself on the first read, so the panel filling is the
+    // event to wait for. A camera that never reads leaves it empty.
+    await page.waitForFunction(
+      () => (document.getElementById('merchant-result')?.textContent ?? '').length > 0,
+      { timeout: READ_TIMEOUT_MS },
+    ).catch(() => undefined);
+    const readMs = Date.now() - startedAt;
+    const panel = await page.evaluate(
+      () => document.getElementById('merchant-result')?.textContent ?? '',
+    );
+
+    console.log(`\npanel after ${readMs} ms: ${panel.trim().replace(/\s+/g, ' ') || '(nothing)'}`);
     if (failures.length > 0) console.log('browser errors:', failures.slice(0, 5));
 
-    if (decoded === 0) {
-      console.error('\nthe browser read nothing, so the scanner path is broken');
+    // A refusal names the reason that the voucher reader gave. Any of those
+    // means the bytes arrived. A camera fault names itself instead, and an
+    // empty panel means no frame ever decoded.
+    const cameraFault = /camera/i.test(panel);
+    const decoded = panel.length > 0 && !cameraFault ? 1 : 0;
+
+    if (cameraFault) {
+      console.error('\nthe page reported a camera fault, so no frame reached the decoder');
       process.exit(1);
     }
-    console.log('\nthe browser read the code through the application path');
+    if (decoded === 0) {
+      console.error(
+        `\nthe browser read nothing in ${READ_TIMEOUT_MS} ms, so the scanner path is broken`,
+      );
+      process.exit(1);
+    }
+    console.log(`\nthe browser read the code through the application path, in ${readMs} ms`);
   } finally {
     await browser.close();
   }

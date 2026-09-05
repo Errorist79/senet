@@ -42,7 +42,7 @@ function cameraProblem(caught: unknown): CameraError {
 }
 
 /** What the scanner asks for. A merchant points a rear camera at a screen. */
-export const REAR_CAMERA: MediaTrackConstraints = {
+const REAR_CAMERA: MediaTrackConstraints = {
   facingMode: 'environment',
   width: { ideal: SCAN_FRAME_WIDTH },
   height: { ideal: SCAN_FRAME_HEIGHT },
@@ -65,7 +65,7 @@ export const REAR_CAMERA: MediaTrackConstraints = {
  * The preview that a person watches is square as well, so the picture that
  * they aim is the picture that the decoder reads.
  */
-export function middleSquare(
+function middleSquare(
   video: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   context: CanvasRenderingContext2D,
@@ -93,11 +93,10 @@ export function middleSquare(
 /**
  * Open one camera and show it.
  *
- * The scanner asks for a rear camera. The camera report asks for one named
- * device, so that a person can compare the lenses that a phone carries. Both
- * need the same failures in the same words, so both come through here.
+ * Every failure here reaches a merchant as words that they can act on, so
+ * every caller comes through this one place.
  */
-export async function openCamera(
+async function openCamera(
   video: HTMLVideoElement,
   wanted: MediaTrackConstraints,
 ): Promise<MediaStream> {

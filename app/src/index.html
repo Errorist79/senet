@@ -143,10 +143,6 @@
         </form>
 
         <div class="result-panel" id="merchant-result"></div>
-
-        <button class="link-button" id="merchant-report" type="button">
-          The camera will not read a code
-        </button>
       </section>
 
       <section class="screen" id="screen-payee" hidden>
@@ -192,52 +188,6 @@
         <div class="result-panel" id="payee-read-panel"></div>
       </section>
 
-      <section class="screen" id="screen-camera" hidden>
-        <h2 class="screen-title">Camera report</h2>
-        <p class="screen-note">
-          This measures the cameras that this phone carries. Show a voucher on a
-          second phone, then hold it in the middle of the picture.
-        </p>
-        <p class="screen-note">
-          The frame sweep asks one camera for four frame sizes in turn, and the
-          zoom sweep asks it for four zoom factors. Both sweeps use the last
-          camera that you measured. Hold the two phones at the same distance
-          for the whole of a sweep. Only then does a sweep measure the thing
-          that it changes.
-        </p>
-        <p class="screen-note">
-          The box above writes a line into every measurement that follows it.
-          Put the distance in it, and the report says which reading belongs to
-          which distance. A reading with no note describes nothing later.
-        </p>
-
-        <label class="field">
-          <span class="field-label">What this measurement is of</span>
-          <input
-            class="field-input"
-            id="report-note"
-            type="text"
-            autocomplete="off"
-            placeholder="21 cm"
-          />
-        </label>
-
-        <button class="submit" id="report-find" type="button">Find the cameras</button>
-        <button class="submit" id="report-frames" type="button">Measure the frame sizes</button>
-        <button class="submit submit-quiet" id="report-zoom" type="button">Measure the zoom</button>
-
-        <video class="scanner" id="report-video" muted playsinline hidden></video>
-
-        <p class="screen-note" id="report-status">Nothing is measured yet.</p>
-
-        <div class="report-cameras" id="report-cameras"></div>
-
-        <pre class="report-output" id="report-output"></pre>
-
-        <button class="submit submit-quiet" id="report-copy" type="button" hidden>
-          Copy the report
-        </button>
-      </section>
     </main>
 
     <footer class="bar bar-foot">

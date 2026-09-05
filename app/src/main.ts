@@ -1,6 +1,5 @@
 import { fetchConfig, fetchLedger, fetchRelease } from './api.js';
 import { startAccountScreen } from './account.js';
-import { startCameraReport } from './camera-report.js';
 import { showBuildFact, showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
 import { LEDGER_REFRESH_MS } from './config.js';
 import { element } from './dom.js';
@@ -17,17 +16,8 @@ import { getChain, setChain, setLedger } from './store.js';
  * screen at a time. It holds no protocol logic of its own.
  */
 
-/** The screens that this build carries. */
-const SCREENS = ['account', 'payer', 'merchant', 'payee', 'camera'] as const;
-
-/**
- * The screens that the navigation leads to.
- *
- * The camera report is a measurement, and it is not part of the work that a
- * payer or a merchant does. The merchant screen offers it where a person needs
- * it, which is next to a camera that reads nothing.
- */
-const NAV_SCREENS = ['account', 'payer', 'merchant', 'payee'] as const;
+/** The screens that this build carries, and that the navigation leads to. */
+const SCREENS = ['account', 'payer', 'merchant', 'payee'] as const;
 
 type ScreenName = (typeof SCREENS)[number];
 
@@ -51,7 +41,7 @@ function showScreen(name: ScreenName): void {
   for (const screen of SCREENS) {
     element(`screen-${screen}`, HTMLElement).hidden = screen !== name;
   }
-  for (const screen of NAV_SCREENS) {
+  for (const screen of SCREENS) {
     const button = element(`nav-${screen}`, HTMLButtonElement);
     button.setAttribute('aria-current', screen === name ? 'page' : 'false');
   }
@@ -145,14 +135,11 @@ async function start(): Promise<void> {
   // fail the service call. The footer said `build unknown` for that second,
   // which is the one moment a person is most likely to read it.
   showBuildFact(await fetchRelease());
-  for (const screen of NAV_SCREENS) {
+  for (const screen of SCREENS) {
     element(`nav-${screen}`, HTMLButtonElement).addEventListener('click', () => {
       showScreen(screen);
     });
   }
-  element('merchant-report', HTMLButtonElement).addEventListener('click', () => {
-    showScreen('camera');
-  });
   const wanted = window.location.hash.replace('#', '');
   showScreen(isScreen(wanted) ? wanted : 'account');
 
@@ -162,7 +149,6 @@ async function start(): Promise<void> {
   startPayerScreen();
   refreshers.set('merchant', startMerchantScreen());
   refreshers.set('payee', startPayeeScreen());
-  startCameraReport();
   showDeviceFact();
 
   // The first screen appeared before a screen registered its own refresh.

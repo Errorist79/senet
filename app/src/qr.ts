@@ -1,6 +1,6 @@
 import qrcode from 'qrcode-generator';
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
-import type { ReadResult, ReaderOptions } from 'zxing-wasm/reader';
+import type { ReaderOptions } from 'zxing-wasm/reader';
 
 /**
  * QR symbols, in raw binary byte mode.
@@ -37,17 +37,6 @@ export const ERROR_CORRECTION: ErrorCorrection = 'M';
 
 /** The quiet zone around a symbol, in modules. The standard asks for four. */
 const QUIET_MODULES = 4;
-
-/**
- * The largest symbol version that this build expects to draw.
- *
- * A passkey voucher takes version 23, and version 24 when the browser adds an
- * optional field to the client data that it signs. A version above this means
- * something grew that nobody measured: a longer name, a different browser, or
- * a larger signature. The code still works, and it is denser than anything a
- * measurement covered, so the screen says so rather than letting it pass.
- */
-export const PLANNED_MAX_VERSION = 24;
 
 /** One QR symbol, ready to draw. */
 export interface Symbol_ {
@@ -134,18 +123,6 @@ export interface Scanned {
   readonly bytes: Uint8Array;
   /** The text form. Only a SEP-7 reader may use this. */
   readonly text: string;
-  /**
-   * How wide one module was in the frame, in pixels.
-   *
-   * This number decides whether a camera can read a code at all. A frame
-   * carries the symbol at some size, and the decoder must find each module
-   * inside it. The number therefore says how close to the limit a read came.
-   * A measurement that omits it says only that something worked.
-   *
-   * The value is null when the decoder names no version for the symbol,
-   * because the pitch follows from the version and the corners together.
-   */
-  readonly modulePixels: number | null;
 }
 
 /**
@@ -191,42 +168,10 @@ export function prepareDecoder(): Promise<unknown> {
   return loading;
 }
 
-/**
- * How wide one module was, out of one result.
- *
- * The decoder reports the version of the symbol and the four corners of it.
- * A symbol of version v has 4v + 17 modules on a side. The length of an edge,
- * divided by that count, is the pitch. The mean of the four edges is steadier
- * than one edge when the camera looks at the screen at an angle.
- */
-function modulePitch(found: ReadResult): number | null {
-  const version = Number.parseInt(found.version, 10);
-  if (!Number.isFinite(version) || version < 1) return null;
-  const modules = 4 * version + 17;
-  const at = found.position;
-  const edges =
-    span(at.topLeft, at.topRight) +
-    span(at.topRight, at.bottomRight) +
-    span(at.bottomRight, at.bottomLeft) +
-    span(at.bottomLeft, at.topLeft);
-  return edges / 4 / modules;
-}
-
-/** One corner that the decoder found, in frame pixels. */
-interface Corner {
-  readonly x: number;
-  readonly y: number;
-}
-
-/** How far apart two corners are, in pixels. */
-function span(from: Corner, to: Corner): number {
-  return Math.hypot(to.x - from.x, to.y - from.y);
-}
-
 /** Read one camera frame. */
 export async function decodeFrame(frame: ImageData): Promise<Scanned | null> {
   const found = await readBarcodes(frame, READER_OPTIONS);
   const first = found[0];
   if (first === undefined) return null;
-  return { bytes: first.bytes, text: first.text, modulePixels: modulePitch(first) };
+  return { bytes: first.bytes, text: first.text };
 }
