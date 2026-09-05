@@ -5,6 +5,7 @@
 // web server configuration depend on them.
 import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -20,6 +21,18 @@ const COPIED = ['index.html', 'app.css', 'manifest.webmanifest', 'icon.svg'];
 /** The oldest browsers that the application supports. */
 const TARGETS = ['chrome120', 'safari17', 'firefox121'];
 
+// The decoder's WebAssembly, carried inside the bundle.
+//
+// The library loads this file from a public network address by default, and a
+// payer with no network cannot reach one. A file beside the bundle would be a
+// request after the first paint. The service worker warns against one, because
+// it would reach the deleted cache of an earlier worker. Base64 inside
+// the bundle costs about a third more bytes than the file, and it removes both
+// faults: the shell already holds the bundle, and the worker already caches it.
+const require = createRequire(import.meta.url);
+const DECODER_WASM = require.resolve('zxing-wasm/reader/zxing_reader.wasm');
+const ZXING_WASM_BASE64 = readFileSync(DECODER_WASM).toString('base64');
+
 rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
 
@@ -31,8 +44,16 @@ await build({
   target: TARGETS,
   minify: true,
   sourcemap: true,
+  define: { ZXING_WASM_BASE64: JSON.stringify(ZXING_WASM_BASE64) },
   logLevel: 'info',
 });
+
+// The decoder must survive into the artifact. Without it the scanner loads
+// nothing, and the failure appears only when a merchant points a camera.
+const built = readFileSync(join(DIST, 'app.js'), 'utf8');
+if (!built.includes(ZXING_WASM_BASE64.slice(0, 64))) {
+  throw new Error('the build carries no decoder, so the scanner would read nothing');
+}
 
 for (const name of COPIED) cpSync(join(SOURCE, name), join(DIST, name));
 

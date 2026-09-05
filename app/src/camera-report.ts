@@ -1,7 +1,7 @@
 import { REAR_CAMERA, middleSquare, openCamera } from './camera.js';
 import { SCAN_FPS, SCAN_FRAME_HEIGHT, SCAN_FRAME_WIDTH } from './config.js';
 import { element } from './dom.js';
-import { decodeFrame } from './qr.js';
+import { decodeFrame, prepareDecoder } from './qr.js';
 
 /**
  * What the camera gives this device, measured rather than assumed.
@@ -227,11 +227,13 @@ async function watch(
     square = frame.width;
     sharp.push(sharpness(frame));
     const before = Date.now();
-    const found = decodeFrame(frame);
+    const found = await decodeFrame(frame);
     decodeTotal += Date.now() - before;
     if (found !== null) {
       decoded += 1;
-      modules.push(found.modulePixels);
+      // The decoder names no version for some symbols, and the pitch follows
+      // from the version. Those frames still count as reads.
+      if (found.modulePixels !== null) modules.push(found.modulePixels);
       firstDecodeMs ??= Date.now() - startedAt;
     }
   }
@@ -286,7 +288,7 @@ async function measure(
  * measures a symbol only when it finds one.
  */
 function pitch(measured: Measurement): string {
-  if (measured.decoded === 0) return 'no frame read, so no measurement';
+  if (measured.moduleHigh === 0) return 'no frame read, so no measurement';
   const say = (value: number): string => value.toFixed(2);
   return (
     `${say(measured.moduleLow)} low, ${say(measured.moduleMid)} middle, ` +
@@ -331,6 +333,10 @@ export function startCameraReport(): void {
 
   const lines: string[] = [];
   let busy = false;
+
+  // Every measurement times a decode, so the decoder must already be ready.
+  // Otherwise the first measurement would time the load as well.
+  void prepareDecoder();
 
   function write(text: string): void {
     lines.push(text);

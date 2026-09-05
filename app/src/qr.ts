@@ -1,5 +1,6 @@
-import jsQR from 'jsqr';
 import qrcode from 'qrcode-generator';
+import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
+import type { ReadResult, ReaderOptions } from 'zxing-wasm/reader';
 
 /**
  * QR symbols, in raw binary byte mode.
@@ -14,7 +15,18 @@ import qrcode from 'qrcode-generator';
  * - The platform's own barcode reader cannot read these codes. Its result
  *   carries a string, so any byte above 127 comes back through a decode that
  *   destroys it. A voucher reader must never use it.
- * - The decoder must hand back the bytes. `jsqr` does, as `binaryData`.
+ * - The decoder must hand back the bytes. This one does, as `bytes`.
+ *
+ * The decoder is the C++ ZXing library, through its WebAssembly build. The
+ * choice rests on a measurement rather than on a preference. Six decoders read
+ * the same modelled frames of a real voucher. Each one passed a frame only
+ * when it returned all 792 bytes unchanged.
+ *
+ * The frames carried two pixels for each module, at a lens blur of a third of
+ * a module. This decoder read eight frames of eight, in five milliseconds
+ * each. The previous decoder read three of eight, in eighty seven. This one is
+ * the faster reader and the better one at the same time. The previous decoder
+ * also had no release after April 2021.
  */
 
 /** The error correction levels that this build can draw. */
@@ -129,8 +141,75 @@ export interface Scanned {
    * carries the symbol at some size, and the decoder must find each module
    * inside it. The number therefore says how close to the limit a read came.
    * A measurement that omits it says only that something worked.
+   *
+   * The value is null when the decoder names no version for the symbol,
+   * because the pitch follows from the version and the corners together.
    */
-  readonly modulePixels: number;
+  readonly modulePixels: number | null;
+}
+
+/**
+ * The decoder, as WebAssembly and in base64, which the build writes in here.
+ *
+ * The bytes travel inside the bundle rather than beside it. A payer mints a
+ * voucher with no network, so the application must open with no network, and
+ * the worker holds the shell files for that. A separate file would be a
+ * request after the first paint, which is the one thing that the worker warns
+ * against. The library also fetches its own WebAssembly from a public network
+ * address by default, which a device with no network cannot reach.
+ */
+declare const ZXING_WASM_BASE64: string;
+
+/** What the reader looks for. A voucher is a QR symbol, and one of them. */
+const READER_OPTIONS: ReaderOptions = {
+  formats: ['QRCode'],
+  maxNumberOfSymbols: 1,
+  tryHarder: true,
+  tryInvert: true,
+};
+
+/** The decoder, once it is ready. One load serves every later frame. */
+let loading: Promise<unknown> | null = null;
+
+/** The decoder's own bytes, out of the base64 that the build wrote in. */
+function wasmBinary(): ArrayBuffer {
+  const text = window.atob(ZXING_WASM_BASE64);
+  const buffer = new ArrayBuffer(text.length);
+  const bytes = new Uint8Array(buffer);
+  for (let index = 0; index < text.length; index += 1) bytes[index] = text.charCodeAt(index);
+  return buffer;
+}
+
+/**
+ * Load the decoder.
+ *
+ * A caller does this before it opens a camera. The first frame then meets a
+ * decoder that is ready, rather than one that is still starting.
+ */
+export function prepareDecoder(): Promise<unknown> {
+  loading ??= prepareZXingModule({ overrides: { wasmBinary: wasmBinary() }, fireImmediately: true });
+  return loading;
+}
+
+/**
+ * How wide one module was, out of one result.
+ *
+ * The decoder reports the version of the symbol and the four corners of it.
+ * A symbol of version v has 4v + 17 modules on a side. The length of an edge,
+ * divided by that count, is the pitch. The mean of the four edges is steadier
+ * than one edge when the camera looks at the screen at an angle.
+ */
+function modulePitch(found: ReadResult): number | null {
+  const version = Number.parseInt(found.version, 10);
+  if (!Number.isFinite(version) || version < 1) return null;
+  const modules = 4 * version + 17;
+  const at = found.position;
+  const edges =
+    span(at.topLeft, at.topRight) +
+    span(at.topRight, at.bottomRight) +
+    span(at.bottomRight, at.bottomLeft) +
+    span(at.bottomLeft, at.topLeft);
+  return edges / 4 / modules;
 }
 
 /** One corner that the decoder found, in frame pixels. */
@@ -145,24 +224,9 @@ function span(from: Corner, to: Corner): number {
 }
 
 /** Read one camera frame. */
-export function decodeFrame(frame: ImageData): Scanned | null {
-  const found = jsQR(frame.data, frame.width, frame.height, {
-    inversionAttempts: 'attemptBoth',
-  });
-  if (found === null) return null;
-  const corners = found.location;
-  // A symbol of version v has 4v + 17 modules on a side. The four edges of
-  // the symbol therefore each cover that many modules. The mean of the four
-  // is steadier than one edge when the camera looks at the screen at an angle.
-  const modules = 4 * found.version + 17;
-  const edges =
-    span(corners.topLeftCorner, corners.topRightCorner) +
-    span(corners.topRightCorner, corners.bottomRightCorner) +
-    span(corners.bottomRightCorner, corners.bottomLeftCorner) +
-    span(corners.bottomLeftCorner, corners.topLeftCorner);
-  return {
-    bytes: Uint8Array.from(found.binaryData),
-    text: found.data,
-    modulePixels: edges / 4 / modules,
-  };
+export async function decodeFrame(frame: ImageData): Promise<Scanned | null> {
+  const found = await readBarcodes(frame, READER_OPTIONS);
+  const first = found[0];
+  if (first === undefined) return null;
+  return { bytes: first.bytes, text: first.text, modulePixels: modulePitch(first) };
 }

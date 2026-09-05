@@ -1,5 +1,5 @@
 import { SCAN_FPS, SCAN_FRAME_HEIGHT, SCAN_FRAME_WIDTH } from './config.js';
-import { decodeFrame } from './qr.js';
+import { decodeFrame, prepareDecoder } from './qr.js';
 import type { Scanned } from './qr.js';
 
 /**
@@ -129,6 +129,10 @@ export async function scanForSymbol(
   video: HTMLVideoElement,
   onFound: (scanned: Scanned) => void,
 ): Promise<Scan> {
+  // The decoder loads before the camera opens. A camera that runs while the
+  // decoder still starts throws its first frames away, and those are the
+  // frames that a person aimed.
+  await prepareDecoder();
   const stream = await openCamera(video, REAR_CAMERA);
 
   const canvas = document.createElement('canvas');
@@ -143,20 +147,23 @@ export async function scanForSymbol(
     video.srcObject = null;
   };
 
-  const readOneFrame = (): void => {
+  const readOneFrame = async (): Promise<void> => {
     if (!running || context === null) return;
     const frame = middleSquare(video, canvas, context);
     if (frame !== null) {
-      const found = decodeFrame(frame);
+      const found = await decodeFrame(frame);
+      // A merchant can stop the scan while a frame is still in the decoder.
+      // Without this the loop would report a voucher after the camera closed.
+      if (!running) return;
       if (found !== null) {
         stop();
         onFound(found);
         return;
       }
     }
-    timer = window.setTimeout(readOneFrame, Math.round(1000 / SCAN_FPS));
+    timer = window.setTimeout(() => void readOneFrame(), Math.round(1000 / SCAN_FPS));
   };
 
-  readOneFrame();
+  void readOneFrame();
   return { stop };
 }
