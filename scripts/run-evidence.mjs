@@ -50,6 +50,20 @@ const REASON_NONCE_CONSUMED = 'nonce already exists for address';
 const REASON_SIGNATURE_EXPIRED = 'signature has expired';
 
 /**
+ * The lifetimes that this run walks, named here rather than imported.
+ *
+ * The names below decide four row names, and a listing has to answer from the
+ * export alone. An imported value does not: a package resolves through the
+ * installed dependencies, which point at the working tree, so a listing that
+ * read this table from the package would report the names on somebody's desk
+ * while the archive it is compared against came from a commit.
+ *
+ * The assertion further down holds this equal to the table it mirrors, so the
+ * copy cannot drift into a lie.
+ */
+const LIFETIME_NAMES = Object.freeze(['5m', '15m', '1h', '12h']);
+
+/**
  * Every row that this command produces.
  *
  * The list exists so that a check can ask what the runner would produce without
@@ -67,9 +81,21 @@ export const PRODUCED_ROWS = Object.freeze([
   '8-void-success',
   '8-after-void-failed',
   'task3-handbuilt',
-  ...Object.keys(LIFETIMES).map((name) => `lifetime-${name}`),
+  ...LIFETIME_NAMES.map((name) => `lifetime-${name}`),
   'sep7-payment',
 ]);
+
+// The listing names the lifetimes without importing them, so this is where the
+// copy meets its source. A lifetime added to the library and not to the list
+// stops the run rather than quietly producing a row that no listing names.
+const missing = Object.keys(LIFETIMES).filter((name) => !LIFETIME_NAMES.includes(name));
+const extra = LIFETIME_NAMES.filter((name) => !(name in LIFETIMES));
+if (missing.length > 0 || extra.length > 0) {
+  throw new Error(
+    `the lifetimes that this run names and the library's table disagree: `
+    + `${missing.join(', ') || 'none'} missing, ${extra.join(', ') || 'none'} unknown`,
+  );
+}
 
 // Answer what this command produces, and spend nothing doing it. This stands
 // above every read of configuration on purpose. Asking what a command would

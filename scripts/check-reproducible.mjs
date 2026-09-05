@@ -37,26 +37,6 @@ const DEVICE_COMMAND = 'scripts/archive-device-row.mjs';
 /** Where the archive trees live, relative to the root of the repository. */
 const ARCHIVE_ROOT = path.join('scripts', 'out');
 
-/**
- * The workspaces that a producer can import from.
- *
- * A producer that imports `@senet/core` resolves it through the installed
- * dependencies, and that link points at the working tree rather than at the
- * export. Measured: an export resolves the package to
- * `packages/core/dist/src/index.js` under the repository root, not under the
- * export. The export carries no built output of its own, because a build is
- * not committed.
- *
- * So a listing that derives a row name from a workspace constant reads the
- * name from the desk while the archive it is compared against comes from
- * `HEAD`. Four of the evidence rows are named from a constant in `@senet/core`
- * exactly this way.
- *
- * That only matters when the two disagree, and this is the condition where
- * they can. The check refuses to answer rather than answering from a mixture
- * of the two.
- */
-const WORKSPACES = Object.freeze(['packages', 'server', 'app']);
 
 /**
  * Find every archive tree in the export, and read the producer each one names.
@@ -101,6 +81,14 @@ function exportHead() {
  * The producer answers for itself rather than being searched for names. A
  * search finds a string that looks like a row name and misses one that the code
  * builds from parts, and it cannot tell a live name from one in a comment.
+ *
+ * A listing must answer from the export alone. That is stronger than needing no
+ * environment file, and it rules out one thing that is easy to miss: a value
+ * imported from a workspace resolves through the installed dependencies, which
+ * point at the working tree rather than at the export. A listing built from
+ * such a value reports the names on somebody's desk while the archive beside it
+ * came from a commit. A producer here therefore names what it produces without
+ * importing it.
  */
 function producedBy(command) {
   const output = execFileSync('node', [path.join(EXPORT_DIR, command), '--list'], {
@@ -110,28 +98,9 @@ function producedBy(command) {
   return output.split('\n').map((line) => line.trim()).filter((line) => line !== '');
 }
 
-/** Whether a workspace differs from `HEAD`, which a producer's listing can read. */
-function dirtyWorkspaces() {
-  const output = execFileSync('git', ['diff', 'HEAD', '--name-only', '--', ...WORKSPACES], {
-    cwd: ROOT,
-    encoding: 'utf8',
-  });
-  return output.split('\n').map((line) => line.trim()).filter((line) => line !== '');
-}
-
 try {
   exportHead();
 
-  // A producer's listing can read a workspace from the working tree, so a
-  // workspace that differs from HEAD makes this check compare HEAD's archive
-  // against a listing that is partly the desk. It says so rather than
-  // reporting a result it cannot stand behind.
-  const dirty = dirtyWorkspaces();
-  check(dirty.length === 0,
-    dirty.length === 0
-      ? 'every workspace matches HEAD, so a listing cannot read uncommitted code'
-      : `${dirty.length} workspace files differ from HEAD, starting with ${dirty[0]}, `
-        + 'and a producer that imports one would list names this repository does not carry');
   console.log(`reading HEAD, unpacked into ${path.relative(ROOT, EXPORT_DIR)}\n`);
 
   const trees = treesInExport();
