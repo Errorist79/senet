@@ -133,30 +133,36 @@ async function main() {
 
     const startedAt = Date.now();
     await page.click('#merchant-scan');
-    // The scanner stops itself on the first read, so the panel filling is the
-    // event to wait for. A camera that never reads leaves it empty.
-    await page.waitForFunction(
-      () => (document.getElementById('merchant-result')?.textContent ?? '').length > 0,
-      { timeout: READ_TIMEOUT_MS },
-    ).catch(() => undefined);
+    // While the camera runs, the panel holds a line of guidance. A result, of
+    // either kind, replaces it with a `.result` box. That box is the event.
+    await page
+      .waitForSelector('#merchant-result .result', { timeout: READ_TIMEOUT_MS })
+      .catch(() => undefined);
     const readMs = Date.now() - startedAt;
-    const panel = await page.evaluate(
-      () => document.getElementById('merchant-result')?.textContent ?? '',
-    );
+    const panel = await page.evaluate(() => {
+      const box = document.querySelector('#merchant-result .result');
+      if (box === null) return { shown: false, text: '', reason: '' };
+      const rows = [...box.querySelectorAll('.detail')];
+      const named = rows.find((row) => row.querySelector('.detail-label')?.textContent === 'Reason');
+      return {
+        shown: true,
+        text: (box.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        reason: named?.querySelector('.detail-value')?.textContent ?? '',
+      };
+    });
 
-    console.log(`\npanel after ${readMs} ms: ${panel.trim().replace(/\s+/g, ' ') || '(nothing)'}`);
+    console.log(`\nafter ${readMs} ms: ${panel.shown ? panel.text : '(the panel stayed empty)'}`);
     if (failures.length > 0) console.log('browser errors:', failures.slice(0, 5));
 
-    // A refusal names the reason that the voucher reader gave. Any of those
-    // means the bytes arrived. A camera fault names itself instead, and an
-    // empty panel means no frame ever decoded.
-    const cameraFault = /camera/i.test(panel);
-    const decoded = panel.length > 0 && !cameraFault ? 1 : 0;
-
-    if (cameraFault) {
-      console.error('\nthe page reported a camera fault, so no frame reached the decoder');
+    // The camera names its own faults, and this run must not read one of those
+    // as a read. Every other reason comes from the voucher reader, which only
+    // speaks once the bytes reach it.
+    const CAMERA_FAULTS = ['refused', 'missing', 'unsupported', 'failed'];
+    if (panel.shown && CAMERA_FAULTS.includes(panel.reason)) {
+      console.error(`\nthe camera itself failed with '${panel.reason}', so nothing was read`);
       process.exit(1);
     }
+    const decoded = panel.shown ? 1 : 0;
     if (decoded === 0) {
       console.error(
         `\nthe browser read nothing in ${READ_TIMEOUT_MS} ms, so the scanner path is broken`,
