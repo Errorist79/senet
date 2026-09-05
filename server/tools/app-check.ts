@@ -41,6 +41,26 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * The names of the rows that this tool writes, when they can be known.
+ *
+ * They cannot. The run mints a voucher and deploys an account, and each row
+ * takes its name from one of those. Both names arrive with the run itself.
+ * This answer therefore names nothing and succeeds, and the reproducibility
+ * check exempts the rows on that basis.
+ *
+ * The answer comes before the tool reads anything. A question about what a
+ * command produces needs no keys, no network and no environment file. The
+ * reader who asks it is a person with a fresh clone, and that person holds no
+ * build either. **A listing must answer from the export alone.**
+ */
+function answerListing(): void {
+  if (!process.argv.includes('--list')) return;
+  process.exit(0);
+}
+
+answerListing();
+
 async function main(): Promise<void> {
   loadEnvFile();
   const config = readConfig();
