@@ -330,8 +330,14 @@ if (servedByService !== null) {
 } else {
   // This is the skew between the two links, and it disappears every time a
   // person runs this from a laptop. It said nothing while it disappeared.
-  skip(`the skew between the origin and the service, because ${SERVICE_RELEASE}`
-    + ' is not readable from here, so this run is not on the host');
+  //
+  // One skip for each check above, rather than one for the pair. A reader
+  // compares a run on the host with a run from a clone by counting. Two checks
+  // that did not run, recorded as one, leave a check unaccounted for. That is
+  // the arithmetic this file exists to keep honest.
+  const why = `because ${SERVICE_RELEASE} is not readable from here, so this run is not on the host`;
+  skip(`the commit skew between the origin and the service, ${why}`);
+  skip(`the release skew between the origin and the service, ${why}`);
 }
 
 // The merchant screen shows the name of a typed error, so the bundle has to
