@@ -19,6 +19,7 @@ import { ERROR_CORRECTION, PLANNED_MAX_VERSION, encodeBytes, drawToCanvas } from
 import { CODE_SIZE } from './config.js';
 import type { ErrorCorrection } from './qr.js';
 import { passkeySigner } from './passkey.js';
+import { redeemDetails } from './receipt.js';
 import { getAccount, getChain, getLedger, getVouchers, setVouchers } from './store.js';
 import type { StoredChain, StoredVoucher } from './store.js';
 
@@ -330,9 +331,8 @@ export function startPayerScreen(): void {
             ? 'Nobody else can use this voucher now. The funds stayed with you.'
             : 'The voucher is still out there. Try again.',
         ),
-        detail('Outcome', reply.outcome),
+        ...redeemDetails(reply),
       );
-      if (reply.hash !== null) box.append(detail('Transaction', short(reply.hash), reply.hash));
       fill(panel, box);
       if (reply.outcome === 'SUCCESS') {
         setVouchers(

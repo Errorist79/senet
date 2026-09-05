@@ -13,6 +13,7 @@ import { CONFIRM_POLL_MS, CONFIRM_TIMEOUT_MS } from './config.js';
 import type { Scan } from './camera.js';
 import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
 import { outcomeText } from './outcomes.js';
+import { redeemDetails } from './receipt.js';
 import {
   getAccount,
   getChain,
@@ -63,27 +64,8 @@ function showResult(panel: HTMLElement, reply: RedeemReply): void {
   box.append(
     make('h2', 'result-title', text.title),
     make('p', 'result-advice', text.advice),
-    detail('Outcome', reply.outcome),
-    detail('Amount', xlm(reply.amountStroops)),
-    detail('Voucher', reply.voucherId),
-    detail('Payer', short(reply.payer), reply.payer),
-    detail('Recipient', short(reply.recipient), reply.recipient),
+    ...redeemDetails(reply),
   );
-  if (reply.hash !== null) {
-    const row = detail('Transaction', short(reply.hash), reply.hash);
-    const link = make('a', 'detail-link', 'open');
-    if (link instanceof HTMLAnchorElement) {
-      link.href = `https://stellar.expert/explorer/testnet/tx/${reply.hash}`;
-      link.target = '_blank';
-      link.rel = 'noreferrer';
-      row.append(link);
-    }
-    box.append(row);
-  }
-  if (reply.ledger !== null) box.append(detail('Ledger', String(reply.ledger)));
-  if (reply.feeChargedStroops !== null) {
-    box.append(detail('Fee charged', xlm(reply.feeChargedStroops)));
-  }
   fill(panel, box);
   if (reply.outcome === 'SUCCESS') void confirmFromFeed(box, reply);
 }
