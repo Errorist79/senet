@@ -296,10 +296,18 @@ function pitch(measured: Measurement): string {
   );
 }
 
-/** One measurement, as a person reads it. */
-function report(measured: Measurement): string {
+/**
+ * One measurement, as a person reads it.
+ *
+ * The note is what a person typed before they measured. A run that walks the
+ * two phones apart makes one block for each distance. The blocks are otherwise
+ * alike. Without the note, nobody can say later which reading belongs to which
+ * distance.
+ */
+function report(measured: Measurement, note: string): string {
   const rate = measured.frames === 0 ? 0 : Math.round((measured.decoded / measured.frames) * 100);
   return [
+    ...(note === '' ? [] : [`note       ${note}`]),
     `camera     ${measured.label}`,
     `id         ${measured.deviceId}`,
     `asked      ${measured.asked}`,
@@ -326,6 +334,7 @@ export function startCameraReport(): void {
   const status = element('report-status', HTMLParagraphElement);
   const cameras = element('report-cameras', HTMLDivElement);
   const output = element('report-output', HTMLPreElement);
+  const noteInput = element('report-note', HTMLInputElement);
   const findButton = element('report-find', HTMLButtonElement);
   const frameButton = element('report-frames', HTMLButtonElement);
   const zoomButton = element('report-zoom', HTMLButtonElement);
@@ -359,6 +368,11 @@ export function startCameraReport(): void {
     status.textContent = text;
   }
 
+  /** What a person typed to describe the measurement that follows. */
+  function note(): string {
+    return noteInput.value.trim();
+  }
+
   function failure(caught: unknown): string {
     return caught instanceof Error ? caught.message : String(caught);
   }
@@ -369,7 +383,7 @@ export function startCameraReport(): void {
     video.hidden = false;
     say(`Measuring ${label}. Hold the code in the middle of the picture.`);
     try {
-      write(report(await measure(video, wanted, label, asked)));
+      write(report(await measure(video, wanted, label, asked), note()));
       say('Done. Measure another camera, or copy the report.');
     } catch (caught) {
       write(`camera     ${label}\nfailed     ${failure(caught)}`);
@@ -403,7 +417,7 @@ export function startCameraReport(): void {
         const label = `a frame ${width} wide`;
         say(`Asking for ${width}. Hold the code still in the middle.`);
         try {
-          write(report(await measure(video, wanted, label, describe(wanted), SWEEP_MS)));
+          write(report(await measure(video, wanted, label, describe(wanted), SWEEP_MS), note()));
         } catch (caught) {
           write(`camera     ${label}\nfailed     ${failure(caught)}`);
         }
@@ -450,7 +464,7 @@ export function startCameraReport(): void {
         } catch (caught) {
           asked = `zoom ${zoom}, refused: ${failure(caught)}`;
         }
-        write(report(await watch(video, track, `zoom ${zoom}`, asked, SWEEP_MS)));
+        write(report(await watch(video, track, `zoom ${zoom}`, asked, SWEEP_MS), note()));
       }
       say('The zoom sweep finished. Copy the report.');
     } catch (caught) {

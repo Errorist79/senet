@@ -205,6 +205,22 @@
           for the whole of a sweep. Only then does a sweep measure the thing
           that it changes.
         </p>
+        <p class="screen-note">
+          The box above writes a line into every measurement that follows it.
+          Put the distance in it, and the report says which reading belongs to
+          which distance. A reading with no note describes nothing later.
+        </p>
+
+        <label class="field">
+          <span class="field-label">What this measurement is of</span>
+          <input
+            class="field-input"
+            id="report-note"
+            type="text"
+            autocomplete="off"
+            placeholder="21 cm"
+          />
+        </label>
 
         <button class="submit" id="report-find" type="button">Find the cameras</button>
         <button class="submit" id="report-frames" type="button">Measure the frame sizes</button>
