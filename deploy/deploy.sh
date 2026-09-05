@@ -116,6 +116,22 @@ cat > "$RELEASE/app/dist/release.json" <<JSON
 JSON
 echo "    release $STAMP carries commit $COMMIT"
 
+# The service identifies a caller by the first entry of the forwarded header,
+# and its budget on the redemption route is keyed on that. So the header has to
+# be set here rather than appended to, or a caller names itself and the budget
+# bounds nobody. Measured before this was fixed: fifteen requests from fifteen
+# forged addresses were not refused once.
+#
+# The property lives in two files that never mention each other, and the moment
+# it can break is a deployment, which is here. Somebody adding a second proxy
+# would reach for the appending form for a good reason.
+if grep -q 'proxy_add_x_forwarded_for' "$RELEASE/deploy/nginx-senet.conf"; then
+  echo "the web server configuration appends to X-Forwarded-For" >&2
+  echo "a caller can then set the first entry and name itself, and the budget on" >&2
+  echo "/api/redemption stops bounding anybody. Set the header from \$remote_addr." >&2
+  exit 1
+fi
+
 echo "==> installing the web server configuration"
 mkdir -p /etc/nginx/snippets
 install -m 0644 "$RELEASE/deploy/nginx-senet-common-headers.conf" \
