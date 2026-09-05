@@ -63,6 +63,15 @@ const LISTENER_AGE_MAX_MS = 10 * 60 * 1000;
 /** A common phone viewport. The session runs on phones, not on a desktop. */
 const PHONE = Object.freeze({ width: 390, height: 844 });
 
+/**
+ * The bytes that a passkey voucher really carries.
+ *
+ * A signed entry measures 792 bytes, and the payload carries a five byte prefix
+ * in front of it. The length decides the symbol version, so a code drawn from
+ * any other length would sit at a density that no payer ever sees.
+ */
+const PAYLOAD_BYTES = 797;
+
 /** Elements that every screen carries, which must never need a sideways scroll. */
 const ALWAYS_ON_SCREEN = Object.freeze([
   ['the ledger reading', '#ledger'],
@@ -73,16 +82,20 @@ const ALWAYS_ON_SCREEN = Object.freeze([
 ]);
 
 /**
- * What only a minted voucher puts on the screen.
+ * What only a stored voucher puts on the screen.
  *
  * This list held three entries. Two of them, the size line and the level
  * control, named a measurement surface that the application no longer carries.
- * A selector that can never match makes a check that can never fail, and this
- * one sat inside a block that no unattended run reaches, so it would have said
- * nothing for as long as anybody left it here.
+ * A selector that can never match makes a check that can never fail, and the
+ * block that held it ran for nobody, so neither fact ever reached a person.
+ *
+ * The block runs now. The check stores a voucher and paints it, so a selector
+ * that goes stale takes the run down with it.
  */
+const CODE_SELECTOR = 'canvas.code';
+
 const SESSION_ELEMENTS = Object.freeze([
-  ['the code', 'canvas.code'],
+  ['the code', CODE_SELECTOR],
 ]);
 
 const args = process.argv.slice(2);
@@ -90,6 +103,27 @@ const args = process.argv.slice(2);
 // a clean machine, cannot accept a number that quietly counts fewer checks.
 const COMPLETE = args.includes('--complete');
 const origin = args.find((one) => !one.startsWith('--')) ?? DEFAULT_ORIGIN;
+/**
+ * How many checks this suite is allowed to leave out of reach.
+ *
+ * `outOfReach` names something that no setup can supply, so `--complete`
+ * cannot refuse it the way it refuses a skip. That makes it the one place
+ * where a check can stop running and nothing complains. It is how a check goes
+ * quiet: the size line and the level control sat in such a block with
+ * selectors that could no longer match anything, and because the block ran for
+ * nobody, neither fact ever reached a person.
+ *
+ * The number is zero. Every check in this suite reaches its subject today, and
+ * the last one that did not now stores a voucher and paints it rather than
+ * waiting for a person to mint one.
+ *
+ * A new entry pushes the total past zero and `--complete` refuses the run.
+ * Raising this number is an edit to this line, it shows in a diff, and whoever
+ * raises it owes a reason. Reaching the subject is nearly always cheaper than
+ * the reason.
+ */
+const NOT_REACHED_ALLOWED = 0;
+
 const problems = [];
 const skipped = [];
 const unreachable = [];
@@ -397,7 +431,51 @@ if (chromePath === undefined || chromePath === '') {
     // renders correct text in a place that nobody can photograph, so the check
     // measures where each element sits rather than what it says.
     await page.setViewport(PHONE);
+
+    // A code appears only after a payer mints one, and no unattended run signs
+    // a passkey. The panel that draws it does not need one: it reads a stored
+    // voucher and paints its payload. So the check stores a voucher of the size
+    // that a passkey really produces, and the code it measures is the code a
+    // payer sees.
+    //
+    // This is why the block below runs at all. It used to sit out of reach, and
+    // two of the three elements it named had stopped existing without anything
+    // saying so.
+    await page.evaluate(
+      (payload) => {
+        window.localStorage.setItem(
+          'senet.vouchers',
+          JSON.stringify([
+            {
+              voucherId: 'a'.repeat(32),
+              amountStroops: '10000000',
+              expireAt: 1,
+              mintedAtMs: 0,
+              payloadBase64: payload,
+              state: 'active',
+              voidHash: null,
+            },
+          ]),
+        );
+      },
+      Buffer.from(
+        Uint8Array.from({ length: PAYLOAD_BYTES }, (unused, at) => (at * 31 + 7) & 0xff),
+      ).toString('base64'),
+    );
     await page.goto(origin, { waitUntil: 'load' });
+    await page.click('#nav-payer');
+    // The list draws one row for the stored voucher, and its `Show` button
+    // paints the code.
+    const painted = await page
+      .waitForSelector('#payer-list button', { visible: true, timeout: 10_000 })
+      .then(async (button) => {
+        await button.click();
+        await page.waitForSelector(CODE_SELECTOR, { visible: true, timeout: 10_000 });
+        return true;
+      })
+      .catch(() => false);
+    check(painted, 'a stored voucher drew no code, so the payer screen cannot show one');
+
     const frame = await page.evaluate((selectors) => {
       const seen = {};
       for (const [label, selector] of selectors) {
@@ -472,6 +550,14 @@ for (const one of skipped) console.log(`SKIPPED: ${one}`);
 for (const one of unreachable) console.log(`NOT REACHED: ${one}`);
 if (problems.length > 0) {
   throw new Error(`${problems.length} of ${checks} checks failed`);
+}
+if (COMPLETE && unreachable.length > NOT_REACHED_ALLOWED) {
+  throw new Error(
+    `${unreachable.length} checks are out of reach and this suite allows ` +
+      `${NOT_REACHED_ALLOWED}. A check that nothing can reach is a check that ` +
+      `nothing enforces. Make the new one reachable, or raise ` +
+      `NOT_REACHED_ALLOWED in this file and say why.`,
+  );
 }
 if (skipped.length > 0) {
   if (COMPLETE) {
