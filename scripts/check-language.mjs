@@ -46,9 +46,9 @@ const BUILD_OUTPUT = new Set(['node_modules', 'dist', 'target']);
  *
  * A name matches at any depth, and a new directory that shares a word with an
  * old one then disappears without a word. That happened here. The name
- * `evidence` was in the list for a source package, and it took the generated
- * tree `scripts/out/evidence` with it, while the three trees beside that one
- * stayed in the walk. Nobody chose that, and nothing reported it.
+ * `evidence` was in the list for a source package. It took the generated tree
+ * `scripts/out/evidence` with it, and the three trees beside that one stayed
+ * in the walk. Nobody chose that, and nothing reported it.
  *
  * A path names one directory and nothing else. The report below names each of
  * these and counts the files that it hides, so a skip is as visible as a
