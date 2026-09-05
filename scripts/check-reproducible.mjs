@@ -131,7 +131,18 @@ function exportHead() {
  * that the code builds from parts. It also cannot tell a live name from a name
  * in a comment.
  *
- * A listing must answer from the export alone. That is stronger than needing no
+ * A listing must answer from the export alone.
+ *
+ * That covers a stale build as well as a missing one. A producer imports the
+ * library, and the library resolves to built output that can be older than the
+ * source it came from. A listing built from an imported value would then answer
+ * from the previous compile while the archive beside it came from a commit.
+ *
+ * Measured rather than assumed: with the built lifetime table edited to name a
+ * lifetime that no source names, all four producers print the same bytes as
+ * before. No listing here reads a built value today.
+ *
+ * The rule is stronger than needing no
  * environment file, and it rules out one thing that is easy to miss: a value
  * imported from a workspace resolves through the installed dependencies, which
  * point at the working tree rather than at the export. A listing built from
