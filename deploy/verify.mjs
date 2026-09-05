@@ -332,9 +332,9 @@ if (servedByService !== null) {
   // person runs this from a laptop. It said nothing while it disappeared.
   //
   // One skip for each check above, rather than one for the pair. A reader
-  // compares a run on the host with a run from a clone by counting. Two checks
-  // that did not run, recorded as one, leave a check unaccounted for. That is
-  // the arithmetic this file exists to keep honest.
+  // counts the checks in a run on the host and in a run from a clone. Two
+  // checks that did not run, recorded as one, leave a check unaccounted for.
+  // That is the arithmetic this file exists to keep honest.
   const why = `because ${SERVICE_RELEASE} is not readable from here, so this run is not on the host`;
   skip(`the commit skew between the origin and the service, ${why}`);
   skip(`the release skew between the origin and the service, ${why}`);
