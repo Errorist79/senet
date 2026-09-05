@@ -26,7 +26,8 @@
     "listen": "npm run build && node dist/tools/listen.js",
     "listen-check": "npm run build && node dist/tools/listen-check.js",
     "confirm-check": "npm run build && node dist/tools/confirm-check.js",
-    "payee-check": "npm run build && node dist/tools/payee-check.js"
+    "payee-check": "npm run build && node dist/tools/payee-check.js",
+    "pay-check": "npm run build && node dist/tools/pay-check.js"
   },
   "dependencies": {
     "@senet/core": "0.1.0",
