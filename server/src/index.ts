@@ -21,5 +21,6 @@ export * from './http/read.js';
 export * from './http/redeem.js';
 export * from './http/redemptions.js';
 export * from './http/payee.js';
+export * from './http/pay.js';
 export * from './http/account.js';
 export * from './http/router.js';

@@ -11,5 +11,6 @@ export * from './errors.js';
 export * from './ledger.js';
 export * from './invariants.js';
 export * from './voucher.js';
+export * from './transfer.js';
 export * from './payload.js';
 export * from './sep7.js';

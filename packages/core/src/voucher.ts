@@ -88,7 +88,7 @@ export function redeemArgs(voucher: Voucher, recipient: string): xdr.ScVal[] {
 }
 
 /** One authorized contract call. */
-function contractFn(
+export function contractFn(
   contractId: string,
   name: string,
   args: xdr.ScVal[],

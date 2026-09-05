@@ -7,6 +7,7 @@ import { RequestBudget } from './budget.js';
 import { balanceRoute, configRoute, ledgerRoute, statusRoute } from './read.js';
 import { acceptRedemptionRoute, feedRoute } from './redemptions.js';
 import { payeeRoute } from './payee.js';
+import { payRoute } from './pay.js';
 import { deployRoute, fundRoute } from './account.js';
 import { redeemRoute } from './redeem.js';
 import {
@@ -51,6 +52,7 @@ const ROUTES: Readonly<Record<string, Route>> = {
   'GET /redemption': (context, _body, url) => feedRoute(context, url),
   'POST /redemption': (context, body) => acceptRedemptionRoute(context, body),
   'POST /payee-request': (context, body) => payeeRoute(context.config, body),
+  'POST /pay': (context, body) => payRoute(context, body),
 };
 
 /**
@@ -63,6 +65,7 @@ const SPENDING_ROUTES: ReadonlySet<string> = new Set([
   'POST /redeem',
   'POST /deploy',
   'POST /fund',
+  'POST /pay',
   // This one spends no fee. It reads the chain once per request, which is a
   // cost that a caller can repeat, so it carries the tighter budget.
   'POST /redemption',
