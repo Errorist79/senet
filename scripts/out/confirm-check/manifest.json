@@ -2,6 +2,7 @@
   "network": "Test SDF Network ; September 2015",
   "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
   "producedAt": "2026-09-04T22:58:54.885Z",
+  "producedBy": "scripts/run-confirmation.mjs",
   "rows": [
     {
       "name": "confirm-1a-success",
