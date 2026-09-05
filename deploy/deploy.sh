@@ -208,4 +208,5 @@ ls -1 | sort -r | tail -n +$((KEEP + 1)) | while read -r old; do
 done
 
 echo "==> done. Check it from outside the host:"
-echo "    CHROME_PATH=/path/to/chrome node $RELEASE/deploy/verify.mjs"
+echo "    CHROME_PATH=/path/to/chrome node $RELEASE/deploy/verify.mjs --complete"
+echo "    --complete refuses a run that skipped a check, which a silent skip once hid"

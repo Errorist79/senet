@@ -6,9 +6,16 @@
 // wrong.
 //
 //   CHROME_PATH=/path/to/chrome node deploy/verify.mjs [https://senet.hoodrun.io]
+//   CHROME_PATH=/path/to/chrome node deploy/verify.mjs --complete
 //
 // The browser check needs Chrome, which `CHROME_PATH` names. Without that
-// variable the command runs every other check and says that it skipped one.
+// variable the command runs every other check and names the one that it
+// skipped, in the summary and not only in passing.
+//
+// `--complete` refuses a run that skipped anything. Use it on the host, where
+// every file and the browser are present. A release that a person tags, and a
+// reproduction on a clean machine, both need the whole suite rather than the
+// part of it that the machine happened to allow.
 
 import { launch } from 'puppeteer-core';
 // The name that the deployed release declares. A commit is the only thing that
@@ -72,13 +79,52 @@ const SESSION_ELEMENTS = Object.freeze([
   ['the code', 'canvas.code'],
 ]);
 
-const origin = process.argv[2] ?? DEFAULT_ORIGIN;
+const args = process.argv.slice(2);
+// Every check must run. A deployment that this run tags, or a reproduction on
+// a clean machine, cannot accept a number that quietly counts fewer checks.
+const COMPLETE = args.includes('--complete');
+const origin = args.find((one) => !one.startsWith('--')) ?? DEFAULT_ORIGIN;
 const problems = [];
+const skipped = [];
+const unreachable = [];
 let checks = 0;
 
 function check(holds, message) {
   checks += 1;
   if (!holds) problems.push(message);
+}
+
+/**
+ * Record a check that did not run.
+ *
+ * A skipped check counts nothing and reports nothing, so the closing number
+ * shrinks and the closing sentence still says that everything answered. That
+ * happened: `CHROME_PATH` was set and not exported, the whole browser check
+ * fell away, and the run said it answered every check over twenty fewer of
+ * them. A skip is now a fact that the summary carries, and `--complete`
+ * refuses the run outright.
+ */
+function skip(what) {
+  skipped.push(what);
+  console.log(`  SKIPPED ${what}`);
+}
+
+/**
+ * Record a check that this run cannot reach by its nature.
+ *
+ * The difference from `skip` is the fix. A skip names something that a person
+ * can supply: a browser, a file that only the host holds. Run it in the right
+ * place with the right variable and the check runs. This names something that
+ * no setup supplies, because the run would have to mint a voucher with a
+ * passkey, and no unattended run does that.
+ *
+ * Keep this list at the two entries it has. Anything a person can fix by
+ * running the command differently is a skip, and moving it here to make a run
+ * pass is the exact fault that this pair exists to stop.
+ */
+function outOfReach(what) {
+  unreachable.push(what);
+  console.log(`  NOT REACHED ${what}`);
 }
 
 console.log(`checking ${origin}\n`);
@@ -175,7 +221,7 @@ if (existsSync(SERVED_NGINX)) {
       ? 'the served configuration appends to X-Forwarded-For, so a caller names itself'
       : 'the served configuration does not set X-Forwarded-For from the connection');
 } else {
-  console.log(`  SKIPPED the forwarded header, because ${SERVED_NGINX} is not readable from here`);
+  skip(`the forwarded header, because ${SERVED_NGINX} is not readable from here`);
 }
 
 const listener = status.listener ?? null;
@@ -193,6 +239,8 @@ if (listener !== null) {
     typeof listener.ageMs === 'number'
       ? `the cursor was written ${Math.round(listener.ageMs / 1000)} seconds ago`
       : 'the status route gives the cursor no age, so nothing here shows a stopped listener');
+} else {
+  skip('everything about the listener, because the status route reports none');
 }
 
 // A passkey binds to the domain that created it. The browser derives that
@@ -214,6 +262,8 @@ check(RP_ID === host,
 if (typeof config.rpId === 'string') {
   check(config.rpId === RP_ID,
     `the service serves the relying party ${config.rpId}, and the release declares ${RP_ID}`);
+} else {
+  skip('the relying party that the service serves, because it serves none');
 }
 
 // The origin names the commit it serves. A content search cannot tell a release
@@ -233,6 +283,11 @@ if (servedByService !== null) {
     `the origin serves commit ${release.commit} and the service runs ${servedByService.commit}`);
   check(servedByService.release === release.release,
     `the origin serves release ${release.release} and the service runs ${servedByService.release}`);
+} else {
+  // This is the skew between the two links, and it disappears every time a
+  // person runs this from a laptop. It said nothing while it disappeared.
+  skip(`the skew between the origin and the service, because ${SERVICE_RELEASE}`
+    + ' is not readable from here, so this run is not on the host');
 }
 
 // The merchant screen shows the name of a typed error, so the bundle has to
@@ -277,7 +332,8 @@ console.log('                the browser derives the real one from the origin');
 // Only a browser answers that, so this check drives one.
 const chromePath = process.env.CHROME_PATH;
 if (chromePath === undefined || chromePath === '') {
-  console.log('\n  SKIPPED the browser check, because CHROME_PATH names no browser');
+  console.log('');
+  skip('the browser check, because CHROME_PATH names no browser');
 } else {
   const browser = await launch({
     executablePath: chromePath,
@@ -377,8 +433,9 @@ if (chromePath === undefined || chromePath === '') {
     // person mints a voucher. A check that cannot reach them says so.
     const shown = SESSION_ELEMENTS.filter(([label]) => frame.seen[label] !== null);
     if (shown.length === 0) {
-      console.log(`\n  SKIPPED the geometry of ${SESSION_ELEMENTS.length} elements that a`
-        + ' voucher creates, because this check makes no account');
+      console.log('');
+      outOfReach(`the geometry of ${SESSION_ELEMENTS.length} elements that a voucher`
+        + ' creates, because this run mints none');
     } else {
       const boxes = shown.map(([label]) => frame.seen[label]);
       const top = Math.min(...boxes.map((box) => box.top));
@@ -403,9 +460,20 @@ if (chromePath === undefined || chromePath === '') {
   }
 }
 
-console.log(`\n${checks} checks`);
+console.log(`\n${checks} checks, ${skipped.length} skipped, ${unreachable.length} out of reach`);
 for (const problem of problems) console.log(`PROBLEM: ${problem}`);
+for (const one of skipped) console.log(`SKIPPED: ${one}`);
+for (const one of unreachable) console.log(`NOT REACHED: ${one}`);
 if (problems.length > 0) {
   throw new Error(`${problems.length} of ${checks} checks failed`);
 }
-console.log('the deployment answers every check');
+if (skipped.length > 0) {
+  if (COMPLETE) {
+    throw new Error(
+      `${skipped.length} checks did not run, and --complete demands all of them`,
+    );
+  }
+  console.log(`the deployment answers the ${checks} checks that ran, and ${skipped.length} did not run`);
+} else {
+  console.log(`the deployment answers every check that this run can reach, and ${checks} ran`);
+}
