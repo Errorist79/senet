@@ -136,13 +136,23 @@ export interface Manifest {
   /** When the command produced the set. */
   readonly producedAt: string;
   /**
-   * The command that produced this set, as a path in the repository.
+   * The command that writes this set, as a path in the repository.
    *
    * A tree that names its own producer lets a check ask that command what it
    * makes, rather than a check carrying a list of every producer. A list has to
    * be edited whenever a producer is added, and a list that somebody forgets to
    * edit leaves a tree silently unchecked, which is the failure this field
    * removes.
+   *
+   * It says which command writes the file, and not that one run made every row
+   * in it. Some sets are built up over many runs: a command that archives one
+   * row at a time reads the set, adds a row and writes the whole file back, so
+   * rows from earlier runs stay. The field is true of such a set because that
+   * command wrote the file it sits in.
+   *
+   * It is therefore false until that command has written the file. Adding it by
+   * hand to a set that no command writes makes a check pass on a claim that
+   * nothing supports, which is the failure the check exists to find.
    */
   readonly producedBy?: string;
   /** The figures that the set claims, for a set that measures something. */
