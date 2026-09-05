@@ -176,18 +176,27 @@ test('the added field measures the same in both entries', () => {
 });
 
 /** Encode a payload, paint it, scan it, and give back what the scan read. */
-function throughTheCamera(payload: Uint8Array): { bytes: Uint8Array; version: number } {
+async function throughTheCamera(
+  payload: Uint8Array,
+): Promise<{ bytes: Uint8Array; version: number }> {
   const symbol = encodeSymbol(payload);
   const image = rasterize(symbol);
-  const scanned = decodeSymbol(image.data, image.width, image.width);
+  const scanned = await decodeSymbol(image.data, image.width, image.width);
   assert.ok(scanned !== null, 'the decoder read no symbol');
-  return { bytes: Uint8Array.from(scanned.binaryData), version: symbol.version };
+  // The encoder and the decoder each name a version. They describe one symbol,
+  // so a disagreement means one of the two moved under the other.
+  assert.equal(
+    scanned.version,
+    symbol.version,
+    `the encoder wrote version ${symbol.version} and the decoder read ${scanned.version}`,
+  );
+  return { bytes: scanned.bytes, version: symbol.version };
 }
 
-test('a real payload survives the whole path, from encode to decode', () => {
+test('a real payload survives the whole path, from encode to decode', async () => {
   const entry = buildVoucherEntry(config, voucher, nonce);
   const payload = encodeVoucher(config, entry);
-  const scanned = throughTheCamera(payload);
+  const scanned = await throughTheCamera(payload);
   assert.deepEqual(scanned.bytes, payload);
   assert.equal(
     decodeVoucher(config, scanned.bytes).entry.toXDR('base64'),
@@ -195,11 +204,11 @@ test('a real payload survives the whole path, from encode to decode', () => {
   );
 });
 
-test('a payload of the passkey size survives the whole path', () => {
+test('a payload of the passkey size survives the whole path', async () => {
   const entry = entryOfSize(PASSKEY_ENTRY_BYTES);
   assert.equal(entry.toXDR().length, PASSKEY_ENTRY_BYTES);
   const payload = encodeVoucher(config, entry);
-  const scanned = throughTheCamera(payload);
+  const scanned = await throughTheCamera(payload);
   assert.equal(scanned.version, VOUCHER_QR_VERSION);
   assert.deepEqual(scanned.bytes, payload);
   assert.equal(

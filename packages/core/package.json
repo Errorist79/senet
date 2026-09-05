@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "22.20.1",
-    "jsqr": "1.4.0",
-    "qrcode-generator": "1.5.2"
+    "qrcode-generator": "1.5.2",
+    "zxing-wasm": "3.1.3"
   }
 }

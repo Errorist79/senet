@@ -1,36 +1,60 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import type { Options, QRCode } from 'jsqr';
+import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 
 /**
- * The pinned decoder, bound to a type that matches what it really is.
+ * The pinned decoder, with its WebAssembly taken from this checkout.
  *
- * `jsqr` 1.4.0 is a CommonJS package, and it sets `module.exports` to the
- * decoder function. Its declaration file instead says `export default`, so a
- * type checker reads the module as a namespace and finds no call signature on
- * it. Version 1.4.0 is the latest release, so the fault has no upstream fix to
- * take.
+ * This is the decoder that the application ships. A test that used a different
+ * decoder would prove a property of that other library. The product would then
+ * rest on a claim that nothing checks.
  *
- * The remedy is to load the module and inspect what arrived. The guard below
- * is the narrowest check available at this boundary: the module must be a
- * function, and it must take the three arguments that the decoder documents.
- * A future release that changes the shape fails here, loudly, rather than
- * where a caller uses the result.
+ * `zxing-wasm` fetches its WebAssembly from a public network address unless a
+ * caller hands it the bytes. A test that reaches the network measures the
+ * network as well as the decoder, and it fails where there is none. This reads
+ * the file that the pinned release installed instead.
  */
-export type DecodeSymbol = (
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  options?: Options,
-) => QRCode | null;
+const wasmFile = readFileSync(
+  createRequire(import.meta.url).resolve('zxing-wasm/reader/zxing_reader.wasm'),
+);
+const wasmBinary = new ArrayBuffer(wasmFile.byteLength);
+new Uint8Array(wasmBinary).set(wasmFile);
 
-function isDecodeSymbol(value: unknown): value is DecodeSymbol {
-  return typeof value === 'function' && value.length >= 3;
+/** The decoder, once it is ready. One load serves every later image. */
+let loading: Promise<unknown> | null = null;
+
+function decoder(): Promise<unknown> {
+  loading ??= prepareZXingModule({ overrides: { wasmBinary }, fireImmediately: true });
+  return loading;
 }
 
-const loaded: unknown = createRequire(import.meta.url)('jsqr');
-if (!isDecodeSymbol(loaded)) {
-  throw new Error('jsqr did not load a decoder function');
+/** What one scan of one image found. */
+export interface ScannedSymbol {
+  /** The payload bytes, which a voucher needs unchanged. */
+  readonly bytes: Uint8Array;
+  /** The version that the decoder read out of the symbol. */
+  readonly version: number;
 }
 
 /** Read one image, and report the symbol in it. */
-export const decodeSymbol: DecodeSymbol = loaded;
+export async function decodeSymbol(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): Promise<ScannedSymbol | null> {
+  await decoder();
+  // `ImageData` holds its pixels in a plain `ArrayBuffer` and never a shared
+  // one. A rasterizer makes no such promise about its own buffer. This copy
+  // carries the promise, where a cast would only claim it.
+  const buffer = new ArrayBuffer(data.length);
+  const pixels = new Uint8ClampedArray(buffer);
+  pixels.set(data);
+  const found = await readBarcodes(
+    { data: pixels, width, height, colorSpace: 'srgb' },
+    { formats: ['QRCode'], maxNumberOfSymbols: 1, tryHarder: true, tryInvert: true },
+  );
+  const first = found[0];
+  if (first === undefined) return null;
+  const version = Number.parseInt(first.version, 10);
+  return { bytes: first.bytes, version: Number.isFinite(version) ? version : 0 };
+}
