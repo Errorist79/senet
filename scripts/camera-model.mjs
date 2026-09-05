@@ -1,7 +1,7 @@
 // A camera, modelled well enough to compare decoders against each other.
 //
-// The symbol and the decoders are real. Only the camera is a model, and it has
-// the four stages that a real camera has, in the order that a real camera has
+// The symbol and the decoders are real. Only the camera is a model. It has the
+// four stages that a real camera has, in the order that a real camera has
 // them:
 //
 //   1. The screen shows the symbol. This draws it at a high whole number of
@@ -43,8 +43,8 @@ const NOISE_LEVELS = 3;
 /**
  * A repeatable random source.
  *
- * Two runs of a comparison have to agree, or a difference between two decoders
- * cannot be told from a difference between two runs.
+ * Two runs of a comparison have to agree. Otherwise nobody can tell a
+ * difference between two decoders from a difference between two runs.
  */
 export function randomSource(seed) {
   let state = seed >>> 0;
@@ -58,7 +58,7 @@ export function randomSource(seed) {
  * Draw a symbol of `payloadBytes` bytes at `SUPERSAMPLE` pixels a module.
  *
  * The bytes are arbitrary, which is what a voucher carries. They travel
- * through a latin1 string that maps one character to one byte, which is the
+ * through a latin1 string that maps one character to one byte. That is the
  * documented way to give this encoder data that is not text.
  */
 export function continuousSymbol(payloadBytes, level = 'M', seed = 20260905) {
@@ -144,9 +144,9 @@ export function blur(picture, side, sigma) {
 /**
  * Sample the continuous picture onto a grid of `outputSide` pixels.
  *
- * `phase` moves the sampling grid inside one output pixel, from 0 to 1. It is
- * the uncontrolled variable of the real measurement, so a sweep that holds it
- * at one value reports a coin toss rather than a rate.
+ * `phase` moves the grid that samples, inside one output pixel, from 0 to 1.
+ * It is the uncontrolled variable of the real measurement. A sweep that holds
+ * it at one value reports a coin toss rather than a rate.
  */
 export function sample(picture, side, outputSide, phase) {
   const step = side / outputSide;

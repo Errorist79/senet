@@ -14,18 +14,18 @@
 // WHAT COUNTS AS A READ
 //
 // A voucher is arbitrary binary, and many of its bytes sit above 127. A
-// decoder that returns text destroys those bytes, and a decoder that returns
-// the wrong bytes is worse than one that returns nothing, because a caller
-// cannot tell. So a frame counts only when every payload byte comes back
+// decoder that returns text destroys those bytes. A decoder that returns the
+// wrong bytes is worse than one that returns nothing, because a caller cannot
+// tell. So a frame counts only when every payload byte comes back
 // unchanged. That single rule disqualifies more candidates than any other
 // measurement here.
 //
 // ADDING A DECODER
 //
-// Add one entry to `DECODERS`. Each entry names the package it needs and a
-// `build` that returns a function from a frame to the payload bytes, or null.
-// A package that is not installed is reported and skipped, so a seventh
-// decoder needs only its own dependency and not everybody else's.
+// Add one entry to `DECODERS`. Each entry names the package that it needs, and
+// a `build` that returns a function from a frame to the payload bytes, or
+// null. The run reports a package that it cannot load, and it skips that
+// decoder. So a seventh decoder needs its own dependency and nobody else's.
 
 import { blur, continuousSymbol, frameAt, randomSource } from './camera-model.mjs';
 
@@ -92,7 +92,7 @@ const DECODERS = [
   {
     name: 'rxing-wasm',
     package: 'rxing-wasm',
-    note: 'a Rust port of ZXing. Its `raw_bytes` does return the payload.',
+    note: 'a Rust port. Its `raw_bytes` is the payload, despite the name.',
     build: async () => {
       const rxing = await import('rxing-wasm');
       return (data, width, height) =>
@@ -145,7 +145,7 @@ const DECODERS = [
   {
     name: 'zxing-js',
     package: '@zxing/library',
-    note: 'the JavaScript port of ZXing. Its bytes sit in a metadata entry.',
+    note: 'the JavaScript port. Its bytes sit in a metadata entry.',
     build: async () => {
       const loaded = await import('@zxing/library');
       // The package ships CommonJS, so its classes sit behind the default.
