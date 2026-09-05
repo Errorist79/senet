@@ -34,6 +34,28 @@ export const LEDGER_REFRESH_MS = 12_000;
 export const REQUEST_TIMEOUT_MS = 130_000;
 
 /**
+ * The camera frame that the scanner asks for, in pixels.
+ *
+ * A page that names no size gets 640 by 480 at 30 frames a second, because
+ * the browser puts that request in for the page. The number is not a limit of
+ * the camera: the same cameras report a width up to 4032.
+ *
+ * The size decides whether a camera can read a code at all. A voucher is a
+ * version 23 symbol. That symbol is 109 modules, and 117 modules with its
+ * quiet zone.
+ *
+ * A person holds the two phones about a quarter of a metre apart. The code
+ * then covers about a quarter of the width of the picture. In a frame 480
+ * pixels wide, that is about one pixel for each module. A decoder needs about
+ * three. In a frame 1920 pixels wide, it is about four.
+ *
+ * The request is an `ideal` one. A camera that cannot give this size gives the
+ * nearest size that it has, and the scanner still opens.
+ */
+export const SCAN_FRAME_WIDTH = 1920;
+export const SCAN_FRAME_HEIGHT = 2560;
+
+/**
  * Camera frames that the scanner decodes each second.
  *
  * A decode costs real work on a phone. A camera at a screen also holds still

@@ -1,5 +1,5 @@
-import { REAR_CAMERA, openCamera } from './camera.js';
-import { SCAN_FPS } from './config.js';
+import { REAR_CAMERA, middleSquare, openCamera } from './camera.js';
+import { SCAN_FPS, SCAN_FRAME_HEIGHT, SCAN_FRAME_WIDTH } from './config.js';
 import { element } from './dom.js';
 import { decodeFrame } from './qr.js';
 
@@ -12,10 +12,15 @@ import { decodeFrame } from './qr.js';
  * opened. It then reports what the stream delivers, how sharp the picture is,
  * and whether the decoder reads a code from it.
  *
- * It changes nothing. The scanner keeps the request that it always made, so
- * the first measurement describes the build that a person already ran. A person
- * then measures the other cameras that the phone carries, and the numbers say
- * which one to use.
+ * The first measurement makes the request that the scanner makes, and it reads
+ * the same middle square of the frame that the scanner reads. It therefore
+ * describes the scanner rather than a gentler thing built for the screen. A
+ * person then measures the other cameras that the phone carries.
+ *
+ * Two sweeps change one thing each. The frame sweep asks one camera for four
+ * frame sizes. The zoom sweep asks one camera for four zoom factors. Each step
+ * reports what the camera really gave. A browser may answer a request with
+ * something else, and a measurement that trusts the request measures nothing.
  *
  * The screen needs a code to look at. A second phone showing a voucher is the
  * subject, because that is what a merchant points a camera at.
@@ -23,6 +28,37 @@ import { decodeFrame } from './qr.js';
 
 /** How long one measurement watches a camera, in milliseconds. */
 const MEASURE_MS = 6_000;
+
+/**
+ * How long one step of a sweep watches a camera, in milliseconds.
+ *
+ * A sweep measures four steps in a row, and a person holds two phones still
+ * for the whole of it. Four seconds a step keeps the whole sweep under half a
+ * minute, and it still counts about forty frames.
+ */
+const SWEEP_MS = 4_000;
+
+/**
+ * The frame widths that the frame sweep asks for.
+ *
+ * The page never asked for a size before, so every camera gave 640 by 480,
+ * which the browser asks for when the page does not. These four steps say
+ * whether this browser gives a larger frame when a page asks, and what the
+ * decoder does with each one. The height keeps the three by four shape that
+ * the cameras already report.
+ */
+const SWEEP_WIDTHS: readonly number[] = [480, 960, 1440, SCAN_FRAME_WIDTH];
+
+/**
+ * The zoom factors that the zoom sweep asks for.
+ *
+ * Zoom raises the size of a module against a lens blur that does not change.
+ * That is the same lever as a larger frame, through different means. The
+ * cameras report a range from 0.5 to 10. A phone reaches for a different
+ * physical lens above some factor. That lens may not focus as close, so the
+ * sweep reports what each step really did.
+ */
+const SWEEP_ZOOMS: readonly number[] = [1, 2, 3, 4];
 
 /**
  * The side of the centre square that the sharpness number uses, in pixels.
@@ -52,12 +88,18 @@ interface Measurement {
   readonly capabilities: string;
   readonly frameWidth: number;
   readonly frameHeight: number;
+  readonly square: number;
   readonly frames: number;
   readonly decoded: number;
   readonly firstDecodeMs: number | null;
+  readonly decodeMs: number;
   readonly sharpLow: number;
   readonly sharpMid: number;
   readonly sharpHigh: number;
+  /** How wide one module was, over the frames that read. */
+  readonly moduleLow: number;
+  readonly moduleMid: number;
+  readonly moduleHigh: number;
 }
 
 /**
@@ -149,67 +191,107 @@ function middle(values: readonly number[]): number {
 }
 
 /**
- * Watch one camera, and report what it gave.
+ * Watch one camera that is already open, and report what it gave.
  *
- * The loop samples at the rate that the scanner samples, and it decodes the
- * whole frame as the scanner decodes it. The numbers therefore describe the
- * scanner, and not a faster or gentler thing built for the measurement.
+ * The loop samples at the rate that the scanner samples, and it reads the
+ * same middle square of the frame that the scanner reads. The numbers
+ * therefore describe the scanner, and not a faster or gentler thing built for
+ * the measurement.
  */
+async function watch(
+  video: HTMLVideoElement,
+  track: MediaStreamTrack,
+  label: string,
+  asked: string,
+  milliseconds: number,
+): Promise<Measurement> {
+  const settings = track.getSettings();
+
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (context === null) throw new Error('this browser draws no two dimensional canvas');
+
+  const sharp: number[] = [];
+  const modules: number[] = [];
+  let frames = 0;
+  let decoded = 0;
+  let decodeTotal = 0;
+  let firstDecodeMs: number | null = null;
+  let square = 0;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < milliseconds) {
+    await wait(Math.round(1000 / SCAN_FPS));
+    const frame = middleSquare(video, canvas, context);
+    if (frame === null) continue;
+    frames += 1;
+    square = frame.width;
+    sharp.push(sharpness(frame));
+    const before = Date.now();
+    const found = decodeFrame(frame);
+    decodeTotal += Date.now() - before;
+    if (found !== null) {
+      decoded += 1;
+      modules.push(found.modulePixels);
+      firstDecodeMs ??= Date.now() - startedAt;
+    }
+  }
+
+  return {
+    label,
+    deviceId: settings.deviceId ?? 'unknown',
+    asked,
+    settings: describe(settings),
+    capabilities: capabilitiesOf(track),
+    frameWidth: video.videoWidth,
+    frameHeight: video.videoHeight,
+    square,
+    frames,
+    decoded,
+    firstDecodeMs,
+    decodeMs: frames === 0 ? 0 : Math.round(decodeTotal / frames),
+    sharpLow: sharp.length === 0 ? 0 : Math.min(...sharp),
+    sharpMid: middle(sharp),
+    sharpHigh: sharp.length === 0 ? 0 : Math.max(...sharp),
+    moduleLow: modules.length === 0 ? 0 : Math.min(...modules),
+    moduleMid: middle(modules),
+    moduleHigh: modules.length === 0 ? 0 : Math.max(...modules),
+  };
+}
+
+/** Open one camera, watch it, and release it. */
 async function measure(
   video: HTMLVideoElement,
   wanted: MediaTrackConstraints,
   label: string,
   asked: string,
+  milliseconds: number = MEASURE_MS,
 ): Promise<Measurement> {
   const stream = await openCamera(video, wanted);
   try {
     const track = stream.getVideoTracks()[0];
     if (track === undefined) throw new Error('the camera gave no video track');
-    const settings = track.getSettings();
-
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (context === null) throw new Error('this browser draws no two dimensional canvas');
-
-    const sharp: number[] = [];
-    let frames = 0;
-    let decoded = 0;
-    let firstDecodeMs: number | null = null;
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < MEASURE_MS) {
-      await wait(Math.round(1000 / SCAN_FPS));
-      if (video.videoWidth === 0 || video.videoHeight === 0) continue;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const frame = context.getImageData(0, 0, canvas.width, canvas.height);
-      frames += 1;
-      sharp.push(sharpness(frame));
-      if (decodeFrame(frame) !== null) {
-        decoded += 1;
-        firstDecodeMs ??= Date.now() - startedAt;
-      }
-    }
-
-    return {
-      label,
-      deviceId: settings.deviceId ?? 'unknown',
-      asked,
-      settings: describe(settings),
-      capabilities: capabilitiesOf(track),
-      frameWidth: video.videoWidth,
-      frameHeight: video.videoHeight,
-      frames,
-      decoded,
-      firstDecodeMs,
-      sharpLow: sharp.length === 0 ? 0 : Math.min(...sharp),
-      sharpMid: middle(sharp),
-      sharpHigh: sharp.length === 0 ? 0 : Math.max(...sharp),
-    };
+    return await watch(video, track, label, asked, milliseconds);
   } finally {
     for (const track of stream.getTracks()) track.stop();
     video.srcObject = null;
   }
+}
+
+/**
+ * How wide one module was, as a person reads it.
+ *
+ * This number says whether the camera stood a chance. A frame that carries
+ * about one pixel for each module defeats every decoder, however many frames
+ * the loop takes. The line is empty when nothing read, because the decoder
+ * measures a symbol only when it finds one.
+ */
+function pitch(measured: Measurement): string {
+  if (measured.decoded === 0) return 'no frame read, so no measurement';
+  const say = (value: number): string => value.toFixed(2);
+  return (
+    `${say(measured.moduleLow)} low, ${say(measured.moduleMid)} middle, ` +
+    `${say(measured.moduleHigh)} high, in pixels for each module`
+  );
 }
 
 /** One measurement, as a person reads it. */
@@ -221,9 +303,12 @@ function report(measured: Measurement): string {
     `asked      ${measured.asked}`,
     `settings   ${measured.settings}`,
     `can do     ${measured.capabilities}`,
-    `decoder    ${measured.frameWidth} by ${measured.frameHeight} pixels`,
+    `frame      ${measured.frameWidth} by ${measured.frameHeight} pixels`,
+    `decoder    the middle ${measured.square} by ${measured.square} square`,
     `read       ${measured.decoded} of ${measured.frames} frames, ${rate} percent`,
     `first read ${measured.firstDecodeMs === null ? 'never' : `${measured.firstDecodeMs} ms`}`,
+    `decode     ${measured.decodeMs} ms a frame`,
+    `module     ${pitch(measured)}`,
     `sharpness  ${measured.sharpLow} low, ${measured.sharpMid} middle, ${measured.sharpHigh} high`,
   ].join('\n');
 }
@@ -240,6 +325,8 @@ export function startCameraReport(): void {
   const cameras = element('report-cameras', HTMLDivElement);
   const output = element('report-output', HTMLPreElement);
   const findButton = element('report-find', HTMLButtonElement);
+  const frameButton = element('report-frames', HTMLButtonElement);
+  const zoomButton = element('report-zoom', HTMLButtonElement);
   const copyButton = element('report-copy', HTMLButtonElement);
 
   const lines: string[] = [];
@@ -271,6 +358,80 @@ export function startCameraReport(): void {
       write(`camera     ${label}\nfailed     ${failure(caught)}`);
       say('That camera did not open. The report holds the reason.');
     } finally {
+      video.hidden = true;
+      busy = false;
+    }
+  }
+
+  /**
+   * Ask the same camera for four frame sizes, and measure each one.
+   *
+   * One lens, one distance, one thing changed. The frame that a camera gives
+   * is the only difference between the four steps. The four read rates
+   * therefore say what the frame is worth. Each step also reports the size
+   * that the camera really gave. A browser may answer a request for a large
+   * frame with a smaller one.
+   */
+  async function sweepFrames(): Promise<void> {
+    if (busy) return;
+    busy = true;
+    video.hidden = false;
+    try {
+      for (const width of SWEEP_WIDTHS) {
+        const height = Math.round((width * SCAN_FRAME_HEIGHT) / SCAN_FRAME_WIDTH);
+        const wanted: MediaTrackConstraints = {
+          facingMode: 'environment',
+          width: { ideal: width },
+          height: { ideal: height },
+        };
+        const label = `a frame ${width} wide`;
+        say(`Asking for ${width}. Hold the code still in the middle.`);
+        try {
+          write(report(await measure(video, wanted, label, describe(wanted), SWEEP_MS)));
+        } catch (caught) {
+          write(`camera     ${label}\nfailed     ${failure(caught)}`);
+        }
+      }
+      say('The frame sweep finished. Copy the report.');
+    } finally {
+      video.hidden = true;
+      busy = false;
+    }
+  }
+
+  /**
+   * Ask the same open camera for four zoom factors, and measure each one.
+   *
+   * The camera stays open across the four steps, so the only change is the
+   * zoom. A camera that refuses the request keeps the factor that it had, and
+   * the settings line of each step says which factor it really used.
+   */
+  async function sweepZoom(): Promise<void> {
+    if (busy) return;
+    busy = true;
+    video.hidden = false;
+    let stream: MediaStream | null = null;
+    try {
+      stream = await openCamera(video, REAR_CAMERA);
+      const track = stream.getVideoTracks()[0];
+      if (track === undefined) throw new Error('the camera gave no video track');
+      for (const zoom of SWEEP_ZOOMS) {
+        say(`Asking for zoom ${zoom}. Hold the code still in the middle.`);
+        let asked = `zoom ${zoom}`;
+        try {
+          await track.applyConstraints({ zoom });
+        } catch (caught) {
+          asked = `zoom ${zoom}, refused: ${failure(caught)}`;
+        }
+        write(report(await watch(video, track, `zoom ${zoom}`, asked, SWEEP_MS)));
+      }
+      say('The zoom sweep finished. Copy the report.');
+    } catch (caught) {
+      write(`camera     the zoom sweep\nfailed     ${failure(caught)}`);
+      say('The zoom sweep did not run. The report holds the reason.');
+    } finally {
+      if (stream !== null) for (const track of stream.getTracks()) track.stop();
+      video.srcObject = null;
       video.hidden = true;
       busy = false;
     }
@@ -326,6 +487,8 @@ export function startCameraReport(): void {
   }
 
   findButton.addEventListener('click', () => void find());
+  frameButton.addEventListener('click', () => void sweepFrames());
+  zoomButton.addEventListener('click', () => void sweepZoom());
 
   copyButton.addEventListener('click', () => {
     const text = lines.join('\n\n');

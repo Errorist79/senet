@@ -1,4 +1,4 @@
-import { SCAN_FPS } from './config.js';
+import { SCAN_FPS, SCAN_FRAME_HEIGHT, SCAN_FRAME_WIDTH } from './config.js';
 import { decodeFrame } from './qr.js';
 import type { Scanned } from './qr.js';
 
@@ -42,7 +42,53 @@ function cameraProblem(caught: unknown): CameraError {
 }
 
 /** What the scanner asks for. A merchant points a rear camera at a screen. */
-export const REAR_CAMERA: MediaTrackConstraints = { facingMode: 'environment' };
+export const REAR_CAMERA: MediaTrackConstraints = {
+  facingMode: 'environment',
+  width: { ideal: SCAN_FRAME_WIDTH },
+  height: { ideal: SCAN_FRAME_HEIGHT },
+};
+
+/**
+ * Copy the middle square of what the camera shows, and give back its pixels.
+ *
+ * The scanner reads a square rather than the whole frame, for two reasons.
+ *
+ * A person aims the middle of the picture at the code. The top and the bottom
+ * of a tall frame hold nothing that the decoder wants. A read of them costs
+ * time and finds nothing.
+ *
+ * The canvas also stays as small as the square. A large frame makes a large
+ * canvas, and a read of a large canvas is the slowest step of the loop. The
+ * source rectangle of `drawImage` cuts the frame before it reaches the
+ * canvas, so the cost follows the square and not the frame.
+ *
+ * The preview that a person watches is square as well, so the picture that
+ * they aim is the picture that the decoder reads.
+ */
+export function middleSquare(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+): ImageData | null {
+  const side = Math.min(video.videoWidth, video.videoHeight);
+  if (side === 0) return null;
+  if (canvas.width !== side || canvas.height !== side) {
+    canvas.width = side;
+    canvas.height = side;
+  }
+  context.drawImage(
+    video,
+    (video.videoWidth - side) / 2,
+    (video.videoHeight - side) / 2,
+    side,
+    side,
+    0,
+    0,
+    side,
+    side,
+  );
+  return context.getImageData(0, 0, side, side);
+}
 
 /**
  * Open one camera and show it.
@@ -99,11 +145,9 @@ export async function scanForSymbol(
 
   const readOneFrame = (): void => {
     if (!running || context === null) return;
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const found = decodeFrame(context.getImageData(0, 0, canvas.width, canvas.height));
+    const frame = middleSquare(video, canvas, context);
+    if (frame !== null) {
+      const found = decodeFrame(frame);
       if (found !== null) {
         stop();
         onFound(found);

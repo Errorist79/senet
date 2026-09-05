@@ -215,9 +215,17 @@ body {
   margin-top: 0;
 }
 
+/*
+ * The preview is square because the decoder reads the middle square of the
+ * frame. `object-fit: cover` on a square box shows exactly that square, so a
+ * person aims at the picture that the decoder reads.
+ */
 .scanner {
+  display: block;
   width: 100%;
-  max-height: 60vh;
+  max-width: 60vh;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
   border-radius: var(--radius);
   background: #000;
   object-fit: cover;

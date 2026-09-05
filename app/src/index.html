@@ -196,11 +196,18 @@
         <h2 class="screen-title">Camera report</h2>
         <p class="screen-note">
           This measures the cameras that this phone carries. Show a voucher on a
-          second phone, then hold it in the middle of the picture. Nothing here
-          changes what the scanner does.
+          second phone, then hold it in the middle of the picture.
+        </p>
+        <p class="screen-note">
+          The frame sweep asks one camera for four frame sizes in turn, and the
+          zoom sweep asks it for four zoom factors. Hold the two phones at the
+          same distance for the whole of a sweep. Only then does the sweep
+          measure the thing that it changes.
         </p>
 
         <button class="submit" id="report-find" type="button">Find the cameras</button>
+        <button class="submit" id="report-frames" type="button">Measure the frame sizes</button>
+        <button class="submit submit-quiet" id="report-zoom" type="button">Measure the zoom</button>
 
         <video class="scanner" id="report-video" muted playsinline hidden></video>
 
