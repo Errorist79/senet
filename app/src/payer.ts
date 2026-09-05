@@ -17,7 +17,6 @@ import { ServiceError, submitRedeem } from './api.js';
 import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
 import { ERROR_CORRECTION, PLANNED_MAX_VERSION, encodeBytes, drawToCanvas } from './qr.js';
 import { CODE_SIZE } from './config.js';
-import type { ErrorCorrection } from './qr.js';
 import { passkeySigner } from './passkey.js';
 import { redeemDetails } from './receipt.js';
 import { getAccount, getChain, getLedger, getVouchers, setVouchers } from './store.js';
@@ -33,23 +32,6 @@ import type { StoredChain, StoredVoucher } from './store.js';
  * That is the whole point of this screen. A payer with no network can still
  * pay, so nothing on this path may reach for one.
  */
-
-/** How wide the code is drawn, in CSS pixels. */
-
-
-/**
- * TEMPORARY. The error correction level is a control on this screen only so
- * that one measurement session can compare the two levels on real phones.
- *
- * Level M draws a denser symbol with more redundancy. Level L draws a larger
- * module with less. Nobody knows which one a camera reads more reliably from a
- * lit screen a few centimetres away. The production payload also sits six
- * bytes inside the largest symbol that level M holds.
- *
- * Remove this control, and the levels beside it, in the change that records
- * the decision. It must not outlive the question.
- */
-const MEASUREMENT_LEVELS: readonly ErrorCorrection[] = ['M', 'L'];
 
 /** Stroops in one XLM, for the amount that a person types. */
 const STROOPS_PER_XLM = 10_000_000n;
@@ -136,13 +118,12 @@ export function startPayerScreen(): void {
    * a photograph of the screen. A person who measures a device needs the
    * version and the byte count in one shot, and taps nothing to get them.
    *
-   * The level is drawn into that same line, so a photograph proves which level
-   * produced the code. Nobody has to record it separately, and nobody can
-   * record it wrongly.
+   * The line names the level as well. A photograph of the screen then
+   * describes the symbol completely, and nobody records that by hand.
    */
-  function showCode(voucher: StoredVoucher, level: ErrorCorrection = ERROR_CORRECTION): void {
+  function showCode(voucher: StoredVoucher): void {
     const bytes = Uint8Array.from(window.atob(voucher.payloadBase64), (c) => c.charCodeAt(0));
-    const symbol = encodeBytes(bytes, level);
+    const symbol = encodeBytes(bytes);
     const box = make('div', 'result result-good');
     box.append(
       make('h2', 'result-title', xlm(voucher.amountStroops)),
@@ -152,7 +133,11 @@ export function startPayerScreen(): void {
     // screen, so a line under it falls off the bottom. A photograph would then
     // carry the code without the numbers that describe it.
     box.append(
-      make('p', 'code-size', `version ${symbol.version} · level ${level} · ${bytes.length} bytes`),
+      make(
+        'p',
+        'code-size',
+        `version ${symbol.version} · level ${ERROR_CORRECTION} · ${bytes.length} bytes`,
+      ),
     );
     if (symbol.version > PLANNED_MAX_VERSION) {
       // The code still works. It is denser than any code that a measurement
@@ -167,23 +152,9 @@ export function startPayerScreen(): void {
         ),
       );
     }
-    // TEMPORARY, with the constant above. One session compares the two levels.
-    // The control sits above the code. A code fills a phone screen, and a
-    // person who holds two phones should not scroll past it to reach a button.
-    const switcher = make('div', 'levels');
-    switcher.append(make('span', 'levels-label', 'Measurement only'));
-    for (const one of MEASUREMENT_LEVELS) {
-      const button = make('button', 'levels-button', `Level ${one}`);
-      if (button instanceof HTMLButtonElement) {
-        button.type = 'button';
-        button.setAttribute('aria-current', one === level ? 'true' : 'false');
-        button.addEventListener('click', () => showCode(voucher, one));
-        switcher.append(button);
-      }
-    }
     const canvas = document.createElement('canvas');
     canvas.className = 'code';
-    box.append(switcher, canvas, detail('Voucher', voucher.voucherId));
+    box.append(canvas, detail('Voucher', voucher.voucherId));
     fill(panel, box);
     drawToCanvas(canvas, symbol, CODE_SIZE);
   }
