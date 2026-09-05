@@ -54,7 +54,16 @@ const BUILD_OUTPUT = new Set(['node_modules', 'dist', 'target']);
  * these and counts the files that it hides, so a skip is as visible as a
  * suspension.
  */
-const SKIPPED = ['packages/core/test/fixtures', 'server/test/fixtures'];
+const SKIPPED = [
+  'packages/core/test/fixtures',
+  'server/test/fixtures',
+  // A run of the confirmation check writes these, and git carries neither. The
+  // sweep counted whatever the last run left on the machine. The same commit
+  // reported 217 files here and 195 from a clone. A count that moves with a
+  // machine is not a fact about the repository.
+  'scripts/out/confirm-check/captures',
+  'scripts/out/confirm-check/listener.json',
+];
 
 const BANNED_WORDS = [
   // language-rules: off
@@ -108,15 +117,17 @@ const add = (file, line, rule, text) =>
 function walk(dir, out = [], record = true) {
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name);
+    const rel = path.relative(ROOT, full);
     if (fs.statSync(full).isDirectory()) {
       if (BUILD_OUTPUT.has(name)) continue;
-      const rel = path.relative(ROOT, full);
       if (SKIPPED.includes(rel)) {
         // Read the skipped tree anyway, to say how many files the skip hides.
         if (record) skipped.push({ tree: rel, files: walk(full, [], false).length });
         continue;
       }
       walk(full, out, record);
+    } else if (SKIPPED.includes(rel)) {
+      if (record) skipped.push({ tree: rel, files: 1 });
     } else if (SCANNABLE.test(name)) out.push(full);
   }
   return out;
