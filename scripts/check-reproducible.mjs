@@ -38,6 +38,27 @@ const DEVICE_COMMAND = 'scripts/archive-device-row.mjs';
 const ARCHIVE_ROOT = path.join('scripts', 'out');
 
 /**
+ * The workspaces that a producer can import from.
+ *
+ * A producer that imports `@senet/core` resolves it through the installed
+ * dependencies, and that link points at the working tree rather than at the
+ * export. Measured: an export resolves the package to
+ * `packages/core/dist/src/index.js` under the repository root, not under the
+ * export. The export carries no built output of its own, because a build is
+ * not committed.
+ *
+ * So a listing that derives a row name from a workspace constant reads the
+ * name from the desk while the archive it is compared against comes from
+ * `HEAD`. Four of the evidence rows are named from a constant in `@senet/core`
+ * exactly this way.
+ *
+ * That only matters when the two disagree, and this is the condition where
+ * they can. The check refuses to answer rather than answering from a mixture
+ * of the two.
+ */
+const WORKSPACES = Object.freeze(['packages', 'server', 'app']);
+
+/**
  * Find every archive tree in the export, and read the producer each one names.
  *
  * The list of producers is discovered rather than carried. A list inside this
@@ -89,8 +110,28 @@ function producedBy(command) {
   return output.split('\n').map((line) => line.trim()).filter((line) => line !== '');
 }
 
+/** Whether a workspace differs from `HEAD`, which a producer's listing can read. */
+function dirtyWorkspaces() {
+  const output = execFileSync('git', ['diff', 'HEAD', '--name-only', '--', ...WORKSPACES], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  return output.split('\n').map((line) => line.trim()).filter((line) => line !== '');
+}
+
 try {
   exportHead();
+
+  // A producer's listing can read a workspace from the working tree, so a
+  // workspace that differs from HEAD makes this check compare HEAD's archive
+  // against a listing that is partly the desk. It says so rather than
+  // reporting a result it cannot stand behind.
+  const dirty = dirtyWorkspaces();
+  check(dirty.length === 0,
+    dirty.length === 0
+      ? 'every workspace matches HEAD, so a listing cannot read uncommitted code'
+      : `${dirty.length} workspace files differ from HEAD, starting with ${dirty[0]}, `
+        + 'and a producer that imports one would list names this repository does not carry');
   console.log(`reading HEAD, unpacked into ${path.relative(ROOT, EXPORT_DIR)}\n`);
 
   const trees = treesInExport();
