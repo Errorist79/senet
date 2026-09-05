@@ -8,7 +8,7 @@
 #
 # The state file sits outside every release directory. A deployment copies a
 # release with `rsync --delete` and later removes old releases, so a cursor
-# inside a release is destroyed by the next deployment. `/opt/senet/` is the
+# inside a release does not survive the next deployment. `/opt/senet/` is the
 # one directory that a deployment never writes, and `.env` already lives there.
 #
 # The working directory is a link that a deployment renames, exactly as the
@@ -23,32 +23,35 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/senet/service
-# `forever` is the argument that keeps the listener polling. Without it the
-# listener reads to the end of the chain and exits, which is the mode that a
-# written path uses so that every step of that path is a command that ends.
-# A unit that omitted it would exit with status 0 every few seconds and restart
-# for ever, and the exit status below would never fire, because the failure
-# that status names would never be the one that ended the process.
+# `forever` is the argument that keeps the listener at its polls. Without it
+# the listener reads to the end of the chain and exits. A written path uses
+# that mode, so that every step of the path is a command that ends.
+#
+# A unit that omitted the argument would exit with status 0 every few seconds
+# and restart for ever. The exit status below would never fire, because the
+# failure that this status names would never end the process.
 ExecStart=/usr/bin/node server/dist/tools/listen.js forever
 Environment=ENV_FILE=/opt/senet/.env
 
-# LISTENER_STATE_FILE is not named here. It lives in the environment file that
-# both services read, because two of them read that path now: this listener
-# writes the cursor, and the fee-payer service serves it on the status route.
+# This unit does not name LISTENER_STATE_FILE. The path lives in the
+# environment file that both services read, because two of them read it now.
+# This listener writes the cursor, and the fee-payer service serves it on the
+# status route.
+#
 # A unit that carried its own copy would let the writer and the reader name
-# different files, and the route would then answer about a file that nothing
-# writes while looking perfectly healthy.
+# different files. The route would then answer about a file that nothing
+# writes, and it would look perfectly healthy.
 
 Restart=always
 RestartSec=5
 
-# Exit status 78 means one thing, and this service reserves it for that: the
-# stored cursor is older than the ledger range that the RPC still holds, so the
+# Exit status 78 means one thing, and this service reserves it for that. The
+# stored cursor is older than the ledger range that the RPC still holds. The
 # events between the cursor and the window are gone for ever.
 #
-# A restart cannot repair that. A listener that restarted would either fail the
-# same way for ever or, worse, start again from the newest ledger and look
-# healthy while every redemption in the gap stays unreported. Neither is a
+# A restart cannot repair that. A listener that restarted would fail the same
+# way for ever. Worse, it might start again from the newest ledger and look
+# healthy, while every redemption in the gap stays unreported. Neither is a
 # decision that a service makes for itself, so the unit stays down and a person
 # chooses.
 #

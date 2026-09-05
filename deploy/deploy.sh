@@ -15,18 +15,18 @@
 # The layout keeps every release in its own directory, and two links decide
 # which one is live:
 #
-#   /opt/senet/releases/<stamp>   one build, complete and unserved
-#   /opt/senet/service            the release that the service runs from
-#   /opt/senet/live               the files that the web server serves
-#   /opt/senet/.env               the keys, which no deployment replaces
-#   /opt/senet/state              the listener's cursor, which no deployment touches
+#   /opt/senet/releases/<stamp>   one build, complete and unserved.
+#   /opt/senet/service            the release that the service runs from.
+#   /opt/senet/live               the files that the web server serves.
+#   /opt/senet/.env               the keys, which no deployment replaces.
+#   /opt/senet/state              the listener's cursor. No deployment touches it.
 #
 # The order of the three steps is the point, and each one depends on the one
 # before it.
 #
 # The service goes first. The application reads its chain settings from
-# `/api/config` at start, so an application that arrived first would meet a
-# service that answers without them, and account creation would fail while the
+# `/api/config` at start. An application that arrived first would meet a
+# service that answers without them. Account creation would then fail while the
 # page still looked healthy.
 #
 # The listener goes second. It posts each redemption to the service, so the
@@ -57,9 +57,9 @@ fi
 chmod 600 "$TARGET/.env"
 
 # The event listener keeps its cursor here. The directory sits beside `.env`
-# rather than inside a release, because the release copy below runs with
-# `--delete` and the prune at the end removes old releases outright. A cursor
-# inside a release would not survive its own deployment.
+# rather than inside a release. The release copy below runs with `--delete`,
+# and the prune at the end removes old releases outright. A cursor inside a
+# release would not survive its own deployment.
 mkdir -p "$TARGET/state"
 
 # The listener needs somewhere to post. Without it the merchant screen confirms
@@ -96,9 +96,9 @@ if [ ! -f "$RELEASE/app/dist/index.html" ]; then
 fi
 
 # Publish the commit that this release carries. A content search cannot tell a
-# release that lacks a change from a check that looks for the wrong string, and
-# two people grepping for different things reach opposite answers. An origin
-# that names its own commit settles that by answering rather than by inference.
+# release that lacks a change from a check that looks for the wrong string.
+# Two people who search for different things reach opposite answers. An origin
+# that names its own commit settles it, and nobody infers the answer.
 COMMIT=$(sed -n 's/.*"commit": "\(.*\)".*/\1/p' "$RELEASE/deploy/release.json")
 case "$COMMIT" in
   '$Format:'*)
@@ -117,18 +117,19 @@ JSON
 echo "    release $STAMP carries commit $COMMIT"
 
 # The service identifies a caller by the first entry of the forwarded header,
-# and its budget on the redemption route is keyed on that. So the header has to
-# be set here rather than appended to, or a caller names itself and the budget
-# bounds nobody. Measured before this was fixed: fifteen requests from fifteen
-# forged addresses were not refused once.
+# and it keys its budget on that entry. This file must therefore set the header
+# here, rather than append to it. Otherwise a caller names itself and the
+# budget bounds nobody. One measurement before the repair: the service refused
+# none of fifteen requests from fifteen forged addresses.
 #
-# The property lives in two files that never mention each other, and the moment
-# it can break is a deployment, which is here. Somebody adding a second proxy
-# would reach for the appending form for a good reason.
+# The property lives in two files that never mention each other.
+#
+# The moment that it can break is a deployment, which is here. Somebody who adds a
+# second proxy would reach for the form that appends, and for a good reason.
 # The pattern matches the directive and not a mention of it. The first version
-# of this gate searched for the name anywhere in the file and matched the
-# comment above the directive, which explains why appending is wrong. A search
-# for a word cannot tell a live setting from prose about that setting.
+# of this gate searched for the name anywhere in the file. It matched the
+# comment above the directive, which explains why that form is wrong.
+# A search for a word cannot tell a live setting from prose about that setting.
 if grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-Forwarded-For[[:space:]]+\$proxy_add_x_forwarded_for' \
   "$RELEASE/deploy/nginx-senet.conf"; then
   echo "the web server configuration appends to X-Forwarded-For" >&2
