@@ -72,10 +72,16 @@ const ALWAYS_ON_SCREEN = Object.freeze([
   ['the ledger fact', '#fact-ledger'],
 ]);
 
-/** What the measurement session photographs. A voucher creates all three. */
+/**
+ * What only a minted voucher puts on the screen.
+ *
+ * This list held three entries. Two of them, the size line and the level
+ * control, named a measurement surface that the application no longer carries.
+ * A selector that can never match makes a check that can never fail, and this
+ * one sat inside a block that no unattended run reaches, so it would have said
+ * nothing for as long as anybody left it here.
+ */
 const SESSION_ELEMENTS = Object.freeze([
-  ['the size line', '.code-size'],
-  ['the level control', '.levels'],
   ['the code', 'canvas.code'],
 ]);
 
@@ -434,15 +440,15 @@ if (chromePath === undefined || chromePath === '') {
     const shown = SESSION_ELEMENTS.filter(([label]) => frame.seen[label] !== null);
     if (shown.length === 0) {
       console.log('');
-      outOfReach(`the geometry of ${SESSION_ELEMENTS.length} elements that a voucher`
-        + ' creates, because this run mints none');
+      const named = SESSION_ELEMENTS.map(([label]) => label).join(', ');
+      outOfReach(`the geometry of ${named}, because this run mints no voucher`);
     } else {
       const boxes = shown.map(([label]) => frame.seen[label]);
       const top = Math.min(...boxes.map((box) => box.top));
       const bottom = Math.max(...boxes.map((box) => box.bottom));
       check(bottom - top <= frame.height,
-        `the code, its size line and its control span ${Math.round(bottom - top)} pixels, `
-        + `and the viewport is ${frame.height}, so a photograph cannot hold them together`);
+        `the code spans ${Math.round(bottom - top)} pixels, and the viewport is `
+        + `${frame.height}, so a phone cannot show it whole`);
       for (const [label] of shown) {
         const box = frame.seen[label];
         check(box.left >= 0 && box.right <= frame.width + 1,
