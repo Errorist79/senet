@@ -334,6 +334,17 @@ export function startCameraReport(): void {
   const lines: string[] = [];
   let busy = false;
 
+  /**
+   * The camera that a sweep measures.
+   *
+   * A sweep changes one thing and holds everything else. The camera is one of
+   * the things that it holds, and `facingMode` does not name one: a browser
+   * may open a different rear camera than the one that reads best. A person
+   * measures the cameras first, and a sweep then runs on the last one that
+   * they measured. Null means the camera that the scanner itself opens.
+   */
+  let chosen: string | null = null;
+
   // Every measurement times a decode, so the decoder must already be ready.
   // Otherwise the first measurement would time the load as well.
   void prepareDecoder();
@@ -385,11 +396,10 @@ export function startCameraReport(): void {
     try {
       for (const width of SWEEP_WIDTHS) {
         const height = Math.round((width * SCAN_FRAME_HEIGHT) / SCAN_FRAME_WIDTH);
-        const wanted: MediaTrackConstraints = {
-          facingMode: 'environment',
-          width: { ideal: width },
-          height: { ideal: height },
-        };
+        const wanted: MediaTrackConstraints =
+          chosen === null
+            ? { facingMode: 'environment', width: { ideal: width }, height: { ideal: height } }
+            : { deviceId: { exact: chosen }, width: { ideal: width }, height: { ideal: height } };
         const label = `a frame ${width} wide`;
         say(`Asking for ${width}. Hold the code still in the middle.`);
         try {
@@ -418,7 +428,18 @@ export function startCameraReport(): void {
     video.hidden = false;
     let stream: MediaStream | null = null;
     try {
-      stream = await openCamera(video, REAR_CAMERA);
+      // The scanner's own frame request, on the chosen camera. This drops
+      // `facingMode` when it names a device, because two rules for one camera
+      // ask the browser to satisfy both.
+      const wanted: MediaTrackConstraints =
+        chosen === null
+          ? REAR_CAMERA
+          : {
+              deviceId: { exact: chosen },
+              width: { ideal: SCAN_FRAME_WIDTH },
+              height: { ideal: SCAN_FRAME_HEIGHT },
+            };
+      stream = await openCamera(video, wanted);
       const track = stream.getVideoTracks()[0];
       if (track === undefined) throw new Error('the camera gave no video track');
       for (const zoom of SWEEP_ZOOMS) {
@@ -483,6 +504,7 @@ export function startCameraReport(): void {
       button.type = 'button';
       button.textContent = `Measure ${name}`;
       button.addEventListener('click', () => {
+        chosen = device.deviceId;
         void run({ deviceId: { exact: device.deviceId } }, name, `deviceId ${device.deviceId}`);
       });
       return button;
