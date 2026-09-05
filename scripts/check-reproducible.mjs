@@ -41,7 +41,18 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { ROOT } from './evidence-set.mjs';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * The root of the repository.
+ *
+ * Computed here rather than imported. This check needed one value from the
+ * shared module, and that module brought the built library with it. A clone
+ * without a build then met a module error before this file ran a line.
+ * A check that speaks for a person who has just cloned should need what that
+ * person has.
+ */
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * Where this check unpacks `HEAD`.
@@ -193,6 +204,15 @@ try {
       claimed = producedBy(command);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
+      // A producer imports the library, which lives in the built output, and a
+      // clone carries the source rather than the build. The person who meets
+      // this is the one who did not read the steps in order, so it names the
+      // step rather than the module.
+      if (/Cannot find module|ERR_MODULE_NOT_FOUND/.test(detail)) {
+        check(false, `${command} cannot say what it produces, because this clone holds `
+          + 'no built output. Run npm install, then npm run build, then run this again.');
+        continue;
+      }
       check(false, `${command} cannot say what it produces: ${detail.split('\n')[0]}`);
       continue;
     }
