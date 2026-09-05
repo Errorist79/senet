@@ -27,6 +27,9 @@ import type { ReaderOptions } from 'zxing-wasm/reader';
  * each. The previous decoder read three of eight, in eighty seven. This one is
  * the faster reader and the better one at the same time. The previous decoder
  * also had no release after April 2021.
+ *
+ * `scripts/measure-decoders.mjs` is that measurement. Run it to disagree with
+ * this choice, or to weigh a decoder that nobody has tried yet.
  */
 
 /** The error correction levels that this build can draw. */
