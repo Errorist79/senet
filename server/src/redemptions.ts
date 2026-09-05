@@ -158,7 +158,12 @@ export async function readFromChain(
 ): Promise<RedemptionMessage | null> {
   const page = await server.getEvents({
     startLedger: claim.ledger,
-    endLedger: claim.ledger,
+    // The end of the window is exclusive, so one ledger is [N, N + 1). With
+    // both bounds at N the window holds nothing, every confirmation fails, and
+    // the listener holds its cursor on the first redemption it tries to
+    // deliver. Measured against this contract: a window ending at the ledger
+    // itself returns no events, and one ending at the next returns the event.
+    endLedger: claim.ledger + 1,
     filters: [{ type: 'contract', contractIds: [contractId] }],
     limit: EVENT_PAGE_LIMIT,
   });
