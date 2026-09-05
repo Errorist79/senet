@@ -150,6 +150,33 @@ check(Object.keys(status.channels ?? {}).length > 0, 'the service holds no chann
 // reads the file rather than the view. That check stays there on purpose. A
 // reader that could only reach the route would learn nothing about a healthy
 // listener whenever the service in front of it was down.
+// The forwarded header, read from the configuration this host serves.
+//
+// The service identifies a caller by the first entry of that header and keys
+// its budget on it, so the header has to be set by the web server rather than
+// appended to what a caller sent. The deployment refuses to install a
+// configuration that appends. This asks a different question: whether the
+// configuration the host is serving right now still says so, which catches an
+// edit made on the host rather than in a commit.
+//
+// It is a host-side read. Every other line here comes from outside the host,
+// and this one cannot, because the file is not public. It says so rather than
+// letting a reader take it for something the origin answered.
+const SERVED_NGINX = '/etc/nginx/sites-available/senet';
+const APPENDS = /^[ \t]*proxy_set_header[ \t]+X-Forwarded-For[ \t]+\$proxy_add_x_forwarded_for/m;
+const SETS = /^[ \t]*proxy_set_header[ \t]+X-Forwarded-For[ \t]+\$remote_addr/m;
+if (existsSync(SERVED_NGINX)) {
+  const served = readFileSync(SERVED_NGINX, 'utf8');
+  check(SETS.test(served) && !APPENDS.test(served),
+    APPENDS.test(served)
+      ? 'the served configuration appends to X-Forwarded-For, so a caller names itself'
+      : SETS.test(served)
+        ? 'the served configuration sets X-Forwarded-For from the connection   read on the host'
+        : 'the served configuration does not set X-Forwarded-For at all');
+} else {
+  console.log(`  SKIPPED the forwarded header, because ${SERVED_NGINX} is not readable from here`);
+}
+
 const listener = status.listener ?? null;
 check(listener !== null, 'the status route reports no listener at all');
 if (listener !== null) {
