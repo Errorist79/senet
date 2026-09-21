@@ -1,8 +1,9 @@
 // Refresh the archive of every transaction that the trees name.
 //
-// This command reads the network and rewrites the archive files. It produces no
-// transaction, so it is safe to run at any time. Run `scripts/run-evidence.mjs`
-// or `scripts/run-load-check.mjs` to produce a new set.
+// This command reads the network and updates transaction archives.
+// An incomplete refresh preserves complete historical evidence and reports a failure.
+// It skips manifests that explicitly mark a derived analysis.
+// Run the producer that the analysis manifest names to update that analysis.
 //
 // Run it with `node scripts/archive-evidence.mjs`.
 
@@ -23,10 +24,20 @@ if (trees.length === 0) throw new Error(`${OUT_DIR} holds no tree with a manifes
 
 let incomplete = 0;
 let archived = 0;
+let transactionTrees = 0;
 const problems = [];
 for (const dir of trees) {
   console.log(`\n${path.basename(dir)}`);
+  const header = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+  if (header?.kind === 'derived-analysis') {
+    if (typeof header.producedBy !== 'string' || header.producedBy.length === 0 || !Array.isArray(header.rows)) {
+      throw new Error(`${dir}: derived analysis needs a producer and rows`);
+    }
+    console.log(`  skipped derived analysis; run ${header.producedBy} to update it`);
+    continue;
+  }
   const manifest = readManifest(dir);
+  transactionTrees += 1;
   incomplete += await archiveManifest(dir, manifest, ENDPOINTS);
   archived += manifest.rows.length;
   // A row that carries what a screen showed also carries a claim. The check
@@ -38,10 +49,10 @@ for (const dir of trees) {
   }
 }
 
-console.log(`\narchived ${archived} rows across ${trees.length} trees`);
+console.log(`\nread ${archived} transaction rows across ${transactionTrees} trees`);
 for (const problem of problems) console.log(`PROBLEM: ${problem}`);
 if (incomplete > 0) {
-  console.log(`${incomplete} row(s) carry no meta, because the RPC server dropped them.`);
+  console.log(`${incomplete} refresh result(s) lack complete RPC or Horizon evidence. Historical files can still contain the earlier evidence.`);
   process.exitCode = 1;
 }
 if (problems.length > 0) throw new Error('a screen showed a figure that the chain does not support');

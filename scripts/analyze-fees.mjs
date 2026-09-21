@@ -166,6 +166,7 @@ const analysis = {
   ],
 };
 const manifest = {
+  kind: 'derived-analysis',
   network: Networks.TESTNET,
   producedBy: PRODUCER,
   rows: [{ name: NAME, producer: 'script', note: 'Declared and charged fees from four archived redemptions.' }],

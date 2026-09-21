@@ -16,6 +16,7 @@ import { Keypair } from '@stellar/stellar-sdk';
 import {
   TESTNET_FRIENDBOT_URL,
   TESTNET_HORIZON_URL,
+  TESTNET_RPC_URL,
   accountBalanceStroops,
   friendbotFund,
   waitForFunds,
@@ -66,6 +67,11 @@ async function main(): Promise<void> {
   // derives from the secret, and a copy can disagree with its own source.
   console.log(`MERCHANT_ADDRESS=${merchant.publicKey()}`);
   console.log(`SECOND_MERCHANT_ADDRESS=${secondMerchant.publicKey()}`);
+  console.log(`SEP7_SIGNING_SECRET=${Keypair.random().secret()}`);
+  console.log('CONTRACT_ID=');
+  console.log(`RPC_URL=${TESTNET_RPC_URL}`);
+  console.log(`HORIZON_URL=${TESTNET_HORIZON_URL}`);
+  console.error('Publish the SEP-7 public key at your HTTPS origin before you use signed payment requests.');
 }
 
 await main();

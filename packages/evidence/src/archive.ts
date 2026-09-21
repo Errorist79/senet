@@ -8,7 +8,7 @@
  * files stay in the repository, so a reader verifies the record after the
  * network forgets it.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ArchivedRow, HorizonSummary, Manifest, Row, RpcSummary } from './types.js';
 
@@ -236,7 +236,12 @@ export function readArchivedRow(dir: string, name: string): ArchivedRow {
   };
 }
 
-/** Read one transaction from the network and write its archive file. */
+function hasCompleteEvidence(row: ArchivedRow): boolean {
+  return row.horizon !== null && [row.rpc.envelopeXdr, row.rpc.resultXdr, row.rpc.resultMetaXdr]
+    .every((value) => value !== null && value.length > 0);
+}
+
+/** Return the current network result, but preserve complete historical evidence when the refresh is incomplete. */
 export async function archiveRow(
   dir: string,
   row: Row,
@@ -253,16 +258,24 @@ export async function archiveRow(
     rpc,
     horizon,
   };
+  const destination = join(dir, `${row.name}.json`);
+  if (!hasCompleteEvidence(archived) && existsSync(destination)) {
+    const previous = readArchivedRow(dir, row.name);
+    if (hasCompleteEvidence(previous)) {
+      console.log(`${row.name}: incomplete refresh; preserved historical archive for ${previous.hash} from ${previous.archivedAt}`);
+      return archived;
+    }
+  }
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${row.name}.json`), `${JSON.stringify(archived, null, 2)}\n`);
+  writeFileSync(destination, `${JSON.stringify(archived, null, 2)}\n`);
   return archived;
 }
 
 /**
  * Archive every row of a manifest.
  *
- * A row that the RPC server no longer holds keeps its Horizon summary, but it
- * carries no meta. This function counts such a row and names it to the caller.
+ * An incomplete network result counts as a failed refresh, even when the
+ * archive retains complete historical evidence.
  */
 export async function archiveManifest(
   dir: string,
@@ -272,7 +285,7 @@ export async function archiveManifest(
   let incomplete = 0;
   for (const row of manifest.rows) {
     const archived = await archiveRow(dir, row, manifest.contractId, endpoints);
-    if (archived.rpc.envelopeXdr === null) incomplete += 1;
+    if (!hasCompleteEvidence(archived)) incomplete += 1;
     const status = archived.rpc.status ?? 'NOT_FOUND';
     const ledger = archived.rpc.ledger ?? archived.horizon?.ledger ?? 'unknown';
     console.log(`${row.name.padEnd(34)} ${status.padEnd(10)} ledger ${ledger}`);
