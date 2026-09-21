@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The trees that the walk reads, and the single files beside them. */
-const TARGETS = ['packages', 'server', 'app', 'scripts', 'deploy', 'contracts', '.github'];
+const TARGETS = ['packages', 'server', 'app', 'scripts', 'deploy', 'contracts', 'docs', '.github'];
 // Files that no target directory holds. `README.md` is the most public document
 // in this repository and the first thing a stranger reads, and no target
 // reached it until somebody looked. The two workspace documents sit inside

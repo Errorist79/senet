@@ -11,7 +11,7 @@ import { ExpiryWindowError, RemainingLifeError } from './errors.js';
  *
  * A payer who mints a voucher offline cannot read the ledger, so the device
  * counts forward from its cached reading. The divisor is the measured mean
- * close time, and the estimate can only run ahead of the real ledger.
+ * close time. The estimate can run ahead of or behind the current ledger.
  */
 export function estimateLedger(lastSeenLedger: number, elapsedSeconds: number): number {
   return (
