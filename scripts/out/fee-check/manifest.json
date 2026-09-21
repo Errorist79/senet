@@ -1,0 +1,11 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "producedBy": "scripts/analyze-fees.mjs",
+  "rows": [
+    {
+      "name": "redemption-fees",
+      "producer": "script",
+      "note": "Declared and charged fees from four archived redemptions."
+    }
+  ]
+}

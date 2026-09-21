@@ -109,7 +109,7 @@ export async function refusalReasons(hash) {
  * `public_key` and `signature`. A smart account signs with a list of one map
  * whose key names the curve, and a passkey names `Secp256r1` there.
  */
-function signatureScheme(signature) {
+export function signatureScheme(signature) {
   let decoded;
   try {
     decoded = scValToNative(signature);

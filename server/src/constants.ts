@@ -1,16 +1,16 @@
 /**
  * Every number that the fee-payer depends on, with the reason for its value.
  *
- * Each figure that names a measurement comes from a run on testnet with an
- * ed25519 payer. A passkey payer costs more, and nobody measured it yet.
+ * Fee measurements come from archived testnet transactions with ed25519 and
+ * passkey payers. The fee depends on the resources and the ledger state.
  */
 
 /**
  * The inclusion fee that the service bids, in stroops.
  *
  * Simulation adds the resource fee on top of this value, and the sum is the
- * whole bid. A redeem measured 47,743 stroops of total bid, of which 37,743
- * was the resource fee.
+ * whole bid. Three archived passkey redemptions each paid 100 stroops for
+ * inclusion. The ed25519 reference paid the same inclusion fee.
  *
  * The bid is not only a price ceiling. The source account must hold the whole
  * bid before the transaction passes validation. Every stroop of the bid is
@@ -26,9 +26,9 @@ export const INCLUSION_FEE_STROOPS = 10_000n;
  * The resource fee comes from simulation, and simulation reads the footprint
  * of the call that the caller supplies. A hostile entry with a large footprint
  * would otherwise turn one request into a large charge against a channel. A
- * measured redeem declares about 47,743 stroops, so this ceiling sits about
- * twenty times above it. That leaves room for a passkey payer, which costs
- * more than an ed25519 payer.
+ * passkey redemption declared 160,781 stroops, with 150,781 for resources.
+ * Two later passkey redemptions each declared 50,543 stroops. This ceiling
+ * covers all three, but their margins below the ceiling differ.
  */
 export const MAX_REDEEM_FEE_STROOPS = 1_000_000n;
 
@@ -49,11 +49,10 @@ export const MAX_DEPLOY_FEE_STROOPS = 5_000_000n;
  * The balance below which the service treats a channel account as spent, in
  * stroops.
  *
- * One redeem bids about 47,743 stroops, and an account must also hold its base
- * reserve of 10,000,000 stroops. Five XLM leaves room for roughly a thousand
- * more redeems. A channel that falls under this floor drifted far from where
- * it started. The service says so plainly, rather than letting the network
- * reject a transaction for a reason that the caller cannot read.
+ * An account must hold its base reserve and the whole declared fee before
+ * validation. This floor exceeds the redemption fee ceiling. The service
+ * reports each channel below this floor. It rejects submission when every
+ * channel has a known balance below the floor.
  */
 export const MIN_CHANNEL_BALANCE_STROOPS = 50_000_000n;
 
