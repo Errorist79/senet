@@ -212,7 +212,7 @@ npm test                   # the library and service tests
 ### 6. Redeem a voucher, and record a refusal
 
 ```bash
-node scripts/run-evidence.mjs --vouchers-only
+node scripts/run-sow-evidence.mjs --vouchers-only
 ```
 
 The command mints, submits and archives ten transactions. Seven succeed and three
@@ -337,7 +337,7 @@ the diagnostic events, plus the summary that Horizon holds.
 Prepare these inputs for a full transaction evidence run:
 
 1. Set `CONTRACT_ID` to the contract that the application uses.
-2. Create a voucher on one phone and redeem it with a second phone.
+2. Create a voucher with a 15-minute lifetime on one phone and redeem it with a second phone.
 3. Save the successful redemption hash and record the two phones on video.
 4. Use the SEP-7 secret whose public key the application's HTTPS origin publishes.
 
@@ -350,10 +350,10 @@ Do not copy another deployment's secret keys.
 The [SEP-7 signature rules](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0007.md#request-signing)
 require the domain's `URI_REQUEST_SIGNING_KEY` to verify the request.
 
-After those steps, one command produces the script rows and archives the supplied device transaction:
+Start this command while the supplied voucher signature remains valid:
 
 ```bash
-node scripts/run-evidence.mjs --device-hash <phone-redemption-hash>
+node scripts/run-sow-evidence.mjs --device-hash <phone-redemption-hash>
 ```
 
 The command checks the device transaction and the hosted key before it submits anything.
@@ -361,15 +361,34 @@ It refuses a missing device hash, an unavailable transaction, another contract o
 The device transaction must succeed and carry a passkey signature.
 Its hash alone cannot prove which phones created or scanned the code.
 
-The command writes a new directory under `scripts/out/` and prints its path.
-It carries no rows from previous runs. Keep the prior archives until you review the replacement.
-The separate `--vouchers-only` mode omits SEP-7 and device rows and writes under `/tmp/` by default.
+The command performs these steps:
+
+1. Archive the supplied passkey redemption.
+2. Submit its exact signed entry again and require a refusal for the consumed nonce.
+3. Produce the eleven transaction rows below.
+4. Capture webhooks for six generated redemptions and the supplied passkey redemption.
+
+The replay uses `replay-voucher.mjs` before the generated transaction batch.
+An expired signature stops the run before that batch starts.
+The webhook archive compares each message with its transaction. It does not prove the sender's identity or the merchant screen state.
+
+The command writes a new transaction directory under `scripts/out/` and prints its path.
+Its sibling directories end in `-device-replay` and `-confirmations`.
+Use `--output NEW-DIRECTORY` to set the transaction directory.
+Keep all three directories together. Keep the prior archives until you review the replacement.
+
+The transaction directory holds `run.json`, which states the scope and completion of the combined run.
+It sets `complete: true` only after all three commands succeed and their manifests report completion.
+A failure returns a nonzero exit status and keeps the partial output.
+
+The separate `--vouchers-only` mode omits SEP-7, device redemption, and device replay evidence.
+It produces ten transaction rows and six webhook rows. It writes under `/tmp/` by default.
 
 Each confirmed transaction enters the archive before the next submission.
 The manifest states the scope and keeps `complete: false` until all rows finish.
 A failed run keeps its partial manifest and archived rows. Do not submit a partial archive as the full set.
 
-The full command produces eleven script rows, with eight successes and three refusals:
+The transaction batch produces eleven script rows, with eight successes and three refusals:
 
 - the redemption whose recipient the submitter selects after the signature;
 - the refused replay of that same entry;
@@ -380,8 +399,21 @@ The full command produces eleven script rows, with eight successes and three ref
 - the four lifetimes;
 - a payment in response to a signed SEP-7 request.
 
-It also archives the supplied device redemption. `--list` names the eleven script rows of the full mode.
-The video, screenshots and webhook output remain separate evidence that a person must capture.
+It also archives the supplied device redemption and its refused replay.
+`node scripts/run-evidence.mjs --list` names the eleven generated transaction rows.
+Add `--vouchers-only` to that list command to see its ten rows.
+The two-phone video, phone void, screenshots, and merchant screen confirmation remain separate evidence that a person must capture.
+
+To capture webhooks again for an existing complete transaction archive, choose a new output directory:
+
+```bash
+node scripts/run-confirmation.mjs --evidence TRANSACTION-DIRECTORY --output NEW-CONFIRMATION-DIRECTORY
+```
+
+The command includes the supplied passkey row when the transaction archive contains it.
+It refuses an existing output directory. Missing deliveries keep `complete: false` and return a nonzero exit status.
+The lower-level `run-evidence.mjs` command produces transaction evidence without webhook captures.
+Its optional `--replay-output NEW-DIRECTORY` also submits the supplied voucher replay before the generated batch.
 
 A refused row lands on chain as a failed transaction, so each refusal is a
 public hash. The command reads the diagnostic events of every refused row. It

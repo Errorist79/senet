@@ -22,6 +22,7 @@
 // and not the failed status alone.
 
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { Asset, Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
@@ -36,7 +37,7 @@ import {
 // copy.
 import { RP_ID } from '@senet/server';
 import {
-  ENDPOINTS, HORIZON_URL, OUT_DIR, RPC_URL, archiveRow, describeRedeem, loadEnv,
+  ENDPOINTS, HORIZON_URL, OUT_DIR, ROOT, RPC_URL, archiveRow, describeRedeem, loadEnv,
   publishesTheKey, refusalReasons, requireEnv, writeManifest,
 } from './evidence-set.mjs';
 
@@ -98,7 +99,9 @@ export const PRODUCED_ROWS = Object.freeze([
 // that read the table below would answer from a stale build. The archive
 // beside it comes from a commit, so the two would agree for the wrong reason.
 if (process.argv.includes('--list')) {
-  for (const name of PRODUCED_ROWS) console.log(name);
+  for (const name of PRODUCED_ROWS) {
+    if (name !== 'sep7-payment' || !process.argv.includes('--vouchers-only')) console.log(name);
+  }
   process.exit(0);
 }
 
@@ -122,17 +125,21 @@ const args = process.argv.slice(2);
 let vouchersOnly = false;
 let deviceHash;
 let outputDirectory;
+let replayDirectory;
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index];
   if (argument === '--vouchers-only') vouchersOnly = true;
-  else if (argument === '--device-hash' || argument === '--output') {
+  else if (argument === '--device-hash' || argument === '--output' || argument === '--replay-output') {
     const value = args[++index];
     if (!value || value.startsWith('--')) throw new Error(`${argument} needs a value`);
     if (argument === '--device-hash') deviceHash = value;
+    else if (argument === '--replay-output') replayDirectory = path.resolve(value);
     else outputDirectory = value;
   } else throw new Error(`unknown argument: ${argument}`);
 }
 if (vouchersOnly && deviceHash) throw new Error('--device-hash requires a full run');
+if (vouchersOnly && replayDirectory) throw new Error('--replay-output requires a full run');
+if (replayDirectory && fs.existsSync(replayDirectory)) throw new Error('Choose a new replay output directory.');
 if (!vouchersOnly && !deviceHash) {
   throw new Error('A full run needs --device-hash from a fresh phone redemption. Use --vouchers-only for the contract path.');
 }
@@ -303,6 +310,7 @@ const rows = [];
 const manifest = {
   network: config.network, contractId, producedAt: new Date().toISOString(),
   producedBy: 'scripts/run-evidence.mjs',
+  producedArgs: vouchersOnly ? ['--vouchers-only'] : [],
   scope: vouchersOnly ? 'vouchers-only' : 'full-transactions', complete: false, rows,
 };
 
@@ -394,6 +402,13 @@ console.log(`payer ${payer.publicKey()}`);
 console.log(`submitter ${submitter.publicKey()}\n`);
 console.log(`archive ${evidenceDirectory}`);
 if (deviceRow) await saveRow(deviceRow);
+if (replayDirectory) {
+  const replay = spawnSync(process.execPath, [
+    'scripts/replay-voucher.mjs', path.join(evidenceDirectory, 'passkey-fresh.json'), replayDirectory,
+  ], { cwd: ROOT, stdio: 'inherit' });
+  if (replay.error) throw replay.error;
+  if (replay.status !== 0) throw new Error('The device voucher replay failed. The transaction archive remains incomplete.');
+}
 
 // The core case. The payer signs, a second account submits, and the submitter
 // selects the recipient after the signature exists.
