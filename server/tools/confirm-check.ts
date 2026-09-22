@@ -41,7 +41,7 @@ const DIST = resolve(HERE, '..', '..', '..', 'app', 'dist');
 const STEP_TIMEOUT_MS = 60_000;
 
 /** What the feed reports that the chain published, when it reports at all. */
-const CONFIRMED_HASH = '44b7f187cb84a113401795268092570c86b7743828464e561ffca759b3ef3514';
+const OLD_HASH = '44b7f187cb84a113401795268092570c86b7743828464e561ffca759b3ef3514';
 const SUBMITTED_HASH = '0000000000000000000000000000000000000000000000000000000000000001';
 const RECIPIENT = 'GC45NTB4OWWPE5FTJ5DI3IHLLGVNB3VCGFANCFAHKFVIVRK6C2PHLSSZ';
 
@@ -97,7 +97,20 @@ async function main(): Promise<void> {
   const payload = Buffer.from(encodeVoucher(voucherConfig, entry)).toString('base64');
   const voucherId = voucher.voucherId.toString();
 
-  let confirms = false;
+  const correct = {
+    voucher_id: voucherId,
+    payer: payer.publicKey(),
+    recipient: RECIPIENT,
+    amount: voucher.amount.toString(),
+    expire_at: voucher.expireAt,
+    tx_hash: SUBMITTED_HASH,
+    ledger: LEDGER + 1,
+    ledger_closed_at: '2026-09-05T00:00:05Z',
+    event_id: 'e1',
+  };
+  let confirmation: typeof correct | null = null;
+  let submissionHash: string | null = SUBMITTED_HASH;
+  let requestedHash: string | null = null;
   const service = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const send = (value: unknown): void => {
@@ -123,7 +136,7 @@ async function main(): Promise<void> {
       send({
         outcome: 'SUCCESS',
         stage: 'poll',
-        hash: SUBMITTED_HASH,
+        hash: submissionHash,
         ledger: LEDGER + 1,
         feeChargedStroops: '47743',
         voucherId,
@@ -134,21 +147,10 @@ async function main(): Promise<void> {
       return;
     }
     if (url.pathname === '/api/redemption') {
+      requestedHash = url.searchParams.get('txHash');
       send({
         voucherId: voucherId,
-        redemption: confirms
-          ? {
-              voucher_id: voucherId,
-              payer: RECIPIENT,
-              recipient: RECIPIENT,
-              amount: '5000000',
-              expire_at: 4507999,
-              tx_hash: CONFIRMED_HASH,
-              ledger: 4507470,
-              ledger_closed_at: '2026-09-05T00:00:05Z',
-              event_id: 'e1',
-            }
-          : null,
+        redemption: confirmation,
       });
       return;
     }
@@ -229,8 +231,29 @@ async function main(): Promise<void> {
       throw new Error(`the screen says ${waiting} while it waits`);
     }
 
-    // The second state: the feed speaks, and the screen takes the chain's hash.
-    confirms = true;
+    const mismatches = [
+      { ...correct, tx_hash: OLD_HASH },
+      { ...correct, voucher_id: `${voucherId}0` },
+      { ...correct, payer: RECIPIENT },
+      { ...correct, recipient: payer.publicKey() },
+      { ...correct, amount: '1' },
+    ];
+    for (const mismatch of mismatches) {
+      confirmation = mismatch;
+      // The next request proves that the screen processed the previous reply.
+      await page.waitForResponse((response) => response.url().includes('/api/redemption?'));
+      await Promise.race([
+        page.waitForRequest((request) => request.url().includes('/api/redemption?')),
+        page.waitForSelector('.confirmed'),
+      ]);
+      if (await page.$('.confirmed') !== null) {
+        throw new Error(`the screen confirmed a different payment: ${JSON.stringify(mismatch)}`);
+      }
+    }
+    console.log('mismatches rejected for hash, voucher, payer, recipient and amount');
+    if (requestedHash !== SUBMITTED_HASH) throw new Error('the feed request omits the payment hash');
+
+    confirmation = correct;
     await page.waitForSelector('.confirmed', { timeout: STEP_TIMEOUT_MS });
     const confirmed = await confirmationLine(page);
     console.log(`confirmed  ${confirmed}`);
@@ -243,20 +266,13 @@ async function main(): Promise<void> {
       return value instanceof HTMLElement ? (value.dataset['full'] ?? '') : '';
     });
     console.log(`hash       ${shown}`);
-    // The two hashes differ on purpose. This one assertion therefore says two
-    // things: the screen shows the chain's hash, and it does not show the
-    // submission's. A second test for the submission's hash could never fire
-    // after this one, and the compiler said so.
-    if (shown !== CONFIRMED_HASH) {
-      throw new Error(
-        `the screen shows ${shown}. The chain published ${CONFIRMED_HASH}, and the ` +
-          `submission returned ${SUBMITTED_HASH}. The screen must show the first.`,
-      );
+    if (shown !== SUBMITTED_HASH) {
+      throw new Error(`the screen shows ${shown}, but this payment has hash ${SUBMITTED_HASH}`);
     }
 
     // The third state: the feed never speaks. This is why the bound is short
     // enough to reach.
-    confirms = false;
+    confirmation = null;
     await page.reload({ waitUntil: 'load' });
     await submit();
     await page.waitForFunction(
@@ -271,6 +287,17 @@ async function main(): Promise<void> {
     if (!late.includes('has not confirmed it yet')) {
       throw new Error(`the screen says ${late} when the feed never speaks`);
     }
+
+    submissionHash = null;
+    confirmation = correct;
+    requestedHash = null;
+    await page.reload({ waitUntil: 'load' });
+    await submit();
+    await page.waitForSelector('.confirming-late', { timeout: STEP_TIMEOUT_MS });
+    if (await page.$('.confirmed') !== null || requestedHash !== null) {
+      throw new Error('the screen confirms without a submission hash');
+    }
+    console.log('a missing submission hash remains unconfirmed');
     console.log('the screen confirms from the chain, and it stops waiting with words');
   } finally {
     await browser.close();

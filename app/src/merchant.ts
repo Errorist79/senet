@@ -89,17 +89,24 @@ async function confirmFromFeed(box: HTMLElement, reply: RedeemReply): Promise<vo
   for (;;) {
     let found: Redemption | null = null;
     try {
-      found = await fetchRedemption(reply.voucherId);
+      if (reply.hash !== null && reply.hash !== '') {
+        found = await fetchRedemption(reply.voucherId, reply.hash);
+      }
     } catch {
       // A service that does not answer is not a payment that failed. The wait
       // continues, and the bound below ends it.
     }
-    if (found !== null) {
+    if (
+      found !== null &&
+      found.tx_hash === reply.hash &&
+      found.voucher_id === reply.voucherId &&
+      found.payer === reply.payer &&
+      found.recipient === reply.recipient &&
+      found.amount === reply.amountStroops
+    ) {
       line.className = 'confirmed';
       line.textContent = 'The chain confirms this payment.';
       box.append(detail('Confirmed in ledger', String(found.ledger)));
-      // The hash comes from the event, and not from the submission. They agree
-      // on a healthy network, and the one that matters is the chain's.
       box.append(detail('Confirmed hash', short(found.tx_hash), found.tx_hash));
       return;
     }

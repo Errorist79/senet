@@ -455,6 +455,15 @@ Historical passkey rows remain historical evidence. A full run requires a live
 redemption on the configured contract and never carries an old device row forward.
 Record the screen with `archive-device-row.mjs` as well as the transaction evidence.
 The merchant feed confirms the redemption hash; it does not create another transaction.
+The feed requires both `voucherId` and `txHash` query parameters on `GET /api/redemption`.
+The screen confirms only an event with the submitted hash and these matching payment fields:
+
+- voucher identifier;
+- payer;
+- recipient;
+- amount.
+
+The same voucher identifier can occur in separate transactions.
 An app replay normally stops in simulation and produces no new on-chain hash.
 The runner's failed replay has its own hash and proves a separate on-chain refusal.
 

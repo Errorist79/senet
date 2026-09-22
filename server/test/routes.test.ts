@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Address, Keypair, Networks, nativeToScVal, rpc, xdr } from '@stellar/stellar-sdk';
 import {
   TESTNET_CONFIG,
@@ -22,6 +25,7 @@ import {
   TESTNET_RPC_URL,
   TESTNET_WALLET_WASM_HASH,
   createApiHandler,
+  addRedemption,
 } from '../src/index.js';
 import type { ServerConfig } from '../src/index.js';
 
@@ -32,6 +36,7 @@ import type { ServerConfig } from '../src/index.js';
  * so no test here spends a fee or needs a funded key. A request that would
  * reach the network is not part of this file.
  */
+const work = mkdtempSync(join(tmpdir(), 'senet-routes-'));
 const config: ServerConfig = {
   voucher: TESTNET_CONFIG,
   rpcUrl: TESTNET_RPC_URL,
@@ -39,7 +44,7 @@ const config: ServerConfig = {
   friendbotUrl: TESTNET_FRIENDBOT_URL,
   walletWasmHash: TESTNET_WALLET_WASM_HASH,
   listenerStatePath: '/nonexistent/listener.json',
-  redemptionStorePath: '/nonexistent/redemptions.json',
+  redemptionStorePath: join(work, 'redemptions.json'),
   sep7SigningSecret: 'SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB',
   rpId: RP_ID,
   channelSecrets: [Keypair.random().secret()],
@@ -76,6 +81,7 @@ before(async () => {
 
 after(() => {
   service.close();
+  rmSync(work, { recursive: true, force: true });
 });
 
 /** Post a JSON body and read the reply. */
@@ -134,6 +140,30 @@ test('an unknown path is a typed refusal, not a crash', async () => {
   const response = await fetch(`${base}/nothing`);
   assert.equal(response.status, 404);
   assert.equal(errorCode(await response.json()), 'NOT_FOUND');
+});
+
+test('a redemption lookup requires the transaction hash', async () => {
+  const response = await fetch(`${base}/redemption?voucherId=111`);
+  assert.equal(response.status, 400);
+  assert.equal(errorCode(await response.json()), 'MISSING_PARAMETER');
+});
+
+test('the redemption route selects the requested transaction for a repeated voucher identifier', async () => {
+  const first = {
+    voucher_id: '111', payer: payer.publicKey(), recipient, amount: '1000000',
+    expire_at: expireAt, tx_hash: 'a'.repeat(64), ledger: expireAt - 1,
+    ledger_closed_at: '2026-09-22T00:00:00Z', event_id: 'first',
+  };
+  const second = { ...first, tx_hash: 'b'.repeat(64), event_id: 'second', recipient: payer.publicKey() };
+  addRedemption(config.redemptionStorePath, first);
+  const url = `${base}/redemption?voucherId=111&txHash=${second.tx_hash}`;
+  const pending = await fetch(url);
+  assert.equal(pending.status, 200);
+  assert.deepEqual(await pending.json(), { voucherId: '111', redemption: null });
+  addRedemption(config.redemptionStorePath, second);
+  const confirmed = await fetch(url);
+  assert.equal(confirmed.status, 200);
+  assert.deepEqual(await confirmed.json(), { voucherId: '111', redemption: second });
 });
 
 test('the service refuses a path outside its own prefix', async () => {
