@@ -1,0 +1,24 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+  "producedAt": "2026-09-22T17:33:15.376Z",
+  "rows": [
+    {
+      "name": "device-merchant-3719405427874441681",
+      "hash": "4f78cdfab360e8301d68e578f2952e6d427f98bf3ba503729c2491e85ecacf9d",
+      "note": "The merchant screen shows this payment and its matching event confirmation.",
+      "producer": "device",
+      "screen": "merchant",
+      "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+      "shown": {
+        "title": "Paid",
+        "advice": "The ledger holds the payment. Give the goods to the payer.",
+        "values": {
+          "Ledger": "4814901",
+          "Fee charged": "0.0747553 XLM"
+        }
+      }
+    }
+  ],
+  "producedBy": "scripts/archive-device-row.mjs"
+}

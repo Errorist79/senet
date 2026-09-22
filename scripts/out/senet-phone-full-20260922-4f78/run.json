@@ -1,0 +1,12 @@
+{
+  "producedBy": "scripts/run-sow-evidence.mjs",
+  "producedAt": "2026-09-22T17:31:38.956Z",
+  "scope": "transactions-device-replay-and-confirmations",
+  "complete": true,
+  "archives": {
+    "transactions": ".",
+    "confirmations": "../senet-phone-full-20260922-4f78-confirmations",
+    "replay": "../senet-phone-full-20260922-4f78-device-replay"
+  },
+  "humanEvidence": "Phone actions, merchant screen, phone void, and video require separate capture."
+}

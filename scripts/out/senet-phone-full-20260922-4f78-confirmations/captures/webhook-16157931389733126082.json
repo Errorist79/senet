@@ -1,0 +1,18 @@
+{
+  "receivedAt": "2026-09-22T17:32:43.858Z",
+  "method": "POST",
+  "path": "/redemption",
+  "headers": {
+    "host": "127.0.0.1:8894",
+    "connection": "keep-alive",
+    "content-type": "application/json",
+    "accept": "*/*",
+    "accept-language": "*",
+    "sec-fetch-mode": "cors",
+    "user-agent": "node",
+    "accept-encoding": "gzip, deflate",
+    "content-length": "394"
+  },
+  "bodySha256": "48a86755ffa0c02a16a1604804ee843d2270a986951d09072ba612c8311e5787",
+  "body": "{\"voucher_id\":\"16157931389733126082\",\"payer\":\"GBKLSUG4CF22SFZRHQZV647SEQN4CCXT76V3F45GIUKRJTJJIJP66I32\",\"recipient\":\"GA6EZZHP2WGKG6HMNHQBAXHGGHJLC6LHVDS5NP4S3B6MHZDZKZQTKJZY\",\"amount\":\"5000000\",\"expire_at\":4815124,\"tx_hash\":\"ba2d27616d57a7561d2457f8b87233f93430e60f57440bcdf366475b0fc63036\",\"ledger\":4814945,\"ledger_closed_at\":\"2026-09-22T17:31:52Z\",\"event_id\":\"0020680031307042816-0000000002\"}"
+}
