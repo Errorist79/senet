@@ -131,20 +131,14 @@ export const DELIVERY_BACKOFF_CEILING_MS = 30_000;
  * because a jump drops those redemptions and leaves a service that looks
  * healthy.
  *
+ * The listener uses this status only when the ledger range that the RPC
+ * reports proves the age. The code of a refusal proves nothing, because the
+ * RPC gives one code to several faults, and some of them clear on their own.
+ *
  * 78 is `EX_CONFIG` in `sysexits.h`, which is the closest standard meaning: the
  * stored state is no longer usable and a person must decide what to do.
  */
 export const EXIT_CURSOR_AGED_OUT = 78;
-
-/**
- * The JSON-RPC code that the network returns for a request that it refuses.
- *
- * The listener sends one shape of request, and the only part of it that can
- * age is the cursor. This code therefore means the cursor named a ledger
- * outside the retained window. The listener classifies on this value and never
- * on the message, because the message is English prose that the network owns.
- */
-export const RPC_INVALID_REQUEST = -32600;
 
 /**
  * How many times a run that must end repeats a refused delivery.

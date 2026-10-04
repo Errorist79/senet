@@ -8,7 +8,6 @@ import {
   DELIVERY_BACKOFF_MS,
   EVENT_PAGE_LIMIT,
   EVENT_POLL_INTERVAL_MS,
-  RPC_INVALID_REQUEST,
 } from './constants.js';
 
 /**
@@ -161,18 +160,58 @@ export function readRedemption(event: rpc.Api.EventResponse): RedemptionMessage 
   };
 }
 
+/** The proof that the listener's position aged out of the network's history. */
+export interface AgedOut {
+  /** The ledger that the next poll asks from. */
+  readonly ledger: number;
+  /** The oldest ledger that the network still keeps, by the rule below. */
+  readonly oldestKept: number;
+}
+
 /**
- * Whether the network refused the request because the cursor aged out.
+ * Ask the RPC whether the listener's position aged out, after a poll failed.
  *
- * The network throws a plain object with a code and a message. It is not an
- * `Error`, so this guard inspects the fields rather than the type. The listener
- * sends one shape of request, and only the cursor in it can age. This code
- * therefore carries that one meaning here.
+ * The answer comes from the ledger range that the RPC reports, and never from
+ * the code of the refusal. The RPC gives one code, -32600, to three faults:
+ *
+ * - a start ledger that is older than the range that the RPC holds;
+ * - a start ledger that is newer than the head of the instance that answers;
+ * - a failed read of the RPC's own store.
+ *
+ * Only the first fault is permanent. A cursor names the head of the instance
+ * that issued it. An answer from an instance with a lower head therefore meets
+ * the second fault, although the cursor is only seconds old. On 23 September
+ * 2026 the listener wrote a cursor at the head, and two seconds later it
+ * stopped for good on this code.
+ *
+ * The RPC documents that a full window holds `ledgerRetentionWindow` ledgers
+ * up to the head. An instance can hold fewer, because the option that fills
+ * the window at start is off by default. The position therefore counts as
+ * aged out only when it is older than both bounds. One instance with a short
+ * history then cannot stop the listener.
+ *
+ * A range question that fails proves nothing, so it gives nothing. The caller
+ * then treats the failure as one that a restart can clear.
  */
-export function isCursorTooOld(caught: unknown): boolean {
-  if (caught === null || typeof caught !== 'object') return false;
-  const fields: Record<string, unknown> = { ...caught };
-  return fields['code'] === RPC_INVALID_REQUEST;
+export async function findAgedOut(
+  server: Pick<rpc.Server, 'getHealth'>,
+  statePath: string,
+  firstLedger: number,
+): Promise<AgedOut | null> {
+  const held = readPosition(statePath);
+  const ledger = held === null ? firstLedger : ledgerOfCursor(held.cursor);
+  if (ledger === null) return null;
+  let range: rpc.Api.GetHealthResponse;
+  try {
+    range = await server.getHealth();
+  } catch {
+    return null;
+  }
+  const oldestKept = Math.min(
+    range.oldestLedger,
+    range.latestLedger - range.ledgerRetentionWindow + 1,
+  );
+  return ledger < oldestKept ? { ledger, oldestKept } : null;
 }
 
 /**
