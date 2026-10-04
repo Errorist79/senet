@@ -149,7 +149,8 @@
         <h2 class="screen-title">Ask to be paid</h2>
         <p class="screen-note">
           Make a payment request and show it. A wallet checks that this domain
-          signed it, so a payer knows where the money goes.
+          signed it, so a payer knows where the money goes. To pay a request
+          that another phone shows, scan it.
         </p>
 
         <form class="form" id="payee-form">
@@ -173,8 +174,12 @@
         <div class="result-panel" id="payee-panel"></div>
 
         <form class="form" id="payee-read-form">
+          <button class="submit" id="payee-scan" type="button">Scan a payment request</button>
+
+          <video class="scanner" id="payee-video" muted playsinline hidden></video>
+
           <details class="fallback">
-            <summary class="fallback-summary">Read a payment request</summary>
+            <summary class="fallback-summary">Paste a request instead</summary>
             <label class="field">
               <span class="field-label">The request</span>
               <textarea class="field-input field-payload" id="payee-uri" rows="4"

@@ -15,7 +15,17 @@ the service.
 - The payer screen, which mints a voucher with no network and draws its code.
 - The merchant screen, which scans a code or takes a pasted voucher, names the
   account that receives the funds, and shows one typed outcome.
-- The payee screen, which makes a payment request, and judges one.
+- The payee screen, which makes a payment request. It also reads a request
+  from the camera or from pasted text, judges it, and pays it.
+
+## The payment request that a payee screen reads
+
+A request reaches one judgement, whether the camera read it or a person pasted
+it. The judgement checks the signature against the key that the named domain
+publishes.
+
+A code that is not a payment request gets a refusal in words. A voucher gets
+its own sentence, which names the screen that takes vouchers.
 
 ## The outcome that a merchant reads
 
@@ -48,18 +58,38 @@ names: `index.html`, `app.js`, `app.css` and `sw.js`.
 
 ## The scanner, and what proves it
 
-The merchant screen reads a code with the camera. The decoder is the C++ ZXing
-library, through its WebAssembly build. The bundle carries that build inside
-itself, because the library fetches it over the network by default, and a
-merchant may have none. The scanner asks the camera for a large frame, and it
-reads the middle square of that frame.
+Two screens read a code with the camera. The merchant screen reads a voucher,
+and the payee screen reads a payment request. One scan button serves each
+screen, and both buttons share one implementation in `src/camera.ts`. It closes
+the camera when a person stops it, when a code reads, and when a person leaves
+the screen.
+
+The decoder is the C++ ZXing library, through its WebAssembly build. The bundle
+carries that build inside itself, because the library fetches it over the
+network by default, and a merchant may have none. The scanner asks the camera
+for a large frame, and it reads the middle square of that frame.
 
 `deploy/scan-check.mjs` is what proves this. It gives Chrome a video file that
-holds a symbol of the size that a real voucher takes. The file carries a stated
-number of pixels for each module. The check then drives the merchant screen as
-a merchant does. A read means the whole path works: the camera, the frame, the
-square and the decoder. The symbol carries bytes that no payer signed, so the screen
-refuses it, and the refusal is the proof that the bytes arrived.
+holds a symbol, and it drives the deployed page as a person does. A result
+means the whole path works: the camera, the frame, the square and the decoder.
+After every result, the check asks whether the camera closed. It runs these
+cases:
+
+- `merchant`: a symbol of the size that a real voucher takes, at a stated
+  number of pixels for each module. The symbol carries bytes that no payer
+  signed, so the merchant screen refuses it. The refusal is the proof that the
+  bytes arrived.
+- `release`: a camera that shows no symbol. Each screen must close its camera
+  when a person leaves the screen or presses stop.
+- `request`: a request that the deployed service signed. The payee screen must
+  judge it signed and offer to pay it.
+- `voucher`: a signed voucher. The payee screen must refuse it as a voucher.
+- `pay`: two browsers with a passkey each. One makes a request on the payee
+  screen, and the check copies the code that the page draws into the video
+  file. The other scans that code, pays it, and must show `Paid` with a link to
+  the transaction. The check then asks the network for that transaction, and
+  it reads the balance of the account that made the request. This case spends
+  testnet funds, and it runs only when a person names it.
 
 That check runs against one browser on one machine. It says nothing about any
 lens. What is known about phones is smaller: one person read one real voucher

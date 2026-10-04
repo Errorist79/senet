@@ -5,6 +5,19 @@
  * fails at start with a clear message, and not later with a blank screen.
  */
 
+/**
+ * What a screen does when a person reaches it, and when they leave it.
+ *
+ * A screen draws from what the device holds, and another screen can change
+ * that, so a screen draws itself again when a person reaches it. A screen that
+ * holds the camera releases it when a person leaves, because nobody aims a
+ * camera behind a hidden screen.
+ */
+export interface ScreenHooks {
+  readonly refresh: () => void;
+  readonly leave: () => void;
+}
+
 /** The element with `id`, when it is of the kind that the caller needs. */
 export function element<T extends Element>(
   id: string,

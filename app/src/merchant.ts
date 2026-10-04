@@ -8,10 +8,10 @@ import {
 import type { DecodedVoucher, VoucherConfig } from '@senet/core';
 import { ServiceError, fetchLedger, fetchRedemption, submitRedeem } from './api.js';
 import type { RedeemReply, Redemption } from './api.js';
-import { CameraError, scanForSymbol } from './camera.js';
+import { CameraError, wireScanButton } from './camera.js';
 import { CONFIRM_POLL_MS, CONFIRM_TIMEOUT_MS } from './config.js';
-import type { Scan } from './camera.js';
 import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
+import type { ScreenHooks } from './dom.js';
 import { outcomeText } from './outcomes.js';
 import { redeemDetails } from './receipt.js';
 import {
@@ -165,11 +165,11 @@ function readCode(config: VoucherConfig, bytes: Uint8Array, now: number): Held {
 /**
  * Wire the merchant screen to the document.
  *
- * It gives back the way to refresh itself. The account arrives on another
- * screen. A destination drawn once at start would then say that this device
- * holds nothing long after it holds an account.
+ * It gives back the way to refresh itself and the way to leave. The account
+ * arrives on another screen. A destination drawn once at start would then say
+ * that this device holds nothing long after it holds an account.
  */
-export function startMerchantScreen(): () => void {
+export function startMerchantScreen(): ScreenHooks {
   const form = element('merchant-form', HTMLFormElement);
   const payload = element('merchant-payload', HTMLTextAreaElement);
   const recipient = element('merchant-recipient', HTMLInputElement);
@@ -181,8 +181,6 @@ export function startMerchantScreen(): () => void {
   const otherLabel = element('merchant-other-label', HTMLSpanElement);
   const video = element('merchant-video', HTMLVideoElement);
   const panel = element('merchant-result', HTMLDivElement);
-
-  let scan: Scan | null = null;
 
   /**
    * Show where the payment goes.
@@ -231,15 +229,6 @@ export function startMerchantScreen(): () => void {
   });
 
   showDestination();
-  
-
-  /** Stop the camera and put the button back. */
-  function stopScan(): void {
-    scan?.stop();
-    scan = null;
-    video.hidden = true;
-    scanButton.textContent = 'Scan a voucher';
-  }
 
   /** Show the voucher, and offer to take it. */
   function offer(held: Held): void {
@@ -297,29 +286,17 @@ export function startMerchantScreen(): () => void {
     }
   }
 
-  /** Open the camera and wait for a code. */
-  async function startScan(): Promise<void> {
-    fill(panel, make('p', 'waiting', 'Point the camera at the code that the payer shows.'));
-    video.hidden = false;
-    scanButton.textContent = 'Stop the camera';
-    try {
-      scan = await scanForSymbol(video, (found) => {
-        stopScan();
-        void present(found.bytes);
-      });
-    } catch (caught) {
-      stopScan();
+  const stopScan = wireScanButton(scanButton, video, {
+    onStart: () => {
+      fill(panel, make('p', 'waiting', 'Point the camera at the code that the payer shows.'));
+    },
+    onFound: (found) => {
+      void present(found.bytes);
+    },
+    onFailure: (caught) => {
       const { code, message } = reason(caught);
       showRefusal(panel, code, message);
-    }
-  }
-
-  scanButton.addEventListener('click', () => {
-    if (scan !== null) {
-      stopScan();
-      return;
-    }
-    void startScan();
+    },
   });
 
   form.addEventListener('submit', (event) => {
@@ -356,5 +333,5 @@ export function startMerchantScreen(): () => void {
     }
   }
 
-  return showDestination;
+  return { refresh: showDestination, leave: stopScan };
 }
