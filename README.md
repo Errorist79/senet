@@ -256,33 +256,55 @@ also needs a real passkey redemption and a published SEP-7 key, as described bel
 `cargo build --release` produces a different artifact, so it does not reproduce
 the deployed contract.
 
-### Keep the contract live
+### Keep the shared entries live
 
-The contract instance and its code stay live only for their TTL. The contract
-extends its own TTL to 30 days during a redemption, and only when less than one
-day remains. A contract that nobody uses for longer than its remaining TTL
-therefore archives.
+A contract instance and its code stay live only for their TTL. Two contracts
+extend shared entries during a user request:
 
-The next redemption then has to restore the contract, and the restore costs far
-more than a redemption. The service refuses that fee with `FEE_ABOVE_CEILING`,
-so every redemption fails until a person restores the contract. On 4 October
-2026 the restore asked for 26,498,773 stroops.
+- The voucher contract extends its instance and its code to 30 days during a
+  redemption, and only when less than one day remains. A contract that nobody
+  uses for longer than its remaining TTL therefore archives.
+- Every passkey wallet extends the shared wallet code to the maximum TTL during
+  an authentication. It does so once that code sits more than 120,960 ledgers
+  below the maximum.
 
-`deploy/verify.mjs` fails when the instance or the code has less than 30 days
-left, and it prints the days that remain. To restore the contract and extend
-it, run these commands with any funded testnet account:
+Each of these extensions costs more than the service pays for one request. The
+service refuses that fee with `FEE_ABOVE_CEILING`, so the request fails. On 4
+October 2026 the voucher contract had archived, and a redemption asked for
+26,498,773 stroops to restore it.
+
+The timer `senet-extend-ttl.timer` therefore runs `deploy/extend-ttl.mjs` every
+hour. The script extends the voucher instance, the voucher code and the wallet
+code to the maximum TTL two days before a user request would pay.
+`deploy/ttl-policy.mjs` holds the rule for each entry.
+
+An operator account pays for the extensions. It is a testnet account that
+friendbot funds, and it holds no product funds. Its key lives only in
+`/opt/senet/operator.env` on the host. The deployment creates that file once,
+and nothing prints the key. When the balance falls below 2,000 XLM, the script
+merges a new friendbot account into the operator account.
+
+`deploy/verify.mjs` is the alarm for the timer. It fails one day before a user
+request would pay.
+
+If the timer stops:
+
+1. Read the reason: `journalctl -u senet-extend-ttl -n 50`.
+2. Start one run: `systemctl start senet-extend-ttl.service`.
+3. If the run still fails, extend the entries with any funded testnet account:
 
 ```bash
 contract=CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY
-wasm=c93a39a97541555caf3136dfa13dc33e1592ce492a07ad2f00d050352f98bf55
-stellar contract restore --id "$contract" --source-account ACCOUNT --network testnet
-stellar contract restore --wasm-hash "$wasm" --source-account ACCOUNT --network testnet
+voucher=c93a39a97541555caf3136dfa13dc33e1592ce492a07ad2f00d050352f98bf55
+wallet=502ea4e7bdb3ea99880941f1d35ceb67fb598692c0bb40f842ef9c9f17d58b58
 stellar contract extend --id "$contract" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
-stellar contract extend --wasm-hash "$wasm" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
+stellar contract extend --wasm-hash "$voucher" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
+stellar contract extend --wasm-hash "$wallet" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
 ```
 
-3,110,399 ledgers is the longest TTL that testnet allows, about 180 days. The
-network setting `maxEntryTtl` sets that limit.
+An entry that already archived needs `stellar contract restore` with the same
+`--id` or `--wasm-hash` first. 3,110,399 ledgers is the longest TTL that testnet
+allows, about 180 days. The network setting `maxEntryTtl` sets that limit.
 
 ## The public deployment
 
@@ -349,8 +371,10 @@ sees rather than what the host believes. The command checks that:
 - the service names the contract and holds its channel accounts;
 - the event listener wrote its cursor in the last ten minutes, and no event
   blocks it, so a stopped listener fails the check;
-- the voucher contract instance, its code and the passkey wallet code keep at
-  least 30 days of TTL;
+- the shared contract entries stay at least one day above the TTL at which a
+  user request pays to extend them;
+- an ed25519 redemption and a wallet deployment simulate below 75 percent of
+  their fee ceilings;
 - the application names no relying party other than the host.
 
 With a browser it also loads the page, registers the worker, and reads the
