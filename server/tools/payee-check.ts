@@ -6,19 +6,21 @@
  * signature arithmetic works, which never decays, and would say nothing about
  * the half that does: whether the domain still publishes the key that signs.
  *
- * Three of the four states run here. The fourth, a request that names no
+ * Four of the five states run here. The fifth, a request that names no
  * domain, needs no network and a unit test covers it.
+ *
+ * The screen judges the network of a request against the network that the
+ * service reports. The page therefore runs with the service on its own origin.
  *
  *   ENV_FILE=/path/to/.env CHROME_PATH=/path/to/chrome \
  *     npm run payee-check --workspace @senet/server
  */
-import { createServer } from 'node:http';
-import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rpc } from '@stellar/stellar-sdk';
 import { launch } from 'puppeteer-core';
-import { loadEnvFile, payeeRoute, readConfig } from '../src/index.js';
-import { serveBuiltApplication } from './serve-build.js';
+import { FeePayer, createApiHandler, loadEnvFile, payeeRoute, readConfig } from '../src/index.js';
+import { serveApplication } from './serve-build.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(HERE, '..', '..', '..', 'app', 'dist');
@@ -37,9 +39,6 @@ async function main(): Promise<void> {
   loadEnvFile();
   const chromePath = required('CHROME_PATH');
   const config = readConfig();
-  if (!existsSync(join(DIST, 'index.html'))) {
-    throw new Error(`${DIST} holds no build. Run the application build first.`);
-  }
 
   const signed = payeeRoute(config, { destination: DESTINATION, amount: '1.5' });
   // The same request with one character of the amount changed. The signature
@@ -50,14 +49,14 @@ async function main(): Promise<void> {
     `origin_domain=${config.rpId}`,
     'origin_domain=example.com',
   );
+  // The same request without its network. SEP-7 reads that as the public
+  // network, so the screen refuses it before it checks the signature.
+  const unnamed = signed.uri.replace(/&network_passphrase=[^&]*/, '');
 
-  const service = createServer((request, response) =>
-    serveBuiltApplication(DIST, request, response),
-  );
-  await new Promise<void>((up) => service.listen(0, '127.0.0.1', up));
-  const address = service.address();
-  if (address === null || typeof address === 'string') throw new Error('the service took no port');
-  const origin = `http://localhost:${address.port}`;
+  const feePayer = await new FeePayer(config).start();
+  const server = new rpc.Server(config.rpcUrl);
+  const served = await serveApplication(DIST, createApiHandler({ config, feePayer, server }));
+  const origin = served.origin;
   console.log(`origin     ${origin}`);
   console.log(`domain     ${config.rpId}`);
 
@@ -84,7 +83,8 @@ async function main(): Promise<void> {
         const panel = document.getElementById('payee-read-panel');
         if (panel !== null) panel.replaceChildren();
       }, uri);
-      await page.click('#payee-read-form .submit');
+      // The form holds the scan button as well, so this names the paste button.
+      await page.click('#payee-read-form details .submit');
       await page.waitForSelector('#payee-read-panel .result', { timeout: STEP_TIMEOUT_MS });
       return page.evaluate(() => {
         const box = document.querySelector('#payee-read-panel .result');
@@ -113,10 +113,17 @@ async function main(): Promise<void> {
     if (unknown.title.toLowerCase().includes('did not sign')) {
       throw new Error('the screen called an unreachable domain a forgery');
     }
+
+    if (unnamed === signed.uri) throw new Error('the signed request carries no network to remove');
+    const noNetwork = await judge(unnamed);
+    console.log(`no network ${noNetwork.tone}  ${noNetwork.title}`);
+    if (noNetwork.tone !== 'result-bad' || !noNetwork.title.includes('public Stellar network')) {
+      throw new Error(`the screen said ${noNetwork.title} about a request with no network`);
+    }
     console.log('the screen judges a request the way a wallet does');
   } finally {
     await browser.close();
-    service.close();
+    served.close();
   }
 }
 

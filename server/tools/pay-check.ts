@@ -116,7 +116,8 @@ async function main(): Promise<void> {
       field.value = uri;
       field.dispatchEvent(new Event('input', { bubbles: true }));
     }, request.uri);
-    await page.click('#payee-read-form .submit');
+    // The form holds the scan button as well, so this names the paste button.
+    await page.click('#payee-read-form details .submit');
     await page.waitForSelector('#payee-read-panel .result', { timeout: STEP_TIMEOUT_MS });
     const judged = await page.evaluate(
       () => document.querySelector('#payee-read-panel .result-title')?.textContent ?? '',
