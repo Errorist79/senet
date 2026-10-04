@@ -37,8 +37,8 @@ import {
 // copy.
 import { RP_ID } from '@senet/server';
 import {
-  ENDPOINTS, HORIZON_URL, OUT_DIR, ROOT, RPC_URL, archiveRow, describeRedeem, loadEnv,
-  publishesTheKey, refusalReasons, requireEnv, writeManifest,
+  ENDPOINTS, HORIZON_URL, OUT_DIR, ROOT, RPC_URL, archiveRow, deriveRequestClaims, describeRedeem,
+  loadEnv, publishesTheKey, refusalReasons, requireEnv, writeManifest,
 } from './evidence-set.mjs';
 
 /** The value of one voucher in stroops, which is 0.5 XLM. */
@@ -343,8 +343,9 @@ async function record(name, outcome, note, request) {
  * the request, so a wallet can tell that the domain asked.
  *
  * The payment is a classic payment operation and not a contract call. A
- * different decoder therefore reads the row that it produces, and no other row
- * here needs that decoder.
+ * different decoder, `paymentFromEnvelope`, therefore reads the row that it
+ * produces. The run compares that payment with the request after it archives
+ * the row.
  */
 async function payeePresentedPayment() {
   const signingKey = Keypair.fromSecret(requireEnv('SEP7_SIGNING_SECRET'));
@@ -527,6 +528,15 @@ for (const [name, lifetime] of Object.entries(LIFETIMES)) {
 if (!vouchersOnly) {
   const sep7 = await payeePresentedPayment();
   await record(sep7.name, sep7, sep7.note, sep7.request);
+  // The request is the artifact and the payment is the fact. The run compares
+  // the two from the archive, and a disagreement leaves the manifest incomplete.
+  const claims = deriveRequestClaims(evidenceDirectory, manifest);
+  if (claims.checked === 0 || claims.problems.length > 0) {
+    throw new Error(
+      `the archived request and its payment disagree: ${claims.problems.join('; ') || 'the comparison read no row'}`,
+    );
+  }
+  console.log(`  the archived payment answers its request, in ${claims.checked} checks`);
 }
 manifest.complete = true;
 writeManifest(evidenceDirectory, manifest);
