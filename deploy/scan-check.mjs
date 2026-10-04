@@ -19,10 +19,9 @@
 // The cases:
 //
 // - merchant: a symbol of random bytes, of the size that a passkey voucher
-//   takes, on the merchant screen. No unattended run can sign with a passkey,
-//   so the screen refuses the bytes. The refusal is the proof that the scanner
-//   read the bytes and handed them to the voucher reader. A camera that reads
-//   nothing produces no refusal at all.
+//   takes, on the merchant screen. The screen refuses the bytes. The refusal
+//   is the proof that the scanner read the bytes and handed them to the voucher
+//   reader. A camera that reads nothing produces no refusal at all.
 // - release: a camera that shows no symbol, on both screens. Each camera must
 //   close when a person leaves its screen or presses stop.
 // - request: a request that the deployed service signed, on the payee screen.
