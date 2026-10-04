@@ -66,6 +66,8 @@ async function main(): Promise<void> {
   });
   try {
     const page = await browser.newPage();
+    // deploy/scan-check.mjs holds a copy of this setup on purpose: that check is
+    // a plain module in deploy, and this tool is TypeScript in the server tree.
     const session = await page.createCDPSession();
     await session.send('WebAuthn.enable');
     await session.send('WebAuthn.addVirtualAuthenticator', {

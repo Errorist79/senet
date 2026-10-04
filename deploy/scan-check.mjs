@@ -209,6 +209,8 @@ async function openPage(browser, { passkey }) {
     if (message.type() === 'error') console.log(`  browser error: ${message.text()}`);
   });
   if (passkey) {
+    // server/tools/pay-check.ts holds a copy of this setup on purpose: that tool
+    // is TypeScript in the server tree, and this check is a plain module in deploy.
     const session = await page.createCDPSession();
     await session.send('WebAuthn.enable');
     await session.send('WebAuthn.addVirtualAuthenticator', {
