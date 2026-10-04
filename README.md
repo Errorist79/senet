@@ -319,6 +319,8 @@ sees rather than what the host believes. The command checks that:
   origin;
 - `stellar.toml` answers as text and allows another origin;
 - the service names the contract and holds its channel accounts;
+- the event listener wrote its cursor in the last ten minutes, and no event
+  blocks it, so a stopped listener fails the check;
 - the application names no relying party other than the host.
 
 With a browser it also loads the page, registers the worker, and reads the
