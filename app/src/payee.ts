@@ -1,12 +1,11 @@
 import { requestPayment, submitPayment } from './api.js';
 import { CODE_SIZE } from './config.js';
-import { detail, element, fill, make, short } from './dom.js';
+import { detail, element, fill, make, short, toStroops, xlm } from './dom.js';
 import { drawToCanvas, encodeBytes } from './qr.js';
-import { getAccount, getChain, getLedger } from './store.js';
+import { getAccount, getChain, getLedger, voucherConfig } from './store.js';
 import { judgeRequest, judgementText, readRequest } from './verify.js';
 import { LIFETIMES, randomNonce, signPayment } from '@senet/core';
 import { passkeySigner } from './passkey.js';
-import { xlm } from './dom.js';
 
 /**
  * The payee-presented screen.
@@ -173,11 +172,11 @@ export function startPayeeScreen(): () => void {
       showProblem(readPanel, 'This device knows no ledger, so it cannot date a payment.');
       return;
     }
-    const stroops = BigInt(Math.round(Number(asked) * 10_000_000));
     box.append(make('p', 'confirming', `Paying ${asked} XLM. Your device will ask you to confirm.`));
     try {
+      const stroops = toStroops(asked);
       const entry = await signPayment(
-        { network: chain.network, contractId: chain.contractId, tokenId: chain.tokenId },
+        voucherConfig(chain),
         { from: account.contractId, to, amount: stroops, expireAt: seen.sequence + LIFETIMES['15m'] },
         randomNonce(),
         passkeySigner(chain),

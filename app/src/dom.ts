@@ -50,6 +50,25 @@ export function fill(node: Element, ...children: readonly Node[]): void {
   node.replaceChildren(...children);
 }
 
+/** Stroops in one XLM. */
+export const STROOPS_PER_XLM = 10_000_000n;
+
+/**
+ * An amount in XLM, as stroops.
+ *
+ * A person types a decimal amount, or a payment request carries one, and the
+ * ledger counts stroops. The reader multiplies rather than parsing a float,
+ * because a float loses stroops.
+ */
+export function toStroops(typed: string): bigint {
+  if (!/^\d+(\.\d{1,7})?$/.test(typed.trim())) {
+    throw new Error('the amount must be a number with up to seven decimal places');
+  }
+  const [whole, fraction] = typed.trim().split('.');
+  const places = (fraction ?? '').padEnd(7, '0');
+  return BigInt(whole ?? '0') * STROOPS_PER_XLM + BigInt(places);
+}
+
 /** Stroops as an XLM amount with seven places. */
 export function xlm(stroops: string): string {
   const negative = stroops.startsWith('-');

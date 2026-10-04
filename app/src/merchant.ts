@@ -21,6 +21,7 @@ import {
   getMerchantAddress,
   setLedger,
   setMerchantAddress,
+  voucherConfig,
 } from './store.js';
 
 /**
@@ -288,13 +289,8 @@ export function startMerchantScreen(): () => void {
       );
       return;
     }
-    const config: VoucherConfig = {
-      network: chain.network,
-      contractId: chain.contractId,
-      tokenId: chain.tokenId,
-    };
     try {
-      offer(readCode(config, bytes, now));
+      offer(readCode(voucherConfig(chain), bytes, now));
     } catch (caught) {
       const { code, message } = reason(caught);
       showRefusal(panel, code, message);
