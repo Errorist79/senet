@@ -484,19 +484,28 @@ async function createAccount(page, name) {
   return box.rows['Address']?.full ?? '';
 }
 
-/** Press the button that adds test funds, and wait until the balance shows an amount. */
-async function addFunds(page) {
+/**
+ * Press the button that adds test funds, and wait until the balance covers a payment.
+ *
+ * A new account can show a balance of zero before the funds arrive. Any
+ * amount therefore proves nothing. The wait ends at an amount that pays the
+ * request, and it gives back the balance that the screen shows.
+ */
+async function addFunds(page, wanted) {
   await page.click('#account-panel .result button.submit-quiet');
   await page.waitForFunction(
-    () => {
+    (least) => {
       for (const row of document.querySelectorAll('#account-panel .detail')) {
         if (row.querySelector('.detail-label')?.textContent !== 'Balance') continue;
-        return /^\d+\.\d{7} XLM$/.test(row.querySelector('.detail-value')?.textContent ?? '');
+        const shown = /^(\d+)\.(\d{7}) XLM$/.exec(row.querySelector('.detail-value')?.textContent ?? '');
+        return shown !== null && BigInt(`${shown[1]}${shown[2]}`) >= BigInt(least);
       }
       return false;
     },
     { timeout: STEP_TIMEOUT_MS },
+    wanted,
   );
+  return (await readBox(page, '#account-panel .result'))?.rows['Balance']?.full ?? '';
 }
 
 /**
@@ -548,6 +557,7 @@ async function transactionStatus(rpcUrl, hash) {
 }
 
 async function payCase(chain) {
+  const wanted = (BigInt(REQUEST_AMOUNT) * STROOPS_PER_XLM).toString();
   // The payee's phone makes the request and draws it. It needs no camera.
   const payeeBrowser = await launch({ executablePath: CHROME, args: ['--no-sandbox'] });
   let grid;
@@ -569,7 +579,7 @@ async function payCase(chain) {
   // The payer's camera shows that code. The payer reads it, pays it, and reads the result.
   const paid = await withCamera(grid, { passkey: true }, async (page) => {
     await createAccount(page, 'scan check payer');
-    await addFunds(page);
+    console.log(`  the payer holds ${await addFunds(page, wanted)}`);
     const judged = await scan(page, PAYEE);
     expect(judged?.title.endsWith('signed this request') === true, 'the payer did not see a signed request');
     await page.click(`${PAYEE.panel} .result button.submit`);
@@ -597,7 +607,6 @@ async function payCase(chain) {
   const status = await transactionStatus(chain.rpcUrl, hash);
   expect(status === 'SUCCESS', `the network reports ${status} for ${hash}`);
   const balance = await service(`/balance?address=${encodeURIComponent(payee)}`);
-  const wanted = (BigInt(REQUEST_AMOUNT) * STROOPS_PER_XLM).toString();
   expect(balance.balanceStroops === wanted, `the payee holds ${balance.balanceStroops}, not ${wanted}`);
   console.log(`  the network reports ${status} for ${hash}, and the payee holds ${balance.balanceStroops} stroops`);
 }
