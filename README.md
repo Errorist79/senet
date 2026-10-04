@@ -59,7 +59,7 @@ calculation:
 
 | Component | Version |
 |---|---|
-| Stellar network | Testnet, protocol 28 |
+| Stellar network | Testnet, protocol 29 |
 | Rust | 1.96.0, target `wasm32v1-none` |
 | `soroban-sdk` | 27.0.6 |
 | `stellar-cli` | 28.0.0 |
