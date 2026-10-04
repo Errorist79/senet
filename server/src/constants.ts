@@ -47,8 +47,9 @@ export const INCLUSION_FEE_STROOPS = 10_000n;
  */
 
 /**
- * The largest whole fee that the service pays for one redemption that an
- * ed25519 key authorizes, in stroops.
+ * The largest whole fee that the service pays for one redemption or SEP-7
+ * payment that a key authorizes, in stroops. A contract other than the passkey
+ * wallet gets this ceiling too, because it runs code that its owner chose.
  *
  * Measured on 4 October 2026: such a redemption declared at most 49,334
  * stroops. A redemption can also extend the TTL of the native asset balance
@@ -59,7 +60,9 @@ export const MAX_REDEEM_FEE_STROOPS = 1_300_000n;
 
 /**
  * The largest whole fee that the service pays for one request that a passkey
- * account authorizes, in stroops: a redemption, a void, or a SEP-7 payment.
+ * wallet authorizes, in stroops: a redemption, a void, or a SEP-7 payment. The
+ * service reads the payer's code from the network and checks that it is the
+ * wallet code that it knows.
  *
  * Measured on 4 October 2026: a passkey redemption declared 52,035 stroops, a
  * passkey void 47,546, and a SEP-7 payment 45,411. A request can also carry

@@ -109,7 +109,9 @@ careless retry could send one voucher twice.
   resource fee, and the sum is the whole bid.
 - The service refuses to submit above the ceiling of the request's kind. The
   whole fee may reach 1,300,000 stroops for a request that a key authorizes,
-  18,000,000 for a passkey account, and 14,000,000 for a deployment. A hostile
+  18,000,000 for a passkey wallet, and 14,000,000 for a deployment. Any other
+  contract gets the ceiling of a key, and the deploy route accepts only a
+  deployment of the wallet code. A hostile
   entry with a large footprint would otherwise turn one request into a large
   charge against a channel. `src/constants.ts` derives each value from
   measurements.

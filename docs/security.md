@@ -77,10 +77,14 @@ The service refuses a request above the ceiling of its kind before it signs or s
 | Request | Ceiling in stroops | Ceiling in XLM |
 |---|---:|---:|
 | A redemption or a SEP-7 payment that a key authorizes | 1,300,000 | 0.13 |
-| A redemption, a void or a SEP-7 payment that a passkey account authorizes | 18,000,000 | 1.8 |
+| A redemption, a void or a SEP-7 payment that a passkey wallet authorizes | 18,000,000 | 1.8 |
 | An account deployment | 14,000,000 | 1.4 |
 
 These are per-transaction ceilings, not an aggregate guarantee.
+
+The passkey ceiling applies only to a payer that runs the passkey wallet code, which the service reads from the network.
+Any other contract runs code that its owner chose, so it gets the ceiling of a key.
+The deploy route accepts only a deployment of the passkey wallet code. It refuses any other host function before it simulates.
 
 Each ceiling starts from the most that a legitimate request of its kind cost on 4 October 2026.
 It scales that cost to the highest rent rate below the target state size, and it adds 10 percent.

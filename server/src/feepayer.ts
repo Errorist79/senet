@@ -1,4 +1,5 @@
 import {
+  Contract,
   Keypair,
   Operation,
   StrKey,
@@ -31,12 +32,25 @@ const REDEEM_FUNCTION = 'redeem';
 /**
  * The fee ceiling for a redemption or a payment, which depends on the payer.
  *
- * A passkey account runs its own authorization code, and that code can extend
- * the account's TTL during the request. A key signs without contract code. The
- * two kinds of payer therefore cost different amounts.
+ * A passkey wallet runs its own authorization code, and that code can extend
+ * the wallet's TTL during the request. A key signs without contract code. Any
+ * other contract runs code that its owner chose, so it gets the ceiling of a
+ * key. The service pays the larger ceiling only for wallet code that it knows.
+ *
+ * @param executable the code that the payer runs, or `null` for a key or for
+ *   a contract that the network does not hold
  */
-export function payerCeiling(payer: string): bigint {
-  return StrKey.isValidContract(payer) ? MAX_PASSKEY_REQUEST_FEE_STROOPS : MAX_REDEEM_FEE_STROOPS;
+export function payerCeilingFor(
+  payer: string,
+  executable: xdr.ContractExecutable | null,
+  walletWasmHash: string,
+): bigint {
+  const wallet =
+    StrKey.isValidContract(payer) &&
+    executable !== null &&
+    executable.switch().name === 'contractExecutableWasm' &&
+    executable.wasmHash().toString('hex') === walletWasmHash.toLowerCase();
+  return wallet ? MAX_PASSKEY_REQUEST_FEE_STROOPS : MAX_REDEEM_FEE_STROOPS;
 }
 
 /** What one submission produced. The service returns this and it raises nothing. */
@@ -224,6 +238,7 @@ export class FeePayer {
     recipient: string,
   ): Promise<RedeemRecord> {
     const voucher = readVoucher(this.config.voucher, entry);
+    const ceiling = await this.payerCeiling(voucher.payer);
     const result = await this.withChannel((channel) =>
       new TransactionBuilder(channel.next(), {
         fee: INCLUSION_FEE_STROOPS.toString(),
@@ -239,9 +254,28 @@ export class FeePayer {
         )
         .setTimeout(TX_TIMEOUT_SECONDS)
         .build(),
-      payerCeiling(voucher.payer),
+      ceiling,
     );
     return { ...result, voucher };
+  }
+
+  /**
+   * The fee ceiling for a request from this payer, from the code that it runs.
+   *
+   * A failed read gives the ceiling of a key. That can refuse a large request
+   * from a real wallet, and the payer can then try again. It never lets an
+   * unknown contract spend the larger ceiling.
+   */
+  async payerCeiling(payer: string): Promise<bigint> {
+    if (!StrKey.isValidContract(payer)) return payerCeilingFor(payer, null, this.config.walletWasmHash);
+    let executable: xdr.ContractExecutable | null = null;
+    try {
+      const { entries } = await this.server.getLedgerEntries(new Contract(payer).getFootprint());
+      executable = entries[0]?.val.contractData().val().instance().executable() ?? null;
+    } catch {
+      executable = null;
+    }
+    return payerCeilingFor(payer, executable, this.config.walletWasmHash);
   }
 
   /**

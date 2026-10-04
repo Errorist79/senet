@@ -31,8 +31,6 @@ const { Address, Networks, Transaction, xdr } = await import('@stellar/stellar-s
 const { readArchivedRow } = await import('@senet/evidence');
 const { redeemFromEnvelope, signatureScheme } = await import('./evidence-set.mjs');
 const { INCLUSION_FEE_STROOPS, MAX_PASSKEY_REQUEST_FEE_STROOPS, MAX_REDEEM_FEE_STROOPS } = await import('../server/dist/src/constants.js');
-// The rule that the service applies, so the analysis compares each payer with its own ceiling.
-const { payerCeiling } = await import('../server/dist/src/feepayer.js');
 const inputDir = path.join(ROOT, 'scripts/out/evidence');
 
 function sha256(bytes) {
@@ -91,7 +89,9 @@ function measure({ name, expectedScheme }) {
   assert(resource >= resourceCharged, `${name}: resource charge exceeds declaration`);
   assert(inclusionCharged > 0n && inclusionDeclared >= inclusionCharged, `${name}: invalid inclusion fees`);
   const policyDeclared = resource + INCLUSION_FEE_STROOPS;
-  const cap = payerCeiling(redeem.payer);
+  // Each archived passkey payer is a passkey wallet, which its signature scheme shows.
+  // The analysis reads nothing from the network, so it takes the kind from the scheme.
+  const cap = scheme === 'secp256r1' ? MAX_PASSKEY_REQUEST_FEE_STROOPS : MAX_REDEEM_FEE_STROOPS;
   assert(policyDeclared <= cap, `${name}: service fee cap is too low`);
   assert(INCLUSION_FEE_STROOPS >= inclusionCharged, `${name}: service inclusion bid is too low`);
   return {

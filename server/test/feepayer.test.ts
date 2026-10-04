@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Keypair, Networks } from '@stellar/stellar-sdk';
+import { Address, Keypair, Networks, xdr } from '@stellar/stellar-sdk';
 import {
   INCLUSION_FEE_STROOPS,
   MAX_ATTEMPTS,
@@ -8,7 +8,8 @@ import {
   MAX_PASSKEY_REQUEST_FEE_STROOPS,
   MAX_REDEEM_FEE_STROOPS,
   MIN_CHANNEL_BALANCE_STROOPS,
-  payerCeiling,
+  isWalletDeployment,
+  payerCeilingFor,
   readConfig,
   retryable,
 } from '../src/index.js';
@@ -123,9 +124,48 @@ test('a key never spends what a passkey account or a deployment may spend', () =
   assert.ok(MAX_REDEEM_FEE_STROOPS < MAX_PASSKEY_REQUEST_FEE_STROOPS);
 });
 
-test('the ceiling of a request follows the kind of payer', () => {
-  assert.equal(payerCeiling(Keypair.random().publicKey()), MAX_REDEEM_FEE_STROOPS);
-  assert.equal(payerCeiling(TESTNET_CONTRACT_ID), MAX_PASSKEY_REQUEST_FEE_STROOPS);
+/** The code entry that a contract runs, by the hash of its Wasm. */
+function wasm(hash: string): xdr.ContractExecutable {
+  return xdr.ContractExecutable.contractExecutableWasm(Buffer.from(hash, 'hex'));
+}
+
+const WALLET_WASM = '502ea4e7bdb3ea99880941f1d35ceb67fb598692c0bb40f842ef9c9f17d58b58';
+const OTHER_WASM = 'c93a39a97541555caf3136dfa13dc33e1592ce492a07ad2f00d050352f98bf55';
+
+test('only a passkey wallet gets the passkey ceiling', () => {
+  const key = Keypair.random().publicKey();
+  assert.equal(payerCeilingFor(key, null, WALLET_WASM), MAX_REDEEM_FEE_STROOPS);
+  assert.equal(payerCeilingFor(TESTNET_CONTRACT_ID, wasm(WALLET_WASM), WALLET_WASM), MAX_PASSKEY_REQUEST_FEE_STROOPS);
+  // A contract that runs code of its owner's choice spends no more than a key.
+  assert.equal(payerCeilingFor(TESTNET_CONTRACT_ID, wasm(OTHER_WASM), WALLET_WASM), MAX_REDEEM_FEE_STROOPS);
+  assert.equal(payerCeilingFor(TESTNET_CONTRACT_ID, null, WALLET_WASM), MAX_REDEEM_FEE_STROOPS);
+});
+
+test('the deploy route pays only for a deployment of the wallet code', () => {
+  const deploy = (hash: string): xdr.HostFunction =>
+    xdr.HostFunction.hostFunctionTypeCreateContractV2(
+      new xdr.CreateContractArgsV2({
+        contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+          new xdr.ContractIdPreimageFromAddress({
+            address: Address.fromString(Keypair.random().publicKey()).toScAddress(),
+            salt: Buffer.alloc(32),
+          }),
+        ),
+        executable: wasm(hash),
+        constructorArgs: [],
+      }),
+    );
+  assert.equal(isWalletDeployment(deploy(WALLET_WASM), WALLET_WASM), true);
+  assert.equal(isWalletDeployment(deploy(OTHER_WASM), WALLET_WASM), false);
+  // A call into any contract is not a deployment, whatever it does.
+  const call = xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: Address.fromString(TESTNET_CONTRACT_ID).toScAddress(),
+      functionName: 'redeem',
+      args: [],
+    }),
+  );
+  assert.equal(isWalletDeployment(call, WALLET_WASM), false);
 });
 
 test('the inclusion fee is a part of the measured bid', () => {

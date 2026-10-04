@@ -22,6 +22,16 @@ export interface FundReply {
   readonly waitedMs: number;
 }
 
+/** Whether a host function deploys the passkey wallet code, and does nothing else. */
+export function isWalletDeployment(hostFunction: xdr.HostFunction, walletWasmHash: string): boolean {
+  if (hostFunction.switch().name !== 'hostFunctionTypeCreateContractV2') return false;
+  const executable = hostFunction.createContractV2().executable();
+  return (
+    executable.switch().name === 'contractExecutableWasm' &&
+    executable.wasmHash().toString('hex') === walletWasmHash.toLowerCase()
+  );
+}
+
 /**
  * Submit a host function that the caller already authorized.
  *
@@ -42,6 +52,12 @@ export async function deployRoute(
     hostFunction = xdr.HostFunction.fromXDR(requireString(body, 'hostFunction'), 'base64');
   } catch {
     throw badRequest('MALFORMED_HOST_FUNCTION', 'hostFunction is not base64 XDR');
+  }
+  // The route pays for a wallet deployment and for nothing else. A caller who
+  // could name any host function could make the service pay for work of the
+  // caller's choice, up to the deploy ceiling.
+  if (!isWalletDeployment(hostFunction, context.config.walletWasmHash)) {
+    throw badRequest('NOT_A_WALLET_DEPLOYMENT', 'hostFunction must deploy the passkey wallet code');
   }
 
   const entries = body['auth'];
