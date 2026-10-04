@@ -1,4 +1,4 @@
-import { Keypair } from '@stellar/stellar-sdk';
+import { Keypair, Networks } from '@stellar/stellar-sdk';
 import { UriFormatError } from './errors.js';
 
 /**
@@ -22,15 +22,26 @@ const SEP7_SIGNING_PREFIX = 'stellar.sep.7 - URI Scheme';
 /** The query parameter that carries the signature. It is always last. */
 const SIGNATURE_PARAM = 'signature';
 
+/** The query parameter that names the network that a request is for. */
+const NETWORK_PARAM = 'network_passphrase';
+
 /** The width of the zero padding in a SEP-7 signature payload, in bytes. */
 const SIGNING_PAD_BYTES = 36;
 
 /** The value of the last padding byte, which SEP-7 fixes at 4. */
 const SIGNING_PAD_MARKER = 4;
 
-/** The fields of a `pay` request. A request needs the destination only. */
+/** The fields of a `pay` request. A request needs a destination and a network. */
 export interface PayUriFields {
   readonly destination: string;
+  /**
+   * The passphrase of the network that the payment is for.
+   *
+   * SEP-7 makes this field optional, and a wallet reads a request without it
+   * as a request for the public network. A testnet request that left it out
+   * would ask a wallet to move real funds. The builder therefore requires it.
+   */
+  readonly networkPassphrase: string;
   readonly amount?: string;
   readonly assetCode?: string;
   readonly assetIssuer?: string;
@@ -85,8 +96,15 @@ export function buildPayUri(fields: PayUriFields): string {
   if (fields.destination === '') {
     throw new UriFormatError('a pay request needs a destination');
   }
+  // A caller in plain JavaScript can leave the field out, and the type checker
+  // never sees that caller. The check therefore runs at run time too.
+  if (!fields.networkPassphrase) {
+    throw new UriFormatError('a pay request needs the passphrase of its network');
+  }
   const params = new URLSearchParams();
   params.set('destination', fields.destination);
+  // The order follows the parameter list of SEP-7. The network comes before
+  // the origin domain, so the signature covers it like every other field.
   const optional: readonly [string, string | undefined][] = [
     ['amount', fields.amount],
     ['asset_code', fields.assetCode],
@@ -94,6 +112,7 @@ export function buildPayUri(fields: PayUriFields): string {
     ['memo', fields.memo],
     ['memo_type', fields.memoType],
     ['msg', fields.msg],
+    [NETWORK_PARAM, fields.networkPassphrase],
     ['origin_domain', fields.originDomain],
   ];
   for (const [name, value] of optional) {
@@ -139,6 +158,18 @@ export function parseUri(uri: string): ParsedUri {
   const fields: Record<string, string> = {};
   for (const [name, value] of params) fields[name] = value;
   return { operation, fields };
+}
+
+/**
+ * The network that a request is for.
+ *
+ * SEP-7 says that a request needs `network_passphrase` only for a network
+ * other than the public one. A request without it is therefore for the public
+ * network. A reader that compares this value with its own network refuses such
+ * a request, unless the reader runs on the public network.
+ */
+export function requestNetwork(request: ParsedUri): string {
+  return request.fields[NETWORK_PARAM] ?? Networks.PUBLIC;
 }
 
 /** Verify a signed request against a domain's request signing key. */

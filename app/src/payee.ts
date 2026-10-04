@@ -9,7 +9,7 @@ import { drawToCanvas, encodeBytes } from './qr.js';
 import type { Scanned } from './qr.js';
 import { transactionDetail } from './receipt.js';
 import { getAccount, getChain, getLedger, voucherConfig } from './store.js';
-import { judgeRequest, judgementText, readRequest } from './verify.js';
+import { judgeRequest, judgementText, mayPay, readRequest } from './verify.js';
 
 /**
  * The payee-presented screen.
@@ -118,9 +118,18 @@ export function startPayeeScreen(): ScreenHooks {
    * details sit under it.
    */
   async function judge(uri: string): Promise<void> {
+    const chain = getChain();
+    if (chain === null) {
+      showProblem(
+        readPanel,
+        'The service did not answer, so this device does not know its network yet. ' +
+          'Check the network, then try again.',
+      );
+      return;
+    }
     fill(readPanel, make('p', 'waiting', 'Asking the domain that this request names.'));
     try {
-      const judged = await judgeRequest(uri);
+      const judged = await judgeRequest(uri, chain.network);
       const words = judgementText(judged);
       const box = make('div', `result result-${words.tone}`);
       box.append(
@@ -135,10 +144,7 @@ export function startPayeeScreen(): ScreenHooks {
           box.append(detail(name, value.length > 16 ? short(value) : value, value));
         }
       }
-      // A request that the domain refused is never payable. A person may pay
-      // the other three. Two of them mean that nobody vouched, which differs
-      // from somebody's word failing.
-      if (judged.kind !== 'refused') addPayButton(box, uri, request.fields);
+      if (mayPay(judged)) addPayButton(box, uri, request.fields);
       fill(readPanel, box);
     } catch (caught) {
       showProblem(readPanel, reason(caught));
@@ -192,8 +198,9 @@ export function startPayeeScreen(): ScreenHooks {
    *
    * The passkey signs an authorization for a transfer, and the service pays
    * the network fee. The amount and the destination come from the request that
-   * the screen judged. Nothing here comes from a field that a person typed, so
-   * the payment matches what the judgement covered.
+   * the screen judged, and the network is the one that the judgement matched.
+   * Nothing here comes from a field that a person typed, so the payment
+   * matches what the judgement covered.
    */
   async function pay(
     to: string,

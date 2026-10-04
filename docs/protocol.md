@@ -217,3 +217,42 @@ A successful call emits one `Redeemed` event.
 Its topic includes `voucher_id`. Its fields include the payer, recipient, amount and `expire_at`.
 The event feed confirms the recipient that actually received the funds.
 The [security note](security.md) describes the trust limits and tests.
+
+## Payee-presented request
+
+The payee screen asks the service for a signed SEP-7 `pay` request.
+The request is text. The application draws its UTF-8 bytes as a QR symbol in Byte mode.
+The service writes these parameters in this order:
+
+| Parameter | Value |
+|---|---|
+| `destination` | The account of the payee. |
+| `amount` | An XLM amount with up to seven decimal places. |
+| `msg` | An optional note for the payer. |
+| `network_passphrase` | The passphrase of the network that the service runs on. |
+| `origin_domain` | The domain that serves the application. |
+| `signature` | The signature of the domain's request signing key. It is always the last parameter. |
+
+[SEP-7](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0007.md) makes `network_passphrase` optional.
+A request without it is for the public network.
+The [library builder](../packages/core/src/sep7.ts) therefore refuses to build a request without a network.
+The signature covers every parameter before `signature`. A changed or removed network fails verification.
+
+The values use form encoding, which writes a space as `+`.
+The testnet passphrase becomes `Test+SDF+Network+%3B+September+2015`.
+The [Stellar wallet SDK tests](https://github.com/stellar/typescript-wallet-sdk/blob/main/@stellar/typescript-wallet-sdk/test/sep7.test.ts) expect the same text from that SDK's builder.
+
+The application reads a request in this order:
+
+1. Require the `web+stellar:` scheme. Any other code gets a refusal. A voucher gets its own sentence.
+2. Read `network_passphrase`. A request without it is for the public network.
+3. Refuse a request for a network other than the network of the application.
+4. Fetch the request signing key that the `origin_domain` publishes in its `stellar.toml`.
+5. Verify the signature against that key. A signature that fails verification ends the procedure with a refusal.
+6. Offer a payment when the request names a destination and an amount.
+
+A request without a domain, or a domain that does not answer, still gets the offer, with a warning.
+The camera and a pasted request use the same procedure.
+
+Senet controls the text that its service signs and the requests that its own reader accepts.
+Senet does not control another wallet. A wallet that ignores `network_passphrase` can build a public network payment from a testnet request.

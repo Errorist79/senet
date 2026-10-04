@@ -27,6 +27,8 @@
 //   close when a person leaves its screen or presses stop.
 // - request: a request that the deployed service signed, on the payee screen.
 //   The screen must judge it signed and offer to pay it.
+// - no-network and public-network: the same request with its network removed
+//   or replaced. The screen must refuse both and offer no payment.
 // - voucher: a voucher that a fresh key signed, on the payee screen. The screen
 //   must refuse it as a voucher.
 // - pay: one browser makes a request on the payee screen, and a second browser
@@ -36,7 +38,7 @@
 // With no case named, every case except `pay` runs.
 
 import { existsSync, writeFileSync } from 'node:fs';
-import { Keypair } from '@stellar/stellar-sdk';
+import { Keypair, Networks } from '@stellar/stellar-sdk';
 import {
   LIFETIMES,
   ed25519Signer,
@@ -44,19 +46,21 @@ import {
   parseUri,
   randomNonce,
   randomVoucherId,
+  requestNetwork,
   signVoucher,
 } from '@senet/core';
 import { launch } from 'puppeteer-core';
 import qrcode from 'qrcode-generator';
 
-const CASES = ['merchant', 'release', 'request', 'voucher', 'pay'];
+const CASES = ['merchant', 'release', 'request', 'no-network', 'public-network', 'voucher', 'pay'];
 /** The cases that spend testnet funds, which run only when a person names them. */
 const SPENDING = new Set(['pay']);
 
 const ARGS = process.argv.slice(2);
 const IS_NUMBER = /^\d+(\.\d+)?$/;
-// A browser treats `http://localhost` as a secure context, so a build that a
-// local server serves can face this check before it reaches the origin.
+// Chrome treats `http://localhost` as a secure context, which the Secure
+// Contexts specification permits. A build that a local server serves can
+// therefore face this check before it reaches the origin.
 const IS_ORIGIN = /^https?:\/\//;
 const ORIGIN = ARGS.find((one) => IS_ORIGIN.test(one)) ?? 'https://senet.hoodrun.io';
 /** Pixels for each module that the video carries. The caller may name one. */
@@ -95,6 +99,8 @@ const STROOPS_PER_XLM = 10_000_000n;
 /** Where the application links a transaction. */
 const EXPLORER_TRANSACTION = 'https://stellar.expert/explorer/testnet/tx/';
 
+/** The words that the payee screen shows for a request for the public network. */
+const PUBLIC_TITLE = 'This request is for the public Stellar network';
 /** The camera faults that the merchant screen names. None of them is a read. */
 const CAMERA_FAULTS = ['refused', 'missing', 'unsupported', 'failed'];
 
@@ -372,11 +378,13 @@ async function releaseCase() {
 }
 
 /** A request that the deployed service signed, for a destination that nobody pays. */
-async function signedRequest() {
+async function signedRequest(chain) {
   const reply = await service('/payee-request', {
     destination: Keypair.random().publicKey(),
     amount: REQUEST_AMOUNT,
   });
+  const asked = requestNetwork(parseUri(reply.uri));
+  expect(asked === chain.network, `the service signed a request for "${asked}", and it runs on "${chain.network}"`);
   return reply.uri;
 }
 
@@ -394,8 +402,8 @@ async function merchantCase() {
   expect(!CAMERA_FAULTS.includes(named), `the camera itself failed with '${named}', so nothing was read`);
 }
 
-async function requestCase() {
-  const uri = await signedRequest();
+async function requestCase(chain) {
+  const uri = await signedRequest(chain);
   const domain = parseUri(uri).fields['origin_domain'];
   const box = await withCamera(requestSymbol(uri), { passkey: false }, (page) =>
     scan(page, PAYEE),
@@ -405,6 +413,30 @@ async function requestCase() {
     box?.buttons.includes(`Pay ${REQUEST_AMOUNT} XLM`) === true,
     'the payee screen offered no payment for a signed request',
   );
+}
+
+/** A request that names another network, or none, must not be payable. */
+async function wrongNetworkCase(chain, change) {
+  const uri = await signedRequest(chain);
+  const changed = change(uri);
+  expect(changed !== uri, 'the fault that this case plants changed nothing in the request');
+  const box = await withCamera(requestSymbol(changed), { passkey: false }, (page) => scan(page, PAYEE));
+  expect(box?.title === PUBLIC_TITLE, 'the payee screen did not refuse the network of the request');
+  expect(
+    box !== null && !box.buttons.some((text) => text.startsWith('Pay ')),
+    'the payee screen offered to pay a request for another network',
+  );
+}
+
+/** Remove the network from a request. SEP-7 then reads it as public. */
+function dropNetwork(uri) {
+  return uri.replace(/&network_passphrase=[^&]*/, '');
+}
+
+/** Name the public network in a request. */
+function publicNetwork(uri) {
+  const param = new URLSearchParams({ network_passphrase: Networks.PUBLIC }).toString();
+  return uri.replace(/network_passphrase=[^&]*/, param);
 }
 
 async function voucherCase(chain) {
@@ -584,7 +616,9 @@ async function main() {
   const runners = {
     merchant: () => merchantCase(),
     release: () => releaseCase(),
-    request: () => requestCase(),
+    request: () => requestCase(chain),
+    'no-network': () => wrongNetworkCase(chain, dropNetwork),
+    'public-network': () => wrongNetworkCase(chain, publicNetwork),
     voucher: () => voucherCase(chain),
     pay: () => payCase(chain),
   };

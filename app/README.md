@@ -21,8 +21,10 @@ the service.
 ## The payment request that a payee screen reads
 
 A request reaches one judgement, whether the camera read it or a person pasted
-it. The judgement checks the signature against the key that the named domain
-publishes.
+it. The judgement checks the network first. SEP-7 reads a request with no
+`network_passphrase` as a request for the public network. The screen refuses
+that request, and any request for a network other than its own. It then checks
+the signature against the key that the named domain publishes.
 
 A code that is not a payment request gets a refusal in words. A voucher gets
 its own sentence, which names the screen that takes vouchers.
@@ -83,6 +85,9 @@ cases:
   when a person leaves the screen or presses stop.
 - `request`: a request that the deployed service signed. The payee screen must
   judge it signed and offer to pay it.
+- `no-network` and `public-network`: the same request with its network removed
+  or replaced. The payee screen must refuse both, before it checks the
+  signature.
 - `voucher`: a signed voucher. The payee screen must refuse it as a voucher.
 - `pay`: two browsers with a passkey each. One makes a request on the payee
   screen, and the check copies the code that the page draws into the video

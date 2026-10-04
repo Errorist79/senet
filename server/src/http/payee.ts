@@ -23,12 +23,17 @@ export interface PayeeReply {
 /**
  * Build and sign one payee-presented request.
  *
- * The route takes the two configuration values that it reads. It does not take
- * the whole context. A function that states what it needs is a function that a
+ * The route takes the configuration values that it reads. It does not take the
+ * whole context. A function that states what it needs is a function that a
  * test calls directly. It needs no fee-payer and no network client.
+ *
+ * The request names the network that this service pays on. A wallet reads a
+ * request without that field as a request for the public network.
  */
 export function payeeRoute(
-  config: Pick<ServerConfig, 'rpId' | 'sep7SigningSecret'>,
+  config: Pick<ServerConfig, 'rpId' | 'sep7SigningSecret'> & {
+    readonly voucher: Pick<ServerConfig['voucher'], 'network'>;
+  },
   body: Record<string, unknown>,
 ): PayeeReply {
   const destination = requireString(body, 'destination');
@@ -45,10 +50,11 @@ export function payeeRoute(
   // and it would be free to drift from the first.
   const originDomain = config.rpId;
 
+  const networkPassphrase = config.voucher.network;
   const uri = buildPayUri(
     message === undefined
-      ? { destination, amount, originDomain }
-      : { destination, amount, originDomain, msg: message },
+      ? { destination, networkPassphrase, amount, originDomain }
+      : { destination, networkPassphrase, amount, originDomain, msg: message },
   );
   return { uri: signUri(uri, config.sep7SigningSecret), originDomain };
 }

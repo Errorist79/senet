@@ -27,9 +27,9 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { Asset, Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import {
-  LIFETIMES, STELLAR_TOML_PATH, buildPayUri, ed25519Signer, nativeTokenId,
-  randomNonce, randomVoucherId, readVoucher, redeemArgs, signUri, signVoucher, TX_TIMEOUT_SECONDS,
-  verifyUri,
+  LIFETIMES, STELLAR_TOML_PATH, buildPayUri, ed25519Signer, nativeTokenId, parseUri,
+  randomNonce, randomVoucherId, readVoucher, redeemArgs, requestNetwork, signUri, signVoucher,
+  TX_TIMEOUT_SECONDS, verifyUri,
 } from '@senet/core';
 // The domain that this deployment serves under. A request names it as its
 // origin, and a wallet reads the signing key from that domain's file. The
@@ -352,7 +352,12 @@ async function payeePresentedPayment() {
   const amount = stroopsAsAmount(AMOUNT_STROOPS);
 
   const request = signUri(
-    buildPayUri({ destination: merchant, amount, originDomain: RP_ID }),
+    buildPayUri({
+      destination: merchant,
+      networkPassphrase: config.network,
+      amount,
+      originDomain: RP_ID,
+    }),
     signingKey.secret(),
   );
   // Verify first, and pay after. A request that this domain's own key cannot
@@ -361,6 +366,12 @@ async function payeePresentedPayment() {
   const verified = verifyUri(request, signingKey.publicKey());
   if (!verified.verified) {
     throw new Error(`the request that this domain signed does not verify: ${verified.reason}`);
+  }
+  // A wallet reads the network out of the request. The row pays on the network
+  // that a wallet would read, or it pays nothing.
+  const asked = requestNetwork(parseUri(request));
+  if (asked !== config.network) {
+    throw new Error(`the request names the network "${asked}", and this run pays on "${config.network}"`);
   }
 
   const source = await server.getAccount(submitter.publicKey());

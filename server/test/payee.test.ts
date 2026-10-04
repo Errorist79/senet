@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { Keypair } from '@stellar/stellar-sdk';
-import { parseUri, verifyUri } from '@senet/core';
+import { Keypair, Networks } from '@stellar/stellar-sdk';
+import { parseUri, requestNetwork, verifyUri } from '@senet/core';
 import { payeeRoute } from '../src/http/payee.js';
 
 /**
@@ -14,8 +14,12 @@ import { payeeRoute } from '../src/http/payee.js';
 
 const signer = Keypair.random();
 
-/** The two values that the route reads, and nothing else. */
-const config = { rpId: 'senet.hoodrun.io', sep7SigningSecret: signer.secret() };
+/** The values that the route reads, and nothing else. */
+const config = {
+  rpId: 'senet.hoodrun.io',
+  sep7SigningSecret: signer.secret(),
+  voucher: { network: Networks.TESTNET },
+};
 
 test('the request carries this domain, and its signature checks against the key', () => {
   const reply = payeeRoute(config, { destination: signer.publicKey(), amount: '1.5' });
@@ -25,6 +29,16 @@ test('the request carries this domain, and its signature checks against the key'
   assert.equal(parsed.fields['amount'], '1.5');
   const checked = verifyUri(reply.uri, signer.publicKey());
   assert.equal(checked.verified, true);
+});
+
+test('the request names the network that the service runs on', () => {
+  const reply = payeeRoute(config, { destination: signer.publicKey(), amount: '1' });
+  const parsed = parseUri(reply.uri);
+  // The field must be present. A request without it reads as the public
+  // network, and that is the fault that this test exists to catch.
+  assert.equal(parsed.fields['network_passphrase'], Networks.TESTNET);
+  assert.equal(requestNetwork(parsed), Networks.TESTNET);
+  assert.equal(verifyUri(reply.uri, signer.publicKey()).verified, true);
 });
 
 test('another key does not verify the same request', () => {
