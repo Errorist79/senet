@@ -18,6 +18,7 @@
 // the part of the suite that the machine happened to allow.
 
 import { launch } from 'puppeteer-core';
+import { Contract, rpc, xdr } from '@stellar/stellar-sdk';
 // The name that the deployed release declares. A commit is the only thing that
 // changes it, and that is why a check against the origin is worth having.
 import { RP_ID } from '@senet/server';
@@ -59,6 +60,18 @@ const PATHS = [
  * measure the same property from opposite sides, so one limit serves both.
  */
 const LISTENER_AGE_MAX_MS = 10 * 60 * 1000;
+
+/**
+ * How many days of TTL the voucher contract and the wallet code must keep.
+ *
+ * The voucher contract extends its own TTL during a redemption, and only when
+ * less than one day remains. An idle contract therefore archives when its TTL
+ * runs out. Thirty days give a person time to extend it before that happens.
+ */
+const TTL_DAYS_MIN = 30;
+
+/** Milliseconds in one day, to turn a count of ledgers into days. */
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** A common phone viewport. The session runs on phones, not on a desktop. */
 const PHONE = Object.freeze({ width: 390, height: 844 });
@@ -288,6 +301,52 @@ if (listener !== null) {
   skip('everything about the listener, because the status route reports none');
 }
 
+// The ledger entries that every payment needs, and how long the network keeps
+// them.
+//
+// A contract instance and its code stay live only for their TTL. An archived
+// voucher contract makes the first redemption pay to restore it. On 4 October
+// 2026 that restore asked for 26.5 million stroops. The service refused the
+// fee, so every redemption failed while every other check here passed.
+//
+// The wallet code is here because every passkey account runs it. After that
+// code archives, a new account cannot deploy.
+//
+// This asks the RPC that the service names, from outside the host.
+async function readTtl() {
+  const chain = new rpc.Server(config.rpcUrl);
+  const instanceKey = new Contract(config.contractId).getFootprint();
+  const [instance] = (await chain.getLedgerEntries(instanceKey)).entries;
+  if (instance === undefined) throw new Error(`the RPC holds no instance of ${config.contractId}`);
+  const codeKey = (hash) => xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash }));
+  const named = [
+    ['the voucher instance', instanceKey],
+    ['the voucher code', codeKey(instance.val.contractData().val().instance().executable().wasmHash())],
+    ['the wallet code', codeKey(Buffer.from(config.walletWasmHash, 'hex'))],
+  ];
+  const head = (await chain.getLatestLedger()).sequence;
+  const { entries } = await chain.getLedgerEntries(...named.map(([, key]) => key));
+  const liveUntil = new Map(entries.map((entry) => [entry.key.toXDR('base64'), entry.liveUntilLedgerSeq]));
+  return named.map(([name, key]) => {
+    const until = liveUntil.get(key.toXDR('base64'));
+    const days = until === undefined ? null : ((until - head) * core.LEDGER_TARGET_CLOSE_MS) / DAY_MS;
+    return { name, until, days };
+  });
+}
+
+let ttl = [];
+try {
+  ttl = await readTtl();
+} catch (error) {
+  check(false, `the TTL of the contract entries is unknown: ${error instanceof Error ? error.message : String(error)}`);
+}
+for (const { name, days } of ttl) {
+  check(days !== null && days >= TTL_DAYS_MIN,
+    days === null ? `${name} is absent from the RPC, so no payment can use it`
+      : days < 0 ? `${name} is archived, so the next call that needs it pays to restore it`
+        : `${name} keeps ${days.toFixed(1)} days of TTL, and the limit is ${TTL_DAYS_MIN}`);
+}
+
 // A passkey binds to the domain that created it. The browser derives that
 // domain from the origin which served the page, and nothing in the application
 // can change it. This check therefore reads a declaration and not a value that
@@ -375,6 +434,9 @@ if (existsSync(SERVED_NGINX)) {
 console.log(`  listener ${listener?.cursor ?? 'no cursor'}`
   + `${listener?.stuckOn === null || listener?.stuckOn === undefined ? '' : `, stuck on ${listener.stuckOn}`}`
   + '   read from outside the host, through the status route');
+console.log(`  ttl      ${ttl.map(({ name, until, days }) =>
+  `${name} until ledger ${until ?? 'unknown'}, ${days === null ? 'unknown' : days.toFixed(1)} days`).join('; ')}`);
+console.log(`           read from ${config.rpcUrl}, the RPC that the service names (the limit is ${TTL_DAYS_MIN} days)`);
 console.log(`  errors     ${carried.length} of ${errorNames.length} typed names carried as text`);
 console.log(`  relying party ${RP_ID}, declared in the release`);
 console.log('                the browser derives the real one from the origin');

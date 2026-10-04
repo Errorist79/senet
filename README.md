@@ -256,6 +256,34 @@ also needs a real passkey redemption and a published SEP-7 key, as described bel
 `cargo build --release` produces a different artifact, so it does not reproduce
 the deployed contract.
 
+### Keep the contract live
+
+The contract instance and its code stay live only for their TTL. The contract
+extends its own TTL to 30 days during a redemption, and only when less than one
+day remains. A contract that nobody uses for longer than its remaining TTL
+therefore archives.
+
+The next redemption then has to restore the contract, and the restore costs far
+more than a redemption. The service refuses that fee with `FEE_ABOVE_CEILING`,
+so every redemption fails until a person restores the contract. On 4 October
+2026 the restore asked for 26,498,773 stroops.
+
+`deploy/verify.mjs` fails when the instance or the code has less than 30 days
+left, and it prints the days that remain. To restore the contract and extend
+it, run these commands with any funded testnet account:
+
+```bash
+contract=CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY
+wasm=c93a39a97541555caf3136dfa13dc33e1592ce492a07ad2f00d050352f98bf55
+stellar contract restore --id "$contract" --source-account ACCOUNT --network testnet
+stellar contract restore --wasm-hash "$wasm" --source-account ACCOUNT --network testnet
+stellar contract extend --id "$contract" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
+stellar contract extend --wasm-hash "$wasm" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
+```
+
+3,110,399 ledgers is the longest TTL that testnet allows, about 180 days. The
+network setting `maxEntryTtl` sets that limit.
+
 ## The public deployment
 
 `https://senet.hoodrun.io` serves the application and the service. A passkey
@@ -321,6 +349,8 @@ sees rather than what the host believes. The command checks that:
 - the service names the contract and holds its channel accounts;
 - the event listener wrote its cursor in the last ten minutes, and no event
   blocks it, so a stopped listener fails the check;
+- the voucher contract instance, its code and the passkey wallet code keep at
+  least 30 days of TTL;
 - the application names no relying party other than the host.
 
 With a browser it also loads the page, registers the worker, and reads the
