@@ -20,30 +20,82 @@
  */
 export const INCLUSION_FEE_STROOPS = 10_000n;
 
-/**
- * The largest whole fee that the service pays for one redeem, in stroops.
+/*
+ * How the three fee ceilings below follow from measurements.
  *
  * The resource fee comes from simulation, and simulation reads the footprint
- * of the call that the caller supplies. A hostile entry with a large footprint
- * would otherwise turn one request into a large charge against a channel. A
- * passkey redemption declared 160,781 stroops, with 150,781 for resources.
- * Two later passkey redemptions each declared 50,543 stroops. This ceiling
- * covers all three, but their margins below the ceiling differ.
+ * of the call that the caller supplies. Without a ceiling, a hostile request
+ * with a large footprint would turn into a large charge against a channel.
+ *
+ * Rent is most of every fee that the service pays. The network computes the
+ * rent rate from the live Soroban state size, so the rate grows as testnet
+ * grows, and no vote changes it. On 4 October 2026 the rate was 5,403 stroops
+ * per KB.
+ *
+ * Each ceiling takes the most that a legitimate request of its kind cost at
+ * that rate. It scales that sum to 10,000 stroops per KB, which is the network
+ * setting `rentFee1KbSorobanStateSizeHigh`: the highest rate below the target
+ * state size. The scale applies to the whole fee, so the part that is not rent
+ * gets more room than it needs. A margin of 10 percent then covers the spread
+ * between requests of one kind, which measured at most 3.15 percent.
+ *
+ * No ceiling covers an extension of shared contract code. The voucher contract
+ * extends its code during a redemption, and every passkey wallet extends the
+ * shared wallet code during an authentication. Each extension costs more than
+ * 100 million stroops. A timer extends that code before a request has to, and
+ * `deploy/verify.mjs` fails when the timer falls behind.
  */
-export const MAX_REDEEM_FEE_STROOPS = 1_000_000n;
+
+/**
+ * The largest whole fee that the service pays for one redemption that an
+ * ed25519 key authorizes, in stroops.
+ *
+ * Measured on 4 October 2026: such a redemption declared at most 49,334
+ * stroops. A redemption can also extend the TTL of the native asset balance
+ * that it touches by up to 30 days. That measured 1.134 stroops per ledger, or
+ * 587,890 for 30 days. The derivation above turns the sum into 1,287,970.
+ */
+export const MAX_REDEEM_FEE_STROOPS = 1_300_000n;
+
+/**
+ * The largest whole fee that the service pays for one request that a passkey
+ * account authorizes, in stroops: a redemption, a void, or a SEP-7 payment.
+ *
+ * Measured on 4 October 2026: a passkey redemption declared 52,035 stroops, a
+ * passkey void 47,546, and a SEP-7 payment 45,411. A request can also carry
+ * extensions that the network charges once:
+ *
+ * - The wallet extends its own instance and signer to the maximum TTL once they
+ *   sit more than one week below it. That measured 2.204 stroops per ledger, or
+ *   6,855,319 for all 3,110,399 ledgers.
+ * - The request can extend up to three native asset balances, each by up to 30
+ *   days, at 587,890 each.
+ *
+ * The derivation above turns the redemption into 17,644,031 and the payment
+ * into 16,433,656.
+ *
+ * The ceiling covers a wallet that sat idle for as long as the network keeps
+ * it. A lower ceiling would refuse the next request of such a wallet. The
+ * refusal leaves the extension undone. Every later request of that wallet would
+ * then fail the same way, and the wallet would stay stuck for ever.
+ *
+ * It covers one account's own instance and signer. It never covers the shared
+ * wallet code, which the timer keeps out of every request.
+ */
+export const MAX_PASSKEY_REQUEST_FEE_STROOPS = 18_000_000n;
 
 /**
  * The largest whole fee that the service pays for one account deployment.
  *
- * A deployment writes a contract instance and its first signer, so it costs
- * far more than a call against a contract that already exists. One measured
- * deployment declared 1,268,372 stroops and the network charged 1,088,424.
- * This ceiling sits about four times above the measured figure.
+ * A deployment writes a wallet instance and its first signer, and it pays rent
+ * for both up to the maximum TTL. Four deployment simulations on 4 October 2026
+ * declared at most 6,644,266 stroops. The derivation above turns that into
+ * 13,517,742.
  *
- * The two ceilings are separate because the work is separate. One number that
- * covered both would let a hostile voucher spend what a deployment costs.
+ * The deploy route has this ceiling to itself. A payment and a redemption go
+ * through routes with their own ceilings, which follow from their own costs.
  */
-export const MAX_DEPLOY_FEE_STROOPS = 5_000_000n;
+export const MAX_DEPLOY_FEE_STROOPS = 14_000_000n;
 
 /**
  * The balance below which the service treats a channel account as spent, in

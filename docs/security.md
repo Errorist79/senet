@@ -45,7 +45,7 @@ Isolation does not prevent the decoder from returning wrong bytes or consuming e
 The format checks do not prove that an arbitrary wrong output lacks a valid structure.
 Enforcing simulation and execution on chain check the payer's authorization after decode.
 
-## Seven remaining limits
+## Eight remaining limits
 
 1. A code is a bearer instrument. A copier can redeem a copy taken inside its lifetime. The cap and void limit this risk but do not remove it.
 2. Consistency between the two expiration values is the client's responsibility. The contract cannot see the signature expiration ledger.
@@ -54,6 +54,7 @@ Enforcing simulation and execution on chain check the payer's authorization afte
 5. The SDK preserves authorization entries that the caller supplies. The project verifies this behavior from source, not published documentation, so the project pins the SDK version.
 6. The project did not test passkeys synchronized from another device.
 7. A payment request names its network, and Senet cannot make another wallet obey that field. LOBSTR did not obey it in one scan on 2026-10-04.
+8. Rent depends on the total state size of testnet, which Senet does not control.
 
 The third limit describes the service path. A caller that bypasses simulation can submit a failing transaction and pay its fee.
 The fourth limit uses the application's approximate twelve-hour maximum. Actual expiry depends on ledger progress.
@@ -71,9 +72,31 @@ The pin is the source-based compatibility control. The version guard alone accep
 
 The service bids 10,000 stroops for inclusion and obtains the resource fee from simulation.
 The assembled transaction fee is the whole declared fee. It is not a fixed 47,743-stroop bid.
-The service refuses a redemption above 1,000,000 stroops, or 0.1 XLM, before it signs or submits.
-Account deployment has a separate ceiling of 5,000,000 stroops, or 0.5 XLM.
+The service refuses a request above the ceiling of its kind before it signs or submits:
+
+| Request | Ceiling in stroops | Ceiling in XLM |
+|---|---:|---:|
+| A redemption or a SEP-7 payment that a key authorizes | 1,300,000 | 0.13 |
+| A redemption, a void or a SEP-7 payment that a passkey account authorizes | 18,000,000 | 1.8 |
+| An account deployment | 14,000,000 | 1.4 |
+
 These are per-transaction ceilings, not an aggregate guarantee.
+
+Each ceiling starts from the most that a legitimate request of its kind cost on 4 October 2026.
+It scales that cost to the highest rent rate below the target state size, and it adds 10 percent.
+The rent rate grows with the live state size of testnet.
+On 4 October 2026 it was 5,403 stroops per KB. The network setting `rentFee1KbSorobanStateSizeHigh` is 10,000.
+On that day a deployment cost 6,644,266 stroops, above the ceiling of 5,000,000 that applied then, so the service refused every new passkey account.
+
+The passkey ceiling covers a wallet that sat idle for as long as the network keeps it.
+Such a wallet extends its own instance and signer to the maximum TTL in its next request.
+A lower ceiling would refuse that request. The extension would then stay undone, and every later request of that wallet would fail the same way.
+The ceiling covers one account's own instance and signer. It never covers the shared wallet code.
+
+No ceiling covers an extension of shared contract code. Each such extension costs more than 100 million stroops.
+A timer extends the voucher contract and the shared wallet code before a user request has to.
+`deploy/verify.mjs` fails when the timer falls behind.
+It also fails when a simulated deployment or ed25519 redemption passes 75 percent of its ceiling.
 
 The service allows 12 requests per client address in each 60-second window on routes that can spend fees.
 The process holds these counters in memory. A restart clears them, and callers with multiple addresses can obtain separate budgets.
@@ -117,12 +140,27 @@ With the service's 10,000-stroop inclusion bid, the archived resource fees yield
 - Passkey 2 and passkey 3: 50,543 stroops each.
 - Ed25519 reference: 47,742 stroops.
 
-All four fit the service's 1,000,000-stroop redemption ceiling.
+Each of the four fits the current ceiling of its payer kind.
 All four leave 9,900 stroops between the service inclusion bid and the recorded inclusion charge.
 The remaining space below the whole fee ceiling differs between samples.
 The comparison uses archived resource fees. It does not predict a current simulation or require a fee constant change.
 
 Run `node scripts/analyze-fees.mjs --check` on the remote host to verify the recorded analysis against the archived XDR.
+
+The figures above come from September 2026, before the rent rate reached the level of October.
+The requests below ran on 4 October 2026, at 5,403 stroops per KB:
+
+| Request | Transaction | Declared fee | Charged fee |
+|---|---|---:|---:|
+| Ed25519 redemption, lifetime 12 hours | `eda0746a2d3d8d750a8102ab457fac0103f4a732d10c3499037cbf69765e6d1b` | 49,334 | 28,746 |
+| Passkey redemption to a merchant | `6b0aa630867be399ab0c0593972f2480cc7b5abc7d4b4b7011d8363336f752e0` | 52,035 | 31,650 |
+| Passkey void | `229d80dd475cd09d9e9d0ac5bcd18f3859b69518f1b48c7ffa1c31a548b7bf35` | 47,546 | 27,166 |
+| SEP-7 payment from a passkey account | `296372a17f604d3d1d579632007cea0005db7be9a9ddff5006f68f2c97a4f3cf` | 45,411 | 25,363 |
+| Passkey account deployment | `31cfc855d19c813f4f63650863aae2233eb3bfe83e6f6988248b492f13b6238f` | 6,640,610 | 5,759,935 |
+
+The ed25519 row ran through the evidence script, which bids 200,000 stroops for inclusion. Its declared fee here is its resource fee plus the service bid of 10,000, as in the table above.
+The other rows ran through a copy of the service with raised ceilings, against the live network.
+The passkey requests ran in Chrome with a virtual authenticator, which signs a smaller assertion than a phone.
 
 ## Evidence limits
 

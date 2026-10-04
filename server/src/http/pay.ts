@@ -1,5 +1,6 @@
 import { Operation, xdr } from '@stellar/stellar-sdk';
 import { transferInvocation } from '@senet/core';
+import { payerCeiling } from '../feepayer.js';
 import type { SubmitResult } from '../feepayer.js';
 import type { RouteContext } from './router.js';
 import { badRequest, requireString } from './transport.js';
@@ -68,7 +69,7 @@ export async function payRoute(
   const hostFunction = xdr.HostFunction.hostFunctionTypeInvokeContract(
     entry.rootInvocation().function().contractFn(),
   );
-  const result = await context.feePayer.invoke(hostFunction, [entry]);
+  const result = await context.feePayer.invoke(hostFunction, [entry], payerCeiling(from));
   return { ...result, from, to, amountStroops: amount.toString() };
 }
 

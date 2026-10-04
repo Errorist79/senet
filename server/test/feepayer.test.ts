@@ -5,19 +5,27 @@ import {
   INCLUSION_FEE_STROOPS,
   MAX_ATTEMPTS,
   MAX_DEPLOY_FEE_STROOPS,
+  MAX_PASSKEY_REQUEST_FEE_STROOPS,
   MAX_REDEEM_FEE_STROOPS,
   MIN_CHANNEL_BALANCE_STROOPS,
+  payerCeiling,
   readConfig,
   retryable,
 } from '../src/index.js';
 import type { SubmitResult, Stage } from '../src/index.js';
 import { TESTNET_CONTRACT_ID, nativeTokenId } from '@senet/core';
 
-/** The whole bid that one redeem declared on testnet, in stroops. */
-const MEASURED_REDEEM_BID_STROOPS = 47_743n;
+/**
+ * The whole fees that requests declared on testnet on 4 October 2026, in
+ * stroops: the most of each kind, at a rent rate of 5,403 stroops per KB.
+ */
+const MEASURED_REDEEM_BID_STROOPS = 49_334n;
+const MEASURED_PASSKEY_REDEEM_BID_STROOPS = 52_035n;
+const MEASURED_PAY_BID_STROOPS = 45_411n;
+const MEASURED_DEPLOY_BID_STROOPS = 6_644_266n;
 
-/** The whole bid that one account deployment declared on testnet. */
-const MEASURED_DEPLOY_BID_STROOPS = 1_268_372n;
+/** The network setting `rentFee1KbSorobanStateSizeHigh` over the measured rate. */
+const RENT_RATE_GROWTH = 10_000 / 5_403;
 
 /** A result with only the two fields that the retry rule reads. */
 function resultOf(outcome: SubmitResult['outcome'], stage: Stage): SubmitResult {
@@ -89,22 +97,35 @@ test('the attempt count leaves room for one retry and stays small', () => {
   assert.ok(MAX_ATTEMPTS <= 5);
 });
 
-test('the redeem ceiling sits above a redeem and below the channel floor', () => {
-  // A ceiling under the measured bid would refuse every redeem. A ceiling at
+/** A measured fee at the highest rent rate below the target state size. */
+function atHighestRate(bid: bigint): number {
+  return Number(bid) * RENT_RATE_GROWTH;
+}
+
+test('every ceiling covers its measured request at the highest rent rate, below the channel floor', () => {
+  // A ceiling under the cost of a request refuses that request. A ceiling at
   // or above the floor would let one request empty a channel account.
-  assert.ok(MAX_REDEEM_FEE_STROOPS > MEASURED_REDEEM_BID_STROOPS);
-  assert.ok(MAX_REDEEM_FEE_STROOPS < MIN_CHANNEL_BALANCE_STROOPS);
+  for (const [ceiling, bid] of [
+    [MAX_REDEEM_FEE_STROOPS, MEASURED_REDEEM_BID_STROOPS],
+    [MAX_PASSKEY_REQUEST_FEE_STROOPS, MEASURED_PASSKEY_REDEEM_BID_STROOPS],
+    [MAX_PASSKEY_REQUEST_FEE_STROOPS, MEASURED_PAY_BID_STROOPS],
+    [MAX_DEPLOY_FEE_STROOPS, MEASURED_DEPLOY_BID_STROOPS],
+  ] as const) {
+    assert.ok(Number(ceiling) > atHighestRate(bid));
+    assert.ok(ceiling < MIN_CHANNEL_BALANCE_STROOPS);
+  }
 });
 
-test('the deploy ceiling sits above a deployment and below the channel floor', () => {
-  // A deployment writes a contract instance, so it costs far more than a call
-  // against a contract that already exists.
-  assert.ok(MAX_DEPLOY_FEE_STROOPS > MEASURED_DEPLOY_BID_STROOPS);
-  assert.ok(MAX_DEPLOY_FEE_STROOPS < MIN_CHANNEL_BALANCE_STROOPS);
-});
-
-test('a redeem never spends what a deployment costs', () => {
+test('a key never spends what a passkey account or a deployment may spend', () => {
+  // A key runs no authorization code, so nothing in its request extends an
+  // account. Its ceiling stays far below the other two.
   assert.ok(MAX_REDEEM_FEE_STROOPS < MAX_DEPLOY_FEE_STROOPS);
+  assert.ok(MAX_REDEEM_FEE_STROOPS < MAX_PASSKEY_REQUEST_FEE_STROOPS);
+});
+
+test('the ceiling of a request follows the kind of payer', () => {
+  assert.equal(payerCeiling(Keypair.random().publicKey()), MAX_REDEEM_FEE_STROOPS);
+  assert.equal(payerCeiling(TESTNET_CONTRACT_ID), MAX_PASSKEY_REQUEST_FEE_STROOPS);
 });
 
 test('the inclusion fee is a part of the measured bid', () => {

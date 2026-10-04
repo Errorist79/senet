@@ -1,6 +1,7 @@
 import { xdr } from '@stellar/stellar-sdk';
 import type { SubmitResult } from '../feepayer.js';
 import { readBalance, waitForFunds } from '../balance.js';
+import { MAX_DEPLOY_FEE_STROOPS } from '../constants.js';
 import { friendbotFund } from '../horizon.js';
 import type { RouteContext } from './router.js';
 import { badRequest, requireString } from './transport.js';
@@ -58,7 +59,10 @@ export async function deployRoute(
       throw badRequest('MALFORMED_ENTRY', 'every auth entry must be base64 XDR');
     }
   }
-  return { ...(await context.feePayer.invoke(hostFunction, auth)), contractId };
+  return {
+    ...(await context.feePayer.invoke(hostFunction, auth, MAX_DEPLOY_FEE_STROOPS)),
+    contractId,
+  };
 }
 
 /**

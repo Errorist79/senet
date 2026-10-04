@@ -41,7 +41,8 @@
       },
       "currentPolicy": {
         "totalWithArchivedResourceStroops": "160781",
-        "capHeadroomStroops": "839219",
+        "capStroops": "18000000",
+        "capHeadroomStroops": "17839219",
         "inclusionHeadroomStroops": "9900"
       }
     },
@@ -82,7 +83,8 @@
       },
       "currentPolicy": {
         "totalWithArchivedResourceStroops": "50543",
-        "capHeadroomStroops": "949457",
+        "capStroops": "18000000",
+        "capHeadroomStroops": "17949457",
         "inclusionHeadroomStroops": "9900"
       }
     },
@@ -123,7 +125,8 @@
       },
       "currentPolicy": {
         "totalWithArchivedResourceStroops": "50543",
-        "capHeadroomStroops": "949457",
+        "capStroops": "18000000",
+        "capHeadroomStroops": "17949457",
         "inclusionHeadroomStroops": "9900"
       }
     },
@@ -164,7 +167,8 @@
       },
       "currentPolicy": {
         "totalWithArchivedResourceStroops": "47742",
-        "capHeadroomStroops": "952258",
+        "capStroops": "1300000",
+        "capHeadroomStroops": "1252258",
         "inclusionHeadroomStroops": "9900"
       }
     }
@@ -183,8 +187,9 @@
   },
   "servicePolicy": {
     "inclusionBidStroops": "10000",
-    "redeemCapStroops": "1000000",
-    "note": "The service adds the simulated resource fee to the inclusion bid. The cap limits the total declaration."
+    "keyRedeemCapStroops": "1300000",
+    "passkeyRequestCapStroops": "18000000",
+    "note": "The service adds the simulated resource fee to the inclusion bid. The cap of the payer kind limits the total declaration."
   },
   "limits": [
     "These archived transactions use different contract instances and ledger states. Their fees do not isolate the cost of the signature.",

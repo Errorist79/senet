@@ -1,6 +1,7 @@
 import {
   Keypair,
   Operation,
+  StrKey,
   Transaction,
   TransactionBuilder,
   rpc,
@@ -13,7 +14,7 @@ import type { ServerConfig } from './config.js';
 import {
   INCLUSION_FEE_STROOPS,
   MAX_ATTEMPTS,
-  MAX_DEPLOY_FEE_STROOPS,
+  MAX_PASSKEY_REQUEST_FEE_STROOPS,
   MAX_REDEEM_FEE_STROOPS,
   MIN_CHANNEL_BALANCE_STROOPS,
   POLL_ATTEMPTS,
@@ -26,6 +27,17 @@ import type { Classification, Outcome, Stage } from './outcomes.js';
 
 /** The contract function that a voucher authorizes. */
 const REDEEM_FUNCTION = 'redeem';
+
+/**
+ * The fee ceiling for a redemption or a payment, which depends on the payer.
+ *
+ * A passkey account runs its own authorization code, and that code can extend
+ * the account's TTL during the request. A key signs without contract code. The
+ * two kinds of payer therefore cost different amounts.
+ */
+export function payerCeiling(payer: string): bigint {
+  return StrKey.isValidContract(payer) ? MAX_PASSKEY_REQUEST_FEE_STROOPS : MAX_REDEEM_FEE_STROOPS;
+}
 
 /** What one submission produced. The service returns this and it raises nothing. */
 export interface SubmitResult {
@@ -227,7 +239,7 @@ export class FeePayer {
         )
         .setTimeout(TX_TIMEOUT_SECONDS)
         .build(),
-      MAX_REDEEM_FEE_STROOPS,
+      payerCeiling(voucher.payer),
     );
     return { ...result, voucher };
   }
@@ -235,13 +247,15 @@ export class FeePayer {
   /**
    * Submit one host function that the caller already authorized.
    *
-   * A smart account deployment arrives this way. The party that registers the
-   * passkey signs the authorization, and it holds no account of its own. This
-   * service therefore supplies the source account and the fee.
+   * A smart account deployment and a SEP-7 payment arrive this way. The party
+   * that authorized the call holds no account of its own, so this service
+   * supplies the source account and the fee. The caller names the ceiling of
+   * its route, because a deployment and a payment cost different amounts.
    */
   async invoke(
     hostFunction: xdr.HostFunction,
     auth: readonly xdr.SorobanAuthorizationEntry[],
+    maxFeeStroops: bigint,
   ): Promise<SubmitResult> {
     return this.withChannel((channel) =>
       new TransactionBuilder(channel.next(), {
@@ -251,7 +265,7 @@ export class FeePayer {
         .addOperation(Operation.invokeHostFunction({ func: hostFunction, auth: [...auth] }))
         .setTimeout(TX_TIMEOUT_SECONDS)
         .build(),
-      MAX_DEPLOY_FEE_STROOPS,
+      maxFeeStroops,
     );
   }
 

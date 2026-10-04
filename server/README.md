@@ -107,9 +107,12 @@ careless retry could send one voucher twice.
 
 - The service bids 10,000 stroops of inclusion fee. Simulation adds the
   resource fee, and the sum is the whole bid.
-- The service refuses to submit above 1,000,000 stroops of whole fee. A hostile
+- The service refuses to submit above the ceiling of the request's kind. The
+  whole fee may reach 1,300,000 stroops for a request that a key authorizes,
+  18,000,000 for a passkey account, and 14,000,000 for a deployment. A hostile
   entry with a large footprint would otherwise turn one request into a large
-  charge against a channel.
+  charge against a channel. `src/constants.ts` derives each value from
+  measurements.
 - A channel that falls under 50,000,000 stroops counts as spent. The service
   answers `FEE_PAYER_UNDERFUNDED` when every channel falls under that floor.
   The network would otherwise refuse the transaction for a reason that the

@@ -30,7 +30,9 @@ assert(!(process.argv.includes('--write') && process.argv.includes('--check')), 
 const { Address, Networks, Transaction, xdr } = await import('@stellar/stellar-sdk');
 const { readArchivedRow } = await import('@senet/evidence');
 const { redeemFromEnvelope, signatureScheme } = await import('./evidence-set.mjs');
-const { INCLUSION_FEE_STROOPS, MAX_REDEEM_FEE_STROOPS } = await import('../server/dist/src/constants.js');
+const { INCLUSION_FEE_STROOPS, MAX_PASSKEY_REQUEST_FEE_STROOPS, MAX_REDEEM_FEE_STROOPS } = await import('../server/dist/src/constants.js');
+// The rule that the service applies, so the analysis compares each payer with its own ceiling.
+const { payerCeiling } = await import('../server/dist/src/feepayer.js');
 const inputDir = path.join(ROOT, 'scripts/out/evidence');
 
 function sha256(bytes) {
@@ -89,7 +91,8 @@ function measure({ name, expectedScheme }) {
   assert(resource >= resourceCharged, `${name}: resource charge exceeds declaration`);
   assert(inclusionCharged > 0n && inclusionDeclared >= inclusionCharged, `${name}: invalid inclusion fees`);
   const policyDeclared = resource + INCLUSION_FEE_STROOPS;
-  assert(policyDeclared <= MAX_REDEEM_FEE_STROOPS, `${name}: service fee cap is too low`);
+  const cap = payerCeiling(redeem.payer);
+  assert(policyDeclared <= cap, `${name}: service fee cap is too low`);
   assert(INCLUSION_FEE_STROOPS >= inclusionCharged, `${name}: service inclusion bid is too low`);
   return {
     name,
@@ -128,7 +131,8 @@ function measure({ name, expectedScheme }) {
     },
     currentPolicy: {
       totalWithArchivedResourceStroops: policyDeclared.toString(),
-      capHeadroomStroops: (MAX_REDEEM_FEE_STROOPS - policyDeclared).toString(),
+      capStroops: cap.toString(),
+      capHeadroomStroops: (cap - policyDeclared).toString(),
       inclusionHeadroomStroops: (INCLUSION_FEE_STROOPS - inclusionCharged).toString(),
     },
   };
@@ -156,8 +160,9 @@ const analysis = {
   },
   servicePolicy: {
     inclusionBidStroops: INCLUSION_FEE_STROOPS.toString(),
-    redeemCapStroops: MAX_REDEEM_FEE_STROOPS.toString(),
-    note: 'The service adds the simulated resource fee to the inclusion bid. The cap limits the total declaration.',
+    keyRedeemCapStroops: MAX_REDEEM_FEE_STROOPS.toString(),
+    passkeyRequestCapStroops: MAX_PASSKEY_REQUEST_FEE_STROOPS.toString(),
+    note: 'The service adds the simulated resource fee to the inclusion bid. The cap of the payer kind limits the total declaration.',
   },
   limits: [
     'These archived transactions use different contract instances and ledger states. Their fees do not isolate the cost of the signature.',
