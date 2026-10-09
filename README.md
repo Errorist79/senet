@@ -52,12 +52,14 @@ calculation:
 | `scripts/out/device-check/` | The archived record of a run that a person made on a phone. |
 | `.github/workflows/ci.yml` | The build and the test suites. |
 | `deploy/` | The web server configuration, the service unit and the deployment. |
+| [`docs/protocol.md`](docs/protocol.md) | The voucher format, signature, lifetime and void rules. |
+| [`docs/security.md`](docs/security.md) | The threats, controls, tests and remaining limits. |
 
 ## Versions
 
 | Component | Version |
 |---|---|
-| Stellar network | Testnet, protocol 28 |
+| Stellar network | Testnet, protocol 29 |
 | Rust | 1.96.0, target `wasm32v1-none` |
 | `soroban-sdk` | 27.0.6 |
 | `stellar-cli` | 28.0.0 |
@@ -69,7 +71,7 @@ This section takes a reader from an empty machine to a redeemed voucher and to
 a refusal that the network recorded. It assumes knowledge of Stellar. It
 assumes no account, no key and nothing from this project.
 
-Everything below runs against testnet. Testnet holds no value.
+Run these commands on a remote Linux host. Testnet holds no value.
 
 ### 1. Install the tools
 
@@ -107,7 +109,7 @@ stellar network use testnet
 ### 2. Install the dependencies
 
 ```bash
-npm install
+npm ci
 npm run build
 ```
 
@@ -116,17 +118,17 @@ step is part of the service, so this step comes before it.
 
 ### 3. Create the accounts and write the `.env` file
 
-One tool creates every account, funds it through friendbot, waits until Horizon
-reports a balance, and prints the whole `.env` file:
+One tool funds the transaction accounts through friendbot and waits until Horizon
+reports their balances. It also creates an unfunded SEP-7 key and prints the required configuration:
 
 ```bash
-npm run --silent new-keys --workspace @senet/server > .env
-chmod 600 .env
+umask 077
+npm run --silent new-keys --workspace @senet/server > .env.new && mv .env.new .env
 ```
 
 Git ignores `.env`, and it never enters the repository.
 
-The tool creates ten accounts. Four carry a role of the evidence set, and six
+The tool funds ten accounts. Four carry a role of the evidence set, and six
 are the channel accounts of the fee-payer service. `CHANNEL_COUNT` sets the
 number of channels, and the default is six.
 
@@ -137,6 +139,7 @@ number of channels, and the default is six.
 | `MERCHANT_ADDRESS` | Receives a redemption. |
 | `SECOND_MERCHANT_ADDRESS` | Receives a refused attempt. |
 | `FEEPAYER_CHANNELS` | The channel accounts, as secret keys separated by commas. |
+| `SEP7_SIGNING_SECRET` | A fresh key for signed payment requests. Its public key needs publication before use. |
 | `CONTRACT_ID` | The voucher contract. Step 4 prints it. |
 | `RPC_URL`, `HORIZON_URL` | The servers. Keep the values that the tool writes. |
 
@@ -163,14 +166,15 @@ below make the payer the admin of the contract as well, which keeps the account
 count down. An admin sets the two caps and nothing else.
 
 ```bash
+set -eu
 admin=$(grep '^PAYER_SECRET=' .env | cut -d= -f2)
 wasm=target/wasm32v1-none/release/senet_voucher.wasm
 
 hash=$(stellar contract upload --wasm "$wasm" --optimize=false \
-  --source-account "$admin" --network testnet | tail -1)
+  --source-account "$admin" --network testnet)
 
 contract=$(stellar contract deploy --wasm-hash "$hash" \
-  --source-account "$admin" --network testnet | tail -1)
+  --source-account "$admin" --network testnet)
 
 stellar contract invoke --id "$contract" --source-account "$admin" \
   --network testnet -- init \
@@ -208,10 +212,10 @@ npm test                   # the library and service tests
 ### 6. Redeem a voucher, and record a refusal
 
 ```bash
-node scripts/run-evidence.mjs
+node scripts/run-sow-evidence.mjs --vouchers-only
 ```
 
-The command mints, submits and archives ten transactions. Six succeed and three
+The command mints, submits and archives ten transactions. Seven succeed and three
 fail on purpose. It prints the reason that the network recorded for each
 refusal, and it stops when a refusal happened for the wrong reason:
 
@@ -223,9 +227,10 @@ refusal, and it stops when a refusal happened for the wrong reason:
 A refused transaction lands on the ledger. Its hash therefore opens in any
 explorer, and the refusal is a public record rather than a console line.
 
-The command archives every row under `scripts/out/evidence/`. Each file holds
+The command prints the new archive directory under `/tmp/`. Each file holds
 the envelope, the result, the meta, the diagnostic events and the Horizon
-summary.
+summary. Existing archives stay intact. Use `--output /path/to/new-directory`
+to choose another directory. The command refuses an existing directory.
 
 ### 7. Measure the cost and the throughput
 
@@ -235,8 +240,8 @@ node scripts/run-load-check.mjs
 
 ### What this path does not cover
 
-The application, the passkey accounts and the payee-presented codes need a
-browser and a phone. They are not part of this path.
+This path covers contract transactions with ed25519 keys. A complete evidence run
+also needs a real passkey redemption and a published SEP-7 key, as described below.
 
 ## The deployed contract
 
@@ -250,6 +255,56 @@ browser and a phone. They are not part of this path.
 `stellar contract build` reproduces that wasm hash from a clean checkout. A
 `cargo build --release` produces a different artifact, so it does not reproduce
 the deployed contract.
+
+### Keep the shared entries live
+
+A contract instance and its code stay live only for their TTL. Two contracts
+extend shared entries during a user request:
+
+- The voucher contract extends its instance and its code to 30 days during a
+  redemption, and only when less than one day remains. A contract that nobody
+  uses for longer than its remaining TTL therefore archives.
+- Every passkey wallet extends the shared wallet code to the maximum TTL during
+  an authentication. It does so once that code sits more than 120,960 ledgers
+  below the maximum.
+
+Each of these extensions costs more than the service pays for one request. The
+service refuses that fee with `FEE_ABOVE_CEILING`, so the request fails. On 4
+October 2026 the voucher contract had archived, and a redemption asked for
+26,498,773 stroops to restore it.
+
+The timer `senet-extend-ttl.timer` therefore runs `deploy/extend-ttl.mjs` every
+hour. The script extends the voucher instance, the voucher code and the wallet
+code to the maximum TTL two days before a user request would pay.
+`deploy/ttl-policy.mjs` holds the rule for each entry.
+
+An operator account pays for the extensions. It is a testnet account that
+friendbot funds, and it holds no product funds. Its key lives only in
+`/opt/senet/operator.env` on the host. The deployment creates that file once,
+and nothing prints the key. When the balance falls below 2,000 XLM, the script
+merges a new friendbot account into the operator account.
+
+`deploy/verify.mjs` is the alarm for the timer. It fails one day before a user
+request would pay.
+
+If the timer stops:
+
+1. Read the reason: `journalctl -u senet-extend-ttl -n 50`.
+2. Start one run: `systemctl start senet-extend-ttl.service`.
+3. If the run still fails, extend the entries with any funded testnet account:
+
+```bash
+contract=CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY
+voucher=c93a39a97541555caf3136dfa13dc33e1592ce492a07ad2f00d050352f98bf55
+wallet=502ea4e7bdb3ea99880941f1d35ceb67fb598692c0bb40f842ef9c9f17d58b58
+stellar contract extend --id "$contract" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
+stellar contract extend --wasm-hash "$voucher" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
+stellar contract extend --wasm-hash "$wallet" --ledgers-to-extend 3110399 --source-account ACCOUNT --network testnet
+```
+
+An entry that already archived needs `stellar contract restore` with the same
+`--id` or `--wasm-hash` first. 3,110,399 ledgers is the longest TTL that testnet
+allows, about 180 days. The network setting `maxEntryTtl` sets that limit.
 
 ## The public deployment
 
@@ -314,6 +369,12 @@ sees rather than what the host believes. The command checks that:
   origin;
 - `stellar.toml` answers as text and allows another origin;
 - the service names the contract and holds its channel accounts;
+- the event listener wrote its cursor in the last ten minutes, and no event
+  blocks it, so a stopped listener fails the check;
+- the shared contract entries stay at least one day above the TTL at which a
+  user request pays to extend them;
+- an ed25519 redemption and a wallet deployment simulate below 75 percent of
+  their fee ceilings;
 - the application names no relying party other than the host.
 
 With a browser it also loads the page, registers the worker, and reads the
@@ -329,16 +390,61 @@ transaction hash is therefore not a durable citation. This repository archives
 every cited transaction. Each file holds the envelope, the result, the meta and
 the diagnostic events, plus the summary that Horizon holds.
 
-One command produces the whole set on testnet and archives it:
+Prepare these inputs for a full transaction evidence run:
+
+1. Set `CONTRACT_ID` to the contract that the application uses.
+2. Create a voucher with a 15-minute lifetime on one phone and redeem it with a second phone.
+3. Save the successful redemption hash and record the two phones on video.
+4. Use the SEP-7 secret whose public key the application's HTTPS origin publishes.
+
+The fresh key from the account tool does not match the public deployment.
+For a separate deployment, change `RP_ID` in `server/src/config.ts` and serve
+the application under that HTTPS origin. Rebuild after this change.
+Publish the key in that domain's `stellar.toml` before the full evidence run.
+Do not copy another deployment's secret keys.
+
+The [SEP-7 signature rules](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0007.md#request-signing)
+require the domain's `URI_REQUEST_SIGNING_KEY` to verify the request.
+
+Start this command while the supplied voucher signature remains valid:
 
 ```bash
-node scripts/run-evidence.mjs
+node scripts/run-sow-evidence.mjs --device-hash <phone-redemption-hash>
 ```
 
-The command needs four funded testnet accounts and the contract identifier.
-`.env.example` names every value, and `.env` holds them.
+The command checks the device transaction and the hosted key before it submits anything.
+It refuses a missing device hash, an unavailable transaction, another contract or an unpublished key.
+The device transaction must succeed and carry a passkey signature.
+Its hash alone cannot prove which phones created or scanned the code.
 
-The command produces ten rows:
+The command performs these steps:
+
+1. Archive the supplied passkey redemption.
+2. Submit its exact signed entry again and require a refusal for the consumed nonce.
+3. Produce the eleven transaction rows below.
+4. Capture webhooks for six generated redemptions and the supplied passkey redemption.
+
+The replay uses `replay-voucher.mjs` before the generated transaction batch.
+An expired signature stops the run before that batch starts.
+The webhook archive compares each message with its transaction. It does not prove the sender's identity or the merchant screen state.
+
+The command writes a new transaction directory under `scripts/out/` and prints its path.
+Its sibling directories end in `-device-replay` and `-confirmations`.
+Use `--output NEW-DIRECTORY` to set the transaction directory.
+Keep all three directories together. Keep the prior archives until you review the replacement.
+
+The transaction directory holds `run.json`, which states the scope and completion of the combined run.
+It sets `complete: true` only after all three commands succeed and their manifests report completion.
+A failure returns a nonzero exit status and keeps the partial output.
+
+The separate `--vouchers-only` mode omits SEP-7, device redemption, and device replay evidence.
+It produces ten transaction rows and six webhook rows. It writes under `/tmp/` by default.
+
+Each confirmed transaction enters the archive before the next submission.
+The manifest states the scope and keeps `complete: false` until all rows finish.
+A failed run keeps its partial manifest and archived rows. Do not submit a partial archive as the full set.
+
+The transaction batch produces eleven script rows, with eight successes and three refusals:
 
 - the redemption whose recipient the submitter selects after the signature;
 - the refused replay of that same entry;
@@ -346,7 +452,24 @@ The command produces ten rows:
 - the void;
 - the refused redemption after the void;
 - a voucher that a client built with no network call;
-- the four lifetimes.
+- the four lifetimes;
+- a payment in response to a signed SEP-7 request.
+
+It also archives the supplied device redemption and its refused replay.
+`node scripts/run-evidence.mjs --list` names the eleven generated transaction rows.
+Add `--vouchers-only` to that list command to see its ten rows.
+The two-phone video, phone void, screenshots, and merchant screen confirmation remain separate evidence that a person must capture.
+
+To capture webhooks again for an existing complete transaction archive, choose a new output directory:
+
+```bash
+node scripts/run-confirmation.mjs --evidence TRANSACTION-DIRECTORY --output NEW-CONFIRMATION-DIRECTORY
+```
+
+The command includes the supplied passkey row when the transaction archive contains it.
+It refuses an existing output directory. Missing deliveries keep `complete: false` and return a nonzero exit status.
+The lower-level `run-evidence.mjs` command produces transaction evidence without webhook captures.
+Its optional `--replay-output NEW-DIRECTORY` also submits the supplied voucher replay before the generated batch.
 
 A refused row lands on chain as a failed transaction, so each refusal is a
 public hash. The command reads the diagnostic events of every refused row. It
@@ -384,25 +507,44 @@ transaction hash. The command reads the rest from the chain: the contract that
 the transaction called, the payer, and the signature scheme. It refuses a row
 that carries no passkey signature.
 
-The archive holds four passkey rows today, and each one names the contract that
-held it. A row against an earlier contract stays until a person captures a
-fresh one against the current contract. The replacement needs the new hash and
-nothing else.
+Historical passkey rows remain historical evidence. A full run requires a live
+redemption on the configured contract and never carries an old device row forward.
+Record the screen with `archive-device-row.mjs` as well as the transaction evidence.
+The merchant feed confirms the redemption hash; it does not create another transaction.
+The feed requires both `voucherId` and `txHash` query parameters on `GET /api/redemption`.
+The screen confirms only an event with the submitted hash and these matching payment fields:
 
-A second command refreshes the archive of the current set. It produces no
-transaction:
+- voucher identifier;
+- payer;
+- recipient;
+- amount.
+
+The same voucher identifier can occur in separate transactions.
+An app replay normally stops in simulation and produces no new on-chain hash.
+The runner's failed replay has its own hash and proves a separate on-chain refusal.
+
+To record an on-chain refusal for the same signed voucher from a phone,
+first archive its successful redemption with `archive-device-row.mjs --write`.
+Before the signature expires, run:
 
 ```bash
-node scripts/archive-evidence.mjs
+node scripts/replay-voucher.mjs /path/to/successful-row.json /path/to/new-replay-archive
 ```
 
-Both commands read `scripts/out/evidence/manifest.json`, which names each
-transaction and states what the transaction shows. They write one file for each
-row into `scripts/out/evidence/`.
+The command reads `SUBMITTER_SECRET` from `.env` and pays the replay fee on testnet.
+It preserves the signed entry and resource footprint, then submits a new transaction without simulation.
+It checks the consumed-nonce refusal and archives the failed transaction with the original hash as `sourceHash`.
+This transaction proves that the same voucher cannot pay again. The app attempt itself still stops in simulation.
 
-A row that the RPC server no longer holds keeps its Horizon summary, but it
-carries no meta. The command names such a row. The command then returns a
-non-zero exit code.
+`archive-evidence.mjs` reads transaction manifests directly under `scripts/out/`
+and refreshes their row files from RPC and Horizon. It creates no transaction.
+An incomplete refresh preserves a complete historical file and reports its original hash and date.
+The command still exits with a failure status because the current network response is incomplete.
+A complete refresh replaces the row file.
+
+The command skips manifests with `kind: "derived-analysis"`.
+Use `node scripts/analyze-fees.mjs --write` to update the fee analysis from its archived inputs.
+Use the evidence runner's new output directory to produce fresh transaction evidence.
 
 ## The load check
 

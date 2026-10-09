@@ -246,8 +246,10 @@ export interface Redemption {
  * the submission returned. A submission says that the network accepted a
  * transaction. Only the event says that the contract paid.
  */
-export async function fetchRedemption(voucherId: string): Promise<Redemption | null> {
-  const reply = await call(`/redemption?voucherId=${encodeURIComponent(voucherId)}`);
+export async function fetchRedemption(voucherId: string, transactionHash: string): Promise<Redemption | null> {
+  const reply = await call(
+    `/redemption?voucherId=${encodeURIComponent(voucherId)}&txHash=${encodeURIComponent(transactionHash)}`,
+  );
   const found = reply['redemption'];
   if (found === null || typeof found !== 'object' || Array.isArray(found)) return null;
   const fields: Record<string, unknown> = { ...found };

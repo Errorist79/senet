@@ -11,13 +11,17 @@ import type { RedeemReply } from './api.js';
  * wrong, and needs the evidence more than a merchant who takes the money.
  *
  * One list now serves both screens. Neither can drift away from the other.
+ *
+ * The payment of a payee-presented request is a different act, and it reports
+ * different facts. Its transaction row is the same row, so a person who pays a
+ * request reaches the explorer the same way.
  */
 
 /** Where a person looks up a transaction that this build submitted. */
 const EXPLORER_TRANSACTION = 'https://stellar.expert/explorer/testnet/tx/';
 
 /** The transaction row, with a link out to the explorer. */
-function transaction(hash: string): HTMLElement {
+export function transactionDetail(hash: string): HTMLElement {
   const row = detail('Transaction', short(hash), hash);
   const link = make('a', 'detail-link', 'open');
   if (link instanceof HTMLAnchorElement) {
@@ -38,7 +42,7 @@ export function redeemDetails(reply: RedeemReply): readonly HTMLElement[] {
     detail('Payer', short(reply.payer), reply.payer),
     detail('Recipient', short(reply.recipient), reply.recipient),
   ];
-  if (reply.hash !== null) rows.push(transaction(reply.hash));
+  if (reply.hash !== null) rows.push(transactionDetail(reply.hash));
   if (reply.ledger !== null) rows.push(detail('Ledger', String(reply.ledger)));
   if (reply.feeChargedStroops !== null) {
     rows.push(detail('Fee charged', xlm(reply.feeChargedStroops)));

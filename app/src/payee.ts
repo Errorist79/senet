@@ -1,12 +1,15 @@
+import { LIFETIMES, SEP7_SCHEME, decodeVoucher, randomNonce, signPayment } from '@senet/core';
 import { requestPayment, submitPayment } from './api.js';
+import { wireScanButton } from './camera.js';
 import { CODE_SIZE } from './config.js';
-import { detail, element, fill, make, short } from './dom.js';
-import { drawToCanvas, encodeBytes } from './qr.js';
-import { getAccount, getChain, getLedger } from './store.js';
-import { judgeRequest, judgementText, readRequest } from './verify.js';
-import { LIFETIMES, randomNonce, signPayment } from '@senet/core';
+import { detail, element, fill, make, short, toStroops, xlm } from './dom.js';
+import type { ScreenHooks } from './dom.js';
 import { passkeySigner } from './passkey.js';
-import { xlm } from './dom.js';
+import { drawToCanvas, encodeBytes } from './qr.js';
+import type { Scanned } from './qr.js';
+import { transactionDetail } from './receipt.js';
+import { getAccount, getChain, getLedger, voucherConfig } from './store.js';
+import { judgeRequest, judgementText, mayPay, readRequest } from './verify.js';
 
 /**
  * The payee-presented screen.
@@ -14,10 +17,10 @@ import { xlm } from './dom.js';
  * A payee asks for a payment. The service signs the request so that a wallet can
  * tell which domain it came from, and this screen shows it as a code.
  *
- * The same screen reads one. A person who scans a request needs two different
- * things: what the payment is, and whether anybody vouched for it. The screen
- * shows the second first, because a person who reads the amount and pays has
- * already acted.
+ * The same screen reads one, from the camera or from pasted text. A person who
+ * reads a request needs two different things: what the payment is, and
+ * whether anybody vouched for it. The screen shows the second first, because a
+ * person who reads the amount and pays has already acted.
  */
 
 /** Draw one failure, in the shape that every screen uses. */
@@ -32,14 +35,33 @@ function reason(caught: unknown): string {
   return caught instanceof Error ? caught.message : 'the application could not finish that step';
 }
 
+/**
+ * Whether a code carries a voucher for the chain that this device knows.
+ *
+ * The library is the one judge of what a voucher is, so this asks it. The
+ * answer only chooses the words of a refusal, and it never lets anything pay.
+ */
+function isVoucher(bytes: Uint8Array): boolean {
+  const chain = getChain();
+  if (chain === null) return false;
+  try {
+    decodeVoucher(voucherConfig(chain), bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Wire the payee screen to the document. */
-export function startPayeeScreen(): () => void {
+export function startPayeeScreen(): ScreenHooks {
   const form = element('payee-form', HTMLFormElement);
   const amount = element('payee-amount', HTMLInputElement);
   const message = element('payee-message', HTMLInputElement);
   const destination = element('payee-destination', HTMLElement);
   const panel = element('payee-panel', HTMLDivElement);
   const readForm = element('payee-read-form', HTMLFormElement);
+  const scanButton = element('payee-scan', HTMLButtonElement);
+  const video = element('payee-video', HTMLVideoElement);
   const uriField = element('payee-uri', HTMLTextAreaElement);
   const readPanel = element('payee-read-panel', HTMLDivElement);
 
@@ -90,18 +112,24 @@ export function startPayeeScreen(): () => void {
   /**
    * Judge a request, then show what it asks for.
    *
-   * The judgement comes first on the screen. A person who reads an amount and
-   * acts on it pays before they judge anything. The details sit under it.
+   * The camera and the paste field both end here, so a request reads the same
+   * whichever way it arrived. The judgement comes first on the screen. A person
+   * who reads an amount and acts on it pays before they judge anything. The
+   * details sit under it.
    */
-  async function judge(): Promise<void> {
-    const uri = uriField.value.trim();
-    if (uri === '') {
-      showProblem(readPanel, 'Paste a payment request, or scan one.');
+  async function judge(uri: string): Promise<void> {
+    const chain = getChain();
+    if (chain === null) {
+      showProblem(
+        readPanel,
+        'The service did not answer, so this device does not know its network yet. ' +
+          'Check the network, then try again.',
+      );
       return;
     }
     fill(readPanel, make('p', 'waiting', 'Asking the domain that this request names.'));
     try {
-      const judged = await judgeRequest(uri);
+      const judged = await judgeRequest(uri, chain.network);
       const words = judgementText(judged);
       const box = make('div', `result result-${words.tone}`);
       box.append(
@@ -116,14 +144,33 @@ export function startPayeeScreen(): () => void {
           box.append(detail(name, value.length > 16 ? short(value) : value, value));
         }
       }
-      // A request that the domain refused is never payable. A person may pay
-      // the other three. Two of them mean that nobody vouched, which differs
-      // from somebody's word failing.
-      if (judged.kind !== 'refused') addPayButton(box, uri, request.fields);
+      if (mayPay(judged)) addPayButton(box, uri, request.fields);
       fill(readPanel, box);
     } catch (caught) {
       showProblem(readPanel, reason(caught));
     }
+  }
+
+  /**
+   * Take what the camera read, when it is a payment request.
+   *
+   * A request is text, and a voucher is bytes. The camera reads both, and a
+   * person can aim at the wrong phone. A voucher gets its own words, because it
+   * is the one wrong code that this application itself draws.
+   */
+  function readScanned(scanned: Scanned): void {
+    const text = scanned.text.trim();
+    if (text.startsWith(SEP7_SCHEME)) {
+      void judge(text);
+      return;
+    }
+    showProblem(
+      readPanel,
+      isVoucher(scanned.bytes)
+        ? 'This code is a voucher, not a payment request. ' +
+            'To take a voucher, open Take a payment and scan it there.'
+        : 'This code is not a payment request. Scan the code that the payee shows.',
+    );
   }
 
   /** Offer to pay a request, from this device's account. */
@@ -151,8 +198,9 @@ export function startPayeeScreen(): () => void {
    *
    * The passkey signs an authorization for a transfer, and the service pays
    * the network fee. The amount and the destination come from the request that
-   * the screen judged. Nothing here comes from a field that a person typed, so
-   * the payment matches what the judgement covered.
+   * the screen judged, and the network is the one that the judgement matched.
+   * Nothing here comes from a field that a person typed, so the payment
+   * matches what the judgement covered.
    */
   async function pay(
     to: string,
@@ -173,11 +221,11 @@ export function startPayeeScreen(): () => void {
       showProblem(readPanel, 'This device knows no ledger, so it cannot date a payment.');
       return;
     }
-    const stroops = BigInt(Math.round(Number(asked) * 10_000_000));
     box.append(make('p', 'confirming', `Paying ${asked} XLM. Your device will ask you to confirm.`));
     try {
+      const stroops = toStroops(asked);
       const entry = await signPayment(
-        { network: chain.network, contractId: chain.contractId, tokenId: chain.tokenId },
+        voucherConfig(chain),
         { from: account.contractId, to, amount: stroops, expireAt: seen.sequence + LIFETIMES['15m'] },
         randomNonce(),
         passkeySigner(chain),
@@ -194,7 +242,7 @@ export function startPayeeScreen(): () => void {
         make('p', 'result-advice', `${xlm(paid.amountStroops)} to ${short(paid.to)}.`),
         detail('Outcome', paid.outcome),
       );
-      if (paid.hash !== null) done.append(detail('Transaction', short(paid.hash), paid.hash));
+      if (paid.hash !== null) done.append(transactionDetail(paid.hash));
       fill(readPanel, done);
       // The request stays on the screen, so a person can read what they paid.
       uriField.value = uri;
@@ -203,15 +251,30 @@ export function startPayeeScreen(): () => void {
     }
   }
 
+  const stopScan = wireScanButton(scanButton, video, {
+    onStart: () => {
+      fill(readPanel, make('p', 'waiting', 'Point the camera at the payment request that the payee shows.'));
+    },
+    onFound: readScanned,
+    onFailure: (caught) => {
+      showProblem(readPanel, reason(caught));
+    },
+  });
+
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     void ask();
   });
   readForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    void judge();
+    const uri = uriField.value.trim();
+    if (uri === '') {
+      showProblem(readPanel, 'Paste a payment request, or scan one.');
+      return;
+    }
+    void judge(uri);
   });
 
   showDestination();
-  return showDestination;
+  return { refresh: showDestination, leave: stopScan };
 }

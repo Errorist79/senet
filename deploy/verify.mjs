@@ -18,12 +18,22 @@
 // the part of the suite that the machine happened to allow.
 
 import { launch } from 'puppeteer-core';
+import {
+  Address, Contract, Keypair, Operation, TransactionBuilder, contract, rpc, xdr,
+} from '@stellar/stellar-sdk';
 // The name that the deployed release declares. A commit is the only thing that
 // changes it, and that is why a check against the origin is worth having.
-import { RP_ID } from '@senet/server';
+// The fee ceilings come from the release too, so the check measures the
+// numbers that the service enforces and keeps no copy of them.
+import {
+  INCLUSION_FEE_STROOPS, MAX_DEPLOY_FEE_STROOPS, MAX_REDEEM_FEE_STROOPS, RP_ID,
+  TESTNET_FRIENDBOT_URL, friendbotFund,
+} from '@senet/server';
 // The typed errors, so the check asks the bundle for the vocabulary that the
 // library declares rather than for a list written out here.
 import * as core from '@senet/core';
+import { ALARM_LEAD_LEDGERS, LEDGERS_PER_DAY, sharedEntries } from './ttl-policy.mjs';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -59,6 +69,16 @@ const PATHS = [
  * measure the same property from opposite sides, so one limit serves both.
  */
 const LISTENER_AGE_MAX_MS = 10 * 60 * 1000;
+
+/**
+ * The share of a fee ceiling that a route's simulated fee may use.
+ *
+ * The network reprices Soroban rent continuously, because the rent rate grows
+ * with the live state size. A fixed ceiling therefore breaks without a code
+ * change. This share gives a person time to act before it breaks: a route that
+ * reaches it fails here while its requests still pass.
+ */
+const FEE_SHARE_MAX = 0.75;
 
 /** A common phone viewport. The session runs on phones, not on a desktop. */
 const PHONE = Object.freeze({ width: 390, height: 844 });
@@ -288,6 +308,196 @@ if (listener !== null) {
   skip('everything about the listener, because the status route reports none');
 }
 
+// The alarm for the extension timer.
+//
+// The voucher contract and every passkey wallet extend shared code during a
+// user request. That extension costs more than any fee ceiling, so the request
+// fails. On 4 October 2026 the voucher contract archived, and every redemption
+// failed while every other check here passed.
+//
+// `deploy/ttl-policy.mjs` says when a request would pay, from the rules of both
+// contracts. The timer extends each entry two days before that. This fails one
+// day before that, so a failure here means that the timer missed a day of runs.
+//
+// This asks the RPC that the service names, from outside the host.
+async function readTtl() {
+  const chain = new rpc.Server(config.rpcUrl);
+  const archival = (await chain.getLedgerEntries(xdr.LedgerKey.configSetting(new xdr.LedgerKeyConfigSetting({
+    configSettingId: xdr.ConfigSettingId.configSettingStateArchival(),
+  })))).entries[0]?.val.configSetting().stateArchivalSettings();
+  if (archival === undefined) throw new Error('the RPC holds no state archival settings');
+  const instanceKey = new Contract(config.contractId).getFootprint();
+  const [instance] = (await chain.getLedgerEntries(instanceKey)).entries;
+  if (instance === undefined) throw new Error(`the RPC holds no instance of ${config.contractId}`);
+  const entries = sharedEntries({
+    contractId: config.contractId,
+    voucherCodeHash: instance.val.contractData().val().instance().executable().wasmHash(),
+    walletWasmHash: config.walletWasmHash,
+  }, archival.maxEntryTtl());
+  const keyOf = (entry) => (entry.kind === 'instance'
+    ? instanceKey
+    : xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash: Buffer.from(entry.id, 'hex') })));
+  const head = (await chain.getLatestLedger()).sequence;
+  const found = (await chain.getLedgerEntries(...entries.map(keyOf))).entries;
+  const liveUntil = new Map(found.map((one) => [one.key.toXDR('base64'), one.liveUntilLedgerSeq]));
+  return entries.map((entry) => {
+    const until = liveUntil.get(keyOf(entry).toXDR('base64'));
+    return { name: entry.name, until, left: until === undefined ? null : until - head, window: entry.window };
+  });
+}
+
+let ttl = [];
+try {
+  ttl = await readTtl();
+} catch (error) {
+  check(false, `the TTL of the shared entries is unknown: ${error instanceof Error ? error.message : String(error)}`);
+}
+for (const { name, left, window } of ttl) {
+  check(left !== null && left >= window + ALARM_LEAD_LEDGERS,
+    left === null ? `${name} is absent from the RPC, so no payment can use it`
+      : left < 0 ? `${name} is archived, so the next request that needs it pays to restore it`
+        : `${name} keeps ${days(left)} days, and a user request pays to extend it below `
+          + `${days(window)} days. The extension timer has fallen behind.`);
+}
+
+/** A count of ledgers as days, for a person to read. */
+function days(ledgers) {
+  return (ledgers / LEDGERS_PER_DAY).toFixed(1);
+}
+
+// What the service would pay today, against what it agrees to pay.
+//
+// The rent rate that the network charges grows with the live Soroban state
+// size, and nobody votes on that change. On 4 October 2026 a passkey account
+// deployment cost more than its ceiling, and no check had said so.
+//
+// This builds a wallet deployment and an ed25519 redemption the way that the
+// service submits them, and simulates both against the live network. This run
+// signs nothing for submission and sends nothing. Two throwaway accounts that
+// friendbot funds stand in for the payer and the merchant.
+//
+// A passkey redemption and a SEP-7 payment run the wallet's `__check_auth`,
+// which needs a passkey signature, so this simulates neither of them.
+async function readFees() {
+  const chain = new rpc.Server(config.rpcUrl);
+  const voucherConfig = { network: config.network, contractId: config.contractId, tokenId: config.tokenId };
+  const payer = Keypair.random();
+  const merchant = Keypair.random();
+  for (const account of [payer, merchant]) {
+    if (!(await friendbotFund(TESTNET_FRIENDBOT_URL, account.publicKey()))) {
+      throw new Error('friendbot did not fund an account for the simulation');
+    }
+  }
+  const source = await chain.getAccount(merchant.publicKey());
+  const simulate = async (operation) => {
+    const transaction = new TransactionBuilder(source, {
+      fee: INCLUSION_FEE_STROOPS.toString(),
+      networkPassphrase: config.network,
+    }).addOperation(operation).setTimeout(60).build();
+    const simulation = await chain.simulateTransaction(transaction);
+    if (rpc.Api.isSimulationError(simulation)) throw new Error(simulation.error);
+    // The service declares the inclusion bid plus the resource fee, as
+    // `assembleTransaction` builds it.
+    return INCLUSION_FEE_STROOPS + BigInt(simulation.minResourceFee);
+  };
+
+  const head = (await chain.getLatestLedger()).sequence;
+  const voucher = {
+    payer: payer.publicKey(),
+    amount: 1_000_000n,
+    voucherId: core.randomVoucherId(),
+    expireAt: head + core.LIFETIMES['15m'],
+  };
+  const entry = await core.signVoucher(voucherConfig, voucher, core.randomNonce(),
+    core.ed25519Signer(voucherConfig, payer.secret()));
+  const redeem = await simulate(Operation.invokeContractFunction({
+    contract: config.contractId,
+    function: 'redeem',
+    args: core.redeemArgs(voucher, merchant.publicKey()),
+    auth: [entry],
+  }));
+
+  // The constructor arguments come from the wallet's own contract spec, with
+  // the one Secp256r1 signer that the application registers.
+  const walletKey = xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({
+    hash: Buffer.from(config.walletWasmHash, 'hex'),
+  }));
+  const [walletCode] = (await chain.getLedgerEntries(walletKey)).entries;
+  if (walletCode === undefined) throw new Error('the RPC holds no wallet code');
+  const spec = contract.Spec.fromWasm(Buffer.from(walletCode.val.contractCode().code()));
+  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const point = publicKey.export({ format: 'jwk' });
+  const signerKey = Buffer.concat([Buffer.from([4]), Buffer.from(point.x, 'base64url'), Buffer.from(point.y, 'base64url')]);
+  const deploy = await simulate(Operation.createCustomContract({
+    address: Address.fromString(merchant.publicKey()),
+    wasmHash: Buffer.from(config.walletWasmHash, 'hex'),
+    salt: randomBytes(32),
+    constructorArgs: spec.funcArgsToScVals('__constructor', {
+      signer: {
+        tag: 'Secp256r1',
+        values: [randomBytes(16), signerKey, [undefined], [undefined], { tag: 'Persistent', values: undefined }],
+      },
+    }),
+  }));
+  return [
+    { name: 'an ed25519 redemption', fee: redeem, ceiling: MAX_REDEEM_FEE_STROOPS },
+    { name: 'a wallet deployment', fee: deploy, ceiling: MAX_DEPLOY_FEE_STROOPS },
+  ];
+}
+
+// The live Soroban state size, as information and not as a check.
+//
+// The rent rate grows with the state size of the whole network, and Senet does
+// not control that size. The ceilings assume a rate no higher than the network
+// setting `rentFee1KbSorobanStateSizeHigh`, which holds below the target size.
+// The formula is `compute_rent_write_fee_per_1kb` in soroban-env-host, and
+// simulation feeds it the mean of the state size window.
+async function readRentRate() {
+  const chain = new rpc.Server(config.rpcUrl);
+  const setting = (id) => xdr.LedgerKey.configSetting(new xdr.LedgerKeyConfigSetting({
+    configSettingId: xdr.ConfigSettingId[id](),
+  }));
+  const { entries } = await chain.getLedgerEntries(
+    setting('configSettingContractLedgerCostV0'),
+    setting('configSettingLiveSorobanStateSizeWindow'),
+  );
+  const cost = entries.find((entry) => entry.val.configSetting().switch().name === 'configSettingContractLedgerCostV0');
+  const window = entries.find((entry) => entry.val.configSetting().switch().name === 'configSettingLiveSorobanStateSizeWindow');
+  if (cost === undefined || window === undefined) throw new Error('the RPC holds no rent settings');
+  const ledgerCost = cost.val.configSetting().contractLedgerCost();
+  const samples = window.val.configSetting().liveSorobanStateSizeWindow().map((size) => BigInt(size.toString()));
+  const size = samples.reduce((sum, one) => sum + one, 0n) / BigInt(samples.length);
+  const low = BigInt(ledgerCost.rentFee1KbSorobanStateSizeLow().toString());
+  const high = BigInt(ledgerCost.rentFee1KbSorobanStateSizeHigh().toString());
+  const target = BigInt(ledgerCost.sorobanStateTargetSizeBytes().toString());
+  const rate = size < target ? ((high - low) * size + target - 1n) / target + low : null;
+  return { size, target, high, rate };
+}
+
+let rent = null;
+try {
+  rent = await readRentRate();
+} catch {
+  // Information only. A run that cannot read it prints that it is unknown.
+}
+
+let fees = [];
+try {
+  fees = await readFees();
+} catch (error) {
+  check(false, `the simulated fees are unknown: ${error instanceof Error ? error.message : String(error)}`);
+}
+for (const { name, fee, ceiling } of fees) {
+  check(Number(fee) <= Number(ceiling) * FEE_SHARE_MAX,
+    `${name} simulates at ${fee} stroops, which is ${percent(fee, ceiling)} of its ceiling of ${ceiling}, `
+      + `and the limit is ${Math.round(FEE_SHARE_MAX * 100)}%`);
+}
+
+/** One fee as a share of its ceiling, for a person to read. */
+function percent(fee, ceiling) {
+  return `${((Number(fee) / Number(ceiling)) * 100).toFixed(1)}%`;
+}
+
 // A passkey binds to the domain that created it. The browser derives that
 // domain from the origin which served the page, and nothing in the application
 // can change it. This check therefore reads a declaration and not a value that
@@ -375,6 +585,17 @@ if (existsSync(SERVED_NGINX)) {
 console.log(`  listener ${listener?.cursor ?? 'no cursor'}`
   + `${listener?.stuckOn === null || listener?.stuckOn === undefined ? '' : `, stuck on ${listener.stuckOn}`}`
   + '   read from outside the host, through the status route');
+for (const { name, until, left, window } of ttl) {
+  console.log(`  ttl      ${name} until ledger ${until ?? 'unknown'}, ${left === null ? 'unknown' : days(left)} days left, `
+    + `a user request pays below ${days(window)} days, the alarm sits ${days(ALARM_LEAD_LEDGERS)} day above that`);
+}
+console.log(`           read from ${config.rpcUrl}, the RPC that the service names`);
+console.log(`  state    ${rent === null ? 'unknown' : `${rent.size} of the ${rent.target} byte target, `
+  + `rent ${rent.rate === null ? `above ${rent.high}` : rent.rate} stroops per KB`}   information, not a check`);
+for (const { name, fee, ceiling } of fees) {
+  console.log(`  fee      ${name} ${fee} of ${ceiling} stroops, ${percent(fee, ceiling)} (the limit is ${Math.round(FEE_SHARE_MAX * 100)}%)`);
+}
+console.log('           simulated now. This run holds no passkey, so it simulates no passkey request.');
 console.log(`  errors     ${carried.length} of ${errorNames.length} typed names carried as text`);
 console.log(`  relying party ${RP_ID}, declared in the release`);
 console.log('                the browser derives the real one from the origin');

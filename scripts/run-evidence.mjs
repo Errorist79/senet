@@ -1,8 +1,8 @@
-// Produce the evidence set on testnet, then archive it.
+// Produce fresh transaction evidence on testnet, then archive it.
 //
-// One command re-runs every transaction that the repository cites. It writes
-// the envelope, the result, the meta and the diagnostic events of each one.
-// The files go into `scripts/out/evidence/`.
+// A full run needs a fresh device redemption and a published SEP-7 key.
+// Use --vouchers-only for the contract path with fresh testnet keys.
+// Each run writes a new directory and keeps previous archives intact.
 //
 // Run it with `node scripts/run-evidence.mjs`.
 //
@@ -22,12 +22,14 @@
 // and not the failed status alone.
 
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { Asset, Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import {
-  LIFETIMES, STELLAR_TOML_PATH, TESTNET_CONTRACT_ID, buildPayUri, ed25519Signer, nativeTokenId,
-  randomNonce, randomVoucherId, readVoucher, redeemArgs, signUri, signVoucher, TX_TIMEOUT_SECONDS,
-  verifyUri,
+  LIFETIMES, STELLAR_TOML_PATH, buildPayUri, ed25519Signer, nativeTokenId, parseUri,
+  randomNonce, randomVoucherId, readVoucher, redeemArgs, requestNetwork, signUri, signVoucher,
+  TX_TIMEOUT_SECONDS, verifyUri,
 } from '@senet/core';
 // The domain that this deployment serves under. A request names it as its
 // origin, and a wallet reads the signing key from that domain's file. The
@@ -35,8 +37,8 @@ import {
 // copy.
 import { RP_ID } from '@senet/server';
 import {
-  ENDPOINTS, EVIDENCE_DIR, RPC_URL, archiveManifest, describeTransaction, loadEnv, readManifest,
-  refusalReasons, requireEnv, writeManifest,
+  ENDPOINTS, HORIZON_URL, OUT_DIR, ROOT, RPC_URL, archiveRow, deriveRequestClaims, describeRedeem,
+  loadEnv, publishesTheKey, refusalReasons, requireEnv, writeManifest,
 } from './evidence-set.mjs';
 
 /** The value of one voucher in stroops, which is 0.5 XLM. */
@@ -65,7 +67,7 @@ const REASON_SIGNATURE_EXPIRED = 'signature has expired';
 const LIFETIME_NAMES = Object.freeze(['5m', '15m', '1h', '12h']);
 
 /**
- * Every row that this command produces.
+ * Every script row that a full run produces.
  *
  * The list exists so that a check can ask what the runner would produce, and
  * spend no transaction to find out. It follows the same lifetimes that the run
@@ -97,7 +99,9 @@ export const PRODUCED_ROWS = Object.freeze([
 // that read the table below would answer from a stale build. The archive
 // beside it comes from a commit, so the two would agree for the wrong reason.
 if (process.argv.includes('--list')) {
-  for (const name of PRODUCED_ROWS) console.log(name);
+  for (const name of PRODUCED_ROWS) {
+    if (name !== 'sep7-payment' || !process.argv.includes('--vouchers-only')) console.log(name);
+  }
   process.exit(0);
 }
 
@@ -117,8 +121,37 @@ if (missing.length > 0 || extra.length > 0) {
 
 loadEnv();
 
+const args = process.argv.slice(2);
+let vouchersOnly = false;
+let deviceHash;
+let outputDirectory;
+let replayDirectory;
+for (let index = 0; index < args.length; index += 1) {
+  const argument = args[index];
+  if (argument === '--vouchers-only') vouchersOnly = true;
+  else if (argument === '--device-hash' || argument === '--output' || argument === '--replay-output') {
+    const value = args[++index];
+    if (!value || value.startsWith('--')) throw new Error(`${argument} needs a value`);
+    if (argument === '--device-hash') deviceHash = value;
+    else if (argument === '--replay-output') replayDirectory = path.resolve(value);
+    else outputDirectory = value;
+  } else throw new Error(`unknown argument: ${argument}`);
+}
+if (vouchersOnly && deviceHash) throw new Error('--device-hash requires a full run');
+if (vouchersOnly && replayDirectory) throw new Error('--replay-output requires a full run');
+if (replayDirectory && fs.existsSync(replayDirectory)) throw new Error('Choose a new replay output directory.');
+if (!vouchersOnly && !deviceHash) {
+  throw new Error('A full run needs --device-hash from a fresh phone redemption. Use --vouchers-only for the contract path.');
+}
+const evidenceDirectory = outputDirectory
+  ? path.resolve(outputDirectory)
+  : path.join(vouchersOnly ? tmpdir() : OUT_DIR, `evidence-run-${Date.now()}`);
+if (fs.existsSync(evidenceDirectory)) {
+  throw new Error(`${evidenceDirectory} already exists. Choose a new output directory to preserve the archive.`);
+}
+
 const server = new rpc.Server(RPC_URL);
-const contractId = process.env.CONTRACT_ID || TESTNET_CONTRACT_ID;
+const contractId = requireEnv('CONTRACT_ID');
 const config = {
   network: Networks.TESTNET,
   contractId,
@@ -129,12 +162,11 @@ const config = {
 const payer = Keypair.fromSecret(requireEnv('PAYER_SECRET'));
 /** The submitter, who pays the network fee and selects the recipient. */
 const submitter = Keypair.fromSecret(requireEnv('SUBMITTER_SECRET'));
-// Read every remaining variable now, and not at the point of use. The last row
-// of this run is a payment. A run that spent ten transactions before it found
-// a missing key would leave those ten on the chain, with no archive to cite
-// them.
+// Check the remaining configuration before the first submission.
+// A missing SEP-7 key must stop a full run before it spends transaction fees.
+// Later failures retain the archive of each confirmed row.
 requireEnv('MERCHANT_ADDRESS');
-requireEnv('SEP7_SIGNING_SECRET');
+if (!vouchersOnly) requireEnv('SEP7_SIGNING_SECRET');
 // A merchant receives an amount and signs nothing, so each merchant here is an
 // address and not a secret. Every use below passes the address to the contract
 // as the recipient argument.
@@ -142,6 +174,29 @@ requireEnv('SEP7_SIGNING_SECRET');
 const merchant = requireEnv('MERCHANT_ADDRESS');
 /** The second recipient, who receives a refused attempt. */
 const otherMerchant = requireEnv('SECOND_MERCHANT_ADDRESS');
+
+let deviceRow;
+if (!vouchersOnly) {
+  if (!/^[0-9a-f]{64}$/.test(deviceHash)) throw new Error('--device-hash needs a transaction hash');
+  const described = await describeRedeem(deviceHash);
+  const response = await fetch(`${HORIZON_URL}/transactions/${deviceHash}`);
+  const horizon = response.ok ? await response.json() : null;
+  if (horizon?.successful !== true || described === null || described.signature !== 'secp256r1'
+      || described.credentialType !== 'ADDRESS_V2'
+      || described.contractId !== contractId || described.redeem === null
+      || described.redeem.payer === described.redeem.recipient) {
+    throw new Error('The device hash must name a live successful passkey redemption on the configured contract.');
+  }
+  deviceRow = {
+    name: 'passkey-fresh', hash: deviceHash, producer: 'device', contractId,
+    note: 'A person supplied this passkey redemption hash. The transaction does not prove which phones created or scanned the code.',
+  };
+  const signingKey = Keypair.fromSecret(requireEnv('SEP7_SIGNING_SECRET'));
+  const published = await publishesTheKey({
+    tomlUrl: `https://${RP_ID}${STELLAR_TOML_PATH}`, signingKey: signingKey.publicKey(),
+  });
+  if (!published.published) throw new Error(`SEP-7 prerequisite failed: ${published.reason}`);
+}
 
 const signPayer = ed25519Signer(config, payer.secret());
 
@@ -252,11 +307,28 @@ async function submitRefused(voucher, recipient, entry, resources, reason, label
 }
 
 const rows = [];
-function record(name, outcome, note) {
+const manifest = {
+  network: config.network, contractId, producedAt: new Date().toISOString(),
+  producedBy: 'scripts/run-evidence.mjs',
+  producedArgs: vouchersOnly ? ['--vouchers-only'] : [],
+  scope: vouchersOnly ? 'vouchers-only' : 'full-transactions', complete: false, rows,
+};
+
+async function saveRow(row) {
+  rows.push(row);
+  writeManifest(evidenceDirectory, manifest);
+  const archived = await archiveRow(evidenceDirectory, row, contractId, ENDPOINTS);
+  if (!archived.rpc.envelopeXdr || !archived.rpc.resultXdr || !archived.rpc.resultMetaXdr
+      || archived.horizon === null) {
+    throw new Error(`${row.name}: the archive lacks RPC or Horizon evidence. The partial manifest stays at ${evidenceDirectory}.`);
+  }
+}
+
+async function record(name, outcome, note, request) {
   if (!PRODUCED_ROWS.includes(name)) {
     throw new Error(`${name} is recorded but the produced list does not name it`);
   }
-  rows.push({ name, hash: outcome.hash, note, producer: 'script' });
+  await saveRow({ name, hash: outcome.hash, note, producer: 'script', ...(request ? { request } : {}) });
   console.log(`${name.padEnd(34)} ${outcome.status.padEnd(8)} ${outcome.hash}`);
   // A refusal is only evidence when it names its cause. The run therefore
   // prints the text that the network wrote into the diagnostic events.
@@ -271,8 +343,9 @@ function record(name, outcome, note) {
  * the request, so a wallet can tell that the domain asked.
  *
  * The payment is a classic payment operation and not a contract call. A
- * different decoder therefore reads the row that it produces, and no other row
- * here needs that decoder.
+ * different decoder, `paymentFromEnvelope`, therefore reads the row that it
+ * produces. The run compares that payment with the request after it archives
+ * the row.
  */
 async function payeePresentedPayment() {
   const signingKey = Keypair.fromSecret(requireEnv('SEP7_SIGNING_SECRET'));
@@ -280,7 +353,12 @@ async function payeePresentedPayment() {
   const amount = stroopsAsAmount(AMOUNT_STROOPS);
 
   const request = signUri(
-    buildPayUri({ destination: merchant, amount, originDomain: RP_ID }),
+    buildPayUri({
+      destination: merchant,
+      networkPassphrase: config.network,
+      amount,
+      originDomain: RP_ID,
+    }),
     signingKey.secret(),
   );
   // Verify first, and pay after. A request that this domain's own key cannot
@@ -289,6 +367,12 @@ async function payeePresentedPayment() {
   const verified = verifyUri(request, signingKey.publicKey());
   if (!verified.verified) {
     throw new Error(`the request that this domain signed does not verify: ${verified.reason}`);
+  }
+  // A wallet reads the network out of the request. The row pays on the network
+  // that a wallet would read, or it pays nothing.
+  const asked = requestNetwork(parseUri(request));
+  if (asked !== config.network) {
+    throw new Error(`the request names the network "${asked}", and this run pays on "${config.network}"`);
   }
 
   const source = await server.getAccount(submitter.publicKey());
@@ -301,6 +385,7 @@ async function payeePresentedPayment() {
     .build();
   payment.sign(submitter);
   const outcome = await send(payment, 'sep7-payment');
+  if (outcome.status !== 'SUCCESS') throw new Error('The SEP-7 payment did not succeed.');
 
   return {
     name: 'sep7-payment',
@@ -327,13 +412,22 @@ function stroopsAsAmount(stroops) {
 console.log(`contract ${contractId}`);
 console.log(`payer ${payer.publicKey()}`);
 console.log(`submitter ${submitter.publicKey()}\n`);
+console.log(`archive ${evidenceDirectory}`);
+if (deviceRow) await saveRow(deviceRow);
+if (replayDirectory) {
+  const replay = spawnSync(process.execPath, [
+    'scripts/replay-voucher.mjs', path.join(evidenceDirectory, 'passkey-fresh.json'), replayDirectory,
+  ], { cwd: ROOT, stdio: 'inherit' });
+  if (replay.error) throw replay.error;
+  if (replay.status !== 0) throw new Error('The device voucher replay failed. The transaction archive remains incomplete.');
+}
 
 // The core case. The payer signs, a second account submits, and the submitter
 // selects the recipient after the signature exists.
 const main = await terms(LIFETIMES['15m']);
 const mainEntry = await mint(main, randomNonce());
 const mainOutcome = await submitAccepted(main, merchant, mainEntry, '1a');
-record(
+await record(
   '1a-success',
   mainOutcome,
   'One account signs the entry and a second account submits it. The party that submits selects the recipient after the signature exists.',
@@ -341,7 +435,7 @@ record(
 
 // The same signed bytes again, to a different recipient. The network consumed
 // the nonce, so it refuses.
-record(
+await record(
   '1b-double-spend-failed',
   await submitRefused(
     main, otherMerchant, mainEntry, mainOutcome.resources,
@@ -361,7 +455,7 @@ const { resources: expiredResources } =
 const latest = await server.getLatestLedger();
 const expired = { ...expiredTerms, expireAt: latest.sequence - 1 };
 const expiredEntry = await mint(expired, expiredNonce);
-record(
+await record(
   '1c-expired-host-signature-failed',
   await submitRefused(
     expired, merchant, expiredEntry, expiredResources,
@@ -375,12 +469,12 @@ record(
 const voided = await terms(LIFETIMES['15m']);
 const voidEntry = await mint(voided, randomNonce());
 const voidOutcome = await submitAccepted(voided, payer.publicKey(), voidEntry, '8-void');
-record(
+await record(
   '8-void-success',
   voidOutcome,
   'The payer voids the voucher and redeems it to their own address. The redemption spends the nonce, and the balance does not change.',
 );
-record(
+await record(
   '8-after-void-failed',
   await submitRefused(
     voided, merchant, voidEntry, voidOutcome.resources,
@@ -406,7 +500,7 @@ try {
 }
 if (violation) throw new Error(`the payer path reached the network: ${violation}`);
 console.log('the payer built and signed one voucher with no network call');
-record(
+await record(
   'task3-handbuilt',
   await submitAccepted(offline, merchant, offlineEntry, 'task3'),
   'A client that never called simulation built this voucher. The redemption succeeds.',
@@ -422,73 +516,31 @@ const LIFETIME_NOTES = {
 for (const [name, lifetime] of Object.entries(LIFETIMES)) {
   const voucher = await terms(lifetime);
   const entry = await mint(voucher, randomNonce());
-  record(
+  await record(
     `lifetime-${name}`,
     await submitAccepted(voucher, merchant, entry, `lifetime-${name}`),
     LIFETIME_NOTES[name],
   );
 }
 
-/**
- * The rows that a passkey produced, which this command keeps as they are.
- *
- * A script cannot produce a WebAuthn signature, because the ceremony needs a
- * person and a device. A person captures such a row, and the only value that
- * a person supplies is the hash. This command reads the rest from the chain.
- *
- * The contract of a kept row therefore comes from the transaction itself, and
- * nobody keeps it correct by hand. A person who captures a fresh redemption
- * replaces the hash. The row then names the current contract, and it needs no
- * other change. The command also proves that the row
- * carries a passkey signature, so a row of another kind cannot enter the set
- * under a passkey name.
- */
-async function readKeptRows() {
-  if (!fs.existsSync(path.join(EVIDENCE_DIR, 'manifest.json'))) return [];
-  const previous = readManifest(EVIDENCE_DIR);
-  const kept = [];
-  for (const row of previous.rows.filter((each) => each.name.startsWith('passkey-'))) {
-    const described = await describeTransaction(row.hash);
-    if (described === null) {
-      console.log(`${row.name.padEnd(34)} KEPT     the RPC server no longer holds this row`);
-      kept.push(row);
-      continue;
-    }
-    if (described.signature !== 'secp256r1') {
-      throw new Error(`${row.name}: this row carries a ${described.signature} signature, not a passkey`);
-    }
-    const current = described.contractId === contractId ? 'current contract' : 'earlier contract';
-    console.log(`${row.name.padEnd(34)} KEPT     ${described.signature}, ${current}`);
-    kept.push({ ...row, producer: 'device', contractId: described.contractId });
-  }
-  return kept;
-}
-
 // The payee-presented payment. It calls no contract, so it runs after every
 // voucher row rather than among them.
-const sep7 = await payeePresentedPayment();
-if (!PRODUCED_ROWS.includes(sep7.name)) {
-  throw new Error(`${sep7.name} is recorded but the produced list does not name it`);
+if (!vouchersOnly) {
+  const sep7 = await payeePresentedPayment();
+  await record(sep7.name, sep7, sep7.note, sep7.request);
+  // The request is the artifact and the payment is the fact. The run compares
+  // the two from the archive, and a disagreement leaves the manifest incomplete.
+  const claims = deriveRequestClaims(evidenceDirectory, manifest);
+  if (claims.checked === 0 || claims.problems.length > 0) {
+    throw new Error(
+      `the archived request and its payment disagree: ${claims.problems.join('; ') || 'the comparison read no row'}`,
+    );
+  }
+  console.log(`  the archived payment answers its request, in ${claims.checked} checks`);
 }
-rows.push({
-  name: sep7.name, hash: sep7.hash, note: sep7.note, producer: 'script', request: sep7.request,
-});
-console.log(`${sep7.name.padEnd(34)} ${sep7.status.padEnd(8)} ${sep7.hash}`);
+manifest.complete = true;
+writeManifest(evidenceDirectory, manifest);
 
-const kept = await readKeptRows();
-const manifest = {
-  network: config.network,
-  contractId,
-  producedAt: new Date().toISOString(),
-  producedBy: 'scripts/run-evidence.mjs',
-  rows: [...rows, ...kept],
-};
-writeManifest(EVIDENCE_DIR, manifest);
-
-console.log('\narchiving');
-const incomplete = await archiveManifest(EVIDENCE_DIR, manifest, ENDPOINTS);
-console.log(`\nproduced ${rows.length} rows and kept ${kept.length} passkey rows`);
-if (incomplete > 0) {
-  console.log(`${incomplete} row(s) carry no meta, because the RPC server dropped them.`);
-  process.exitCode = 1;
-}
+console.log(`\narchived ${rows.length} rows in ${evidenceDirectory}`);
+console.log('Phone capture, video and feed output require separate device evidence.');
+if (vouchersOnly) console.log('The voucher-only run omits passkey and SEP-7 evidence.');

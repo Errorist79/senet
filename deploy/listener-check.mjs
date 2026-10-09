@@ -234,8 +234,15 @@ check(lag <= LAG_LEDGERS_MAX,
   `the listener is ${lag} ledgers behind, which is ${ago(lag)} (the limit is ${LAG_LEDGERS_MAX})`);
 check(fileAgeMs <= STATE_AGE_MAX_MS,
   `the cursor was written ${Math.round(fileAgeMs / 1000)} seconds ago (the limit is ${STATE_AGE_MAX_MS / 1000})`);
-console.log(`\n  the RPC still holds everything the cursor has not read, and it forgets`);
-console.log(`  the oldest of it in ${ago(margin)}. That is the time to repair a failure above.`);
+// A cursor below the range has no time left. A sentence about the time left
+// would then claim that the RPC holds events that it does not hold.
+if (margin >= 0) {
+  console.log(`\n  the RPC still holds everything the cursor has not read, and it forgets`);
+  console.log(`  the oldest of it in ${ago(margin)}. That is the time to repair a failure above.`);
+} else {
+  console.log(`\n  the RPC no longer holds ledgers ${cursorLedger} to ${range.oldestLedger - 1}.`);
+  console.log('  The cursor did not read them.');
+}
 
 // Name the state rather than leaving a reader to assemble it from five lines.
 // A stopped listener and a listener that cannot deliver both show as lag, and

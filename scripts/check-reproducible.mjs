@@ -150,8 +150,8 @@ function exportHead() {
  * came from a commit. A producer here therefore names what it produces without
  * importing it.
  */
-function producedBy(command) {
-  const output = execFileSync('node', [path.join(EXPORT_DIR, command), '--list'], {
+function producedBy(command, args) {
+  const output = execFileSync('node', [path.join(EXPORT_DIR, command), ...args, '--list'], {
     cwd: EXPORT_DIR,
     encoding: 'utf8',
   });
@@ -211,8 +211,13 @@ try {
     }
 
     let claimed;
+    const producedArgs = manifest.producedArgs ?? [];
+    if (!Array.isArray(producedArgs) || !producedArgs.every((value) => typeof value === 'string')) {
+      check(false, `${tree} has invalid producer arguments`);
+      continue;
+    }
     try {
-      claimed = producedBy(command);
+      claimed = producedBy(command, producedArgs);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       // A producer imports the library, which lives in the built output, and a

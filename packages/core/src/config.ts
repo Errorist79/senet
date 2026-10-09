@@ -11,7 +11,7 @@ import { NETWORK_ID_BYTES } from './constants.js';
  * against another.
  */
 export interface VoucherConfig {
-  /** The network passphrase, which the signed preimage also carries. */
+  /** The network passphrase, whose hash the signed preimage carries. */
   readonly network: string;
   /** The voucher contract that holds the `redeem` function. */
   readonly contractId: string;

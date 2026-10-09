@@ -7,18 +7,17 @@ import { nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import type { rpc } from '@stellar/stellar-sdk';
 import {
   REDEEMED_TOPIC,
+  findAgedOut,
   ledgerOfCursor,
   readListenerState,
   runListener,
   writeStall,
-  isCursorTooOld,
   pollOnce,
   readPosition,
   readRedemption,
   writePosition,
 } from '../src/events.js';
 import type { RedemptionMessage } from '../src/events.js';
-import { RPC_INVALID_REQUEST } from '../src/constants.js';
 
 /**
  * The listener's rules, against a feed that a test drives.
@@ -137,11 +136,72 @@ test('a truncated position reads as no position', () => {
   assert.equal(readPosition(path), null);
 });
 
-test('the guard reads the code of a refusal, and never its message', () => {
-  assert.equal(isCursorTooOld({ code: RPC_INVALID_REQUEST, message: 'anything at all' }), true);
-  assert.equal(isCursorTooOld({ code: -32000, message: 'startLedger must be within' }), false);
-  assert.equal(isCursorTooOld(new Error('startLedger must be within the ledger range')), false);
-  assert.equal(isCursorTooOld(null), false);
+/** The range that the testnet RPC reported on 4 October 2026, a full window. */
+const RANGE: rpc.Api.GetHealthResponse = {
+  status: 'healthy',
+  latestLedger: 5017451,
+  oldestLedger: 4896492,
+  ledgerRetentionWindow: 120960,
+};
+
+/** An RPC that reports one ledger range. */
+function reports(range: rpc.Api.GetHealthResponse): { getHealth: () => Promise<rpc.Api.GetHealthResponse> } {
+  return { getHealth: () => Promise.resolve(range) };
+}
+
+/** A cursor at the end of one ledger, in the shape that the RPC issues. */
+function cursorAt(ledger: number): string {
+  return `${(BigInt(ledger) << 32n).toString().padStart(19, '0')}-4294967295`;
+}
+
+test('a cursor newer than the head did not age out, although the RPC refuses it with the same code', async () => {
+  // Measured: a cursor five ledgers past the head and a cursor a hundred
+  // ledgers before the oldest both got -32600 and the same message.
+  const path = statePath();
+  writePosition(path, { cursor: cursorAt(RANGE.latestLedger + 5) });
+  assert.equal(await findAgedOut(reports(RANGE), path, 0), null);
+});
+
+test('a cursor older than the window aged out, and the answer names both ledgers', async () => {
+  const path = statePath();
+  writePosition(path, { cursor: cursorAt(RANGE.oldestLedger - 100) });
+  assert.deepEqual(await findAgedOut(reports(RANGE), path, 0), {
+    ledger: RANGE.oldestLedger - 100,
+    oldestKept: RANGE.oldestLedger,
+  });
+});
+
+test('the oldest kept ledger is still readable, and the ledger before it is not', async () => {
+  const path = statePath();
+  writePosition(path, { cursor: cursorAt(RANGE.oldestLedger) });
+  assert.equal(await findAgedOut(reports(RANGE), path, 0), null);
+  writePosition(path, { cursor: cursorAt(RANGE.oldestLedger - 1) });
+  assert.notEqual(await findAgedOut(reports(RANGE), path, 0), null);
+});
+
+test('an instance with a short history cannot stop the listener', async () => {
+  // This instance holds a hundred ledgers. The full window still covers the
+  // cursor, so another instance can serve it.
+  const short = { ...RANGE, oldestLedger: RANGE.latestLedger - 100 };
+  const path = statePath();
+  writePosition(path, { cursor: cursorAt(RANGE.latestLedger - 1000) });
+  assert.equal(await findAgedOut(reports(short), path, 0), null);
+});
+
+test('a range question that fails proves nothing', async () => {
+  const silent = { getHealth: () => Promise.reject(new Error('the RPC did not answer')) };
+  const path = statePath();
+  writePosition(path, { cursor: cursorAt(RANGE.oldestLedger - 100) });
+  assert.equal(await findAgedOut(silent, path, 0), null);
+});
+
+test('a first run with no position measures the configured ledger', async () => {
+  const path = join(work, 'no-position-yet.json');
+  assert.deepEqual(await findAgedOut(reports(RANGE), path, RANGE.oldestLedger - 1), {
+    ledger: RANGE.oldestLedger - 1,
+    oldestKept: RANGE.oldestLedger,
+  });
+  assert.equal(await findAgedOut(reports(RANGE), path, RANGE.latestLedger + 3), null);
 });
 
 test('a quiet poll moves the position, so a quiet week cannot wedge the listener', async () => {

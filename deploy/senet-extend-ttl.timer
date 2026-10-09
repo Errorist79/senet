@@ -1,0 +1,18 @@
+# Start senet-extend-ttl.service every hour.
+#
+# Install it at /etc/systemd/system/senet-extend-ttl.timer and enable it.
+#
+# The script extends an entry two days before a user request would pay for it,
+# so an hourly timer has 48 attempts. `Persistent=true` starts a missed run at
+# once after the host comes back.
+
+[Unit]
+Description=Start the Senet shared ledger entry extension every hour
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

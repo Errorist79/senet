@@ -49,11 +49,16 @@ RestartSec=5
 # stored cursor is older than the ledger range that the RPC still holds. The
 # events between the cursor and the window are gone for ever.
 #
-# A restart cannot repair that. A listener that restarted would fail the same
-# way for ever. Worse, it might start again from the newest ledger and look
-# healthy, while every redemption in the gap stays unreported. Neither is a
-# decision that a service makes for itself, so the unit stays down and a person
-# chooses.
+# The listener exits 78 only when the ledger range that the RPC reports proves
+# the age. A refusal alone proves nothing, because the RPC gives one code to an
+# aged-out cursor and to faults that clear on their own. Every other failure
+# exits 1, and the restart above takes the listener back to its stored cursor.
+#
+# A restart cannot repair an aged-out cursor. A listener that restarted would
+# fail the same way for ever. Worse, it might start again from the newest
+# ledger and look healthy, while every redemption in the gap stays unreported.
+# Neither is a decision that a service makes for itself, so the unit stays
+# down and a person chooses.
 #
 # Verified on systemd 249: a unit that exits 78 under this directive records
 # NRestarts=0 and stays down, and the same unit exiting 79 records five

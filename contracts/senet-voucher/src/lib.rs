@@ -33,8 +33,9 @@ const INSTANCE_TTL_THRESHOLD_LEDGERS: u32 = LEDGERS_PER_DAY;
 
 /// The lifetime that an extension sets, which is 30 days. Testnet caps the
 /// lifetime of one entry at 3,110,400 ledgers, about 180 days, so the network
-/// accepts this value. Each extension costs rent, and 30 days is long enough
-/// that a deployment with one redemption per month never lapses.
+/// accepts this value. Each extension costs rent. The contract extends only when
+/// less than one day remains, so a contract with no redemption in that last day
+/// lapses. An operator outside the contract must extend it.
 const INSTANCE_TTL_EXTEND_TO_LEDGERS: u32 = 30 * LEDGERS_PER_DAY;
 
 #[contracttype]

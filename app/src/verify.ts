@@ -1,7 +1,19 @@
-import { STELLAR_TOML_PATH, parseUri, readUriSigningKey, verifyUri } from '@senet/core';
+import { Networks } from '@stellar/stellar-sdk';
+import {
+  STELLAR_TOML_PATH,
+  parseUri,
+  readUriSigningKey,
+  requestNetwork,
+  verifyUri,
+} from '@senet/core';
 
 /**
- * Whether a payee-presented request came from the domain that it names.
+ * Whether a payee-presented request came from the domain that it names, and
+ * whether it is for the network that this application pays on.
+ *
+ * The network comes first. A request for another network is never payable
+ * here, whoever signed it. SEP-7 reads a request that names no network as a
+ * request for the public network, and this reader does the same.
  *
  * A wallet reads `origin_domain` from a request, fetches that domain's Stellar
  * information file, takes the published key, and checks the signature. This
@@ -13,7 +25,7 @@ import { STELLAR_TOML_PATH, parseUri, readUriSigningKey, verifyUri } from '@sene
  * domain that publishes nothing, whenever our service happened to hold the
  * right key. It would then be green in the very case that it exists to catch.
  *
- * Four outcomes, because they need four different sentences and only one of
+ * Five outcomes, because they need five different sentences and only one of
  * them is good news. Two of them are not failures of the request:
  *
  * - a request that names no domain carries nobody's word, and SEP-7 permits
@@ -29,7 +41,25 @@ export type Judgement =
   | { readonly kind: 'signed'; readonly domain: string }
   | { readonly kind: 'unsigned' }
   | { readonly kind: 'refused'; readonly domain: string; readonly reason: string }
-  | { readonly kind: 'unjudged'; readonly domain: string; readonly why: string };
+  | { readonly kind: 'unjudged'; readonly domain: string; readonly why: string }
+  | {
+      readonly kind: 'elsewhere';
+      /** The network that the request is for. A request that names none is for the public one. */
+      readonly asked: string;
+      /** The network that this application pays on. */
+      readonly ours: string;
+    };
+
+/**
+ * Whether a person may pay a request after this judgement.
+ *
+ * The list names the outcomes that allow a payment, rather than the ones that
+ * forbid it. An outcome that a later change adds is then not payable until
+ * somebody decides that it is.
+ */
+export function mayPay(judged: Judgement): boolean {
+  return judged.kind === 'signed' || judged.kind === 'unsigned' || judged.kind === 'unjudged';
+}
 
 /** The fields that a payment request carries. */
 export interface RequestDetails {
@@ -43,14 +73,17 @@ export function readRequest(uri: string): RequestDetails {
 }
 
 /**
- * Judge one request against the domain that it names.
+ * Judge one request against the network that this application pays on, and
+ * then against the domain that it names.
  *
  * A domain that answers nothing produces `unjudged` and never `refused`. The
  * two look the same to a person who reads only a colour. They call for
  * opposite actions: one means do not pay, and the other means find out more.
  */
-export async function judgeRequest(uri: string): Promise<Judgement> {
+export async function judgeRequest(uri: string, ours: string): Promise<Judgement> {
   const parsed = parseUri(uri);
+  const asked = requestNetwork(parsed);
+  if (asked !== ours) return { kind: 'elsewhere', asked, ours };
   const domain = parsed.fields['origin_domain'];
   if (domain === undefined || domain === '') return { kind: 'unsigned' };
 
@@ -82,17 +115,26 @@ export interface JudgementText {
   readonly advice: string;
 }
 
+/** How a network reads to a person, for the two networks that a person may know by name. */
+function networkName(passphrase: string): string {
+  if (passphrase === Networks.PUBLIC) return 'the public Stellar network';
+  if (passphrase === Networks.TESTNET) return 'the Stellar test network';
+  return `the network "${passphrase}"`;
+}
+
 /**
  * The words for each outcome.
  *
- * Four states, three colours, and the colour says what to do rather than how
+ * Five states, three colours, and the colour says what to do rather than how
  * unusual the state is. **Amber means check the payment yourself. Red means do
  * not pay.**
  *
  * `signed` is the only green, because the domain vouched for where the money
- * goes. `refused` is the only red, because somebody's word failed. `unsigned`
- * and `unjudged` are both amber, and they ask the same thing of a person by
- * different routes: nobody vouched, so read the details yourself.
+ * goes. Two states take red. `refused` takes it because somebody's word
+ * failed. `elsewhere` takes it because this application cannot pay on the
+ * network that the request names. `unsigned` and `unjudged` are both amber,
+ * and they ask the same thing of a person by different routes: nobody
+ * vouched, so read the details yourself.
  *
  * A colour that says what to do survives. A colour that says how unusual
  * something is decays, because every state can argue that it is unusual.
@@ -104,6 +146,17 @@ export interface JudgementText {
  * then stops meaning anything. Revisit this choice in such a world.**
  */
 export function judgementText(judged: Judgement): JudgementText {
+  if (judged.kind === 'elsewhere') {
+    // A person who reads `public network` may not know that a request with no
+    // network means the same thing. The sentence says it.
+    const unnamed =
+      judged.asked === Networks.PUBLIC ? ' A request that names no network is for the public network.' : '';
+    return {
+      tone: 'bad',
+      title: `This request is for ${networkName(judged.asked)}`,
+      advice: `This application pays on ${networkName(judged.ours)}, so it does not pay this request.${unnamed}`,
+    };
+  }
   if (judged.kind === 'signed') {
     return {
       tone: 'good',

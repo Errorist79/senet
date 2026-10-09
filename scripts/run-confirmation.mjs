@@ -1,50 +1,10 @@
-// Archive the webhook messages that the listener delivers for real redemptions.
-//
-//   node scripts/run-confirmation.mjs [--list]
-//
-// The funded promise is the merchant screen confirming from the event feed,
-// with the webhook output. This command produces the second half of that: the
-// messages themselves, captured as a receiver got them, paired with the
-// redemptions they report.
-//
-// It redeems nothing. The evidence set already holds redemptions, so this reads
-// the chain over the window that contains them and archives what the listener
-// posts. Redeeming again here would duplicate the machinery that produces those
-// rows, and two copies of it would disagree the first time one changed.
-//
-// The archive's own type carries what a row proves. The message agrees
-// with a transaction that we did not write, and it arrived after the ledger
-// that carries the event closed. It is not proof that a particular listener
-// sent it, and the archive says so rather than letting a reader assume more.
+// Capture webhook evidence for the redemptions in one transaction archive.
+// Each run keeps prior archives and writes its completion status.
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Networks } from '@stellar/stellar-sdk';
-import {
-  CONFIRM_CHECK_DIR, ENDPOINTS, EVIDENCE_DIR, ROOT, archiveRow, deriveDeliveryClaims, loadEnv,
-  readManifest, writeManifest,
-} from './evidence-set.mjs';
 
-/**
- * The rows that this command produces, one for each redemption that it
- * confirms.
- *
- * The names follow the evidence rows that they confirm, so a reader can put
- * the two side by side. This file names the list rather than discovering it. A
- * check that asks what this command produces must get an answer with no
- * network, no keys and no environment file.
- */
-export const PRODUCED_ROWS = Object.freeze([
-  'confirm-1a-success',
-  'confirm-8-void-success',
-  'confirm-lifetime-5m',
-  'confirm-lifetime-15m',
-  'confirm-lifetime-1h',
-  'confirm-lifetime-12h',
-]);
-
-/** The evidence row that each confirmation row reports. */
 const CONFIRMS = Object.freeze({
   'confirm-1a-success': '1a-success',
   'confirm-8-void-success': '8-void-success',
@@ -53,162 +13,158 @@ const CONFIRMS = Object.freeze({
   'confirm-lifetime-1h': 'lifetime-1h',
   'confirm-lifetime-12h': 'lifetime-12h',
 });
-
+const DEVICE_CONFIRMATION = 'confirm-passkey-fresh';
+const DEVICE_ROW = 'passkey-fresh';
+export const PRODUCED_ROWS = Object.freeze(Object.keys(CONFIRMS));
 if (process.argv.includes('--list')) {
-  for (const name of PRODUCED_ROWS) console.log(name);
+  console.log([...PRODUCED_ROWS, ...(process.argv.includes('--device-confirmation') ? [DEVICE_CONFIRMATION] : [])].join('\n'));
   process.exit(0);
 }
 
-/** The port that this run's receiver holds. */
+const { Networks } = await import('@stellar/stellar-sdk');
+const { ENDPOINTS, OUT_DIR, ROOT, archiveRow, deriveDeliveryClaims, loadEnv, readManifest, writeManifest } =
+  await import('./evidence-set.mjs');
 const PORT = 8894;
-
-/** How far before the earliest redemption the listener starts reading. */
 const LEDGERS_BEFORE = 50;
-
-/** The listener, in the mode that reads to the head of the chain and exits. */
+const RECEIVER_TIMEOUT_MS = 5000;
 const LISTENER = 'server/dist/tools/listen.js';
+const args = process.argv.slice(2);
+let evidenceDirectory;
+let outputDirectory;
+let deviceConfirmation = false;
+for (let index = 0; index < args.length; index += 1) {
+  const flag = args[index];
+  if (flag === '--device-confirmation') deviceConfirmation = true;
+  else if (flag === '--evidence' || flag === '--output') {
+    const value = args[++index];
+    if (!value || value.startsWith('--')) throw new Error(`${flag} needs a value`);
+    if (flag === '--evidence') evidenceDirectory = path.resolve(value);
+    else outputDirectory = path.resolve(value);
+  } else throw new Error(`unknown argument: ${flag}`);
+}
+if (!evidenceDirectory) throw new Error('Use --evidence DIRECTORY to select the transaction archive.');
+outputDirectory ??= path.join(OUT_DIR, `confirmation-run-${Date.now()}`);
+if (fs.existsSync(outputDirectory)) throw new Error(`${outputDirectory} already exists. Choose a new output directory.`);
+loadEnv();
+const header = JSON.parse(fs.readFileSync(path.join(evidenceDirectory, 'manifest.json'), 'utf8'));
+if (header.complete === false) throw new Error('The transaction archive is incomplete.');
+const evidence = readManifest(evidenceDirectory);
+if (evidence.network !== Networks.TESTNET) throw new Error('Confirmation evidence requires testnet.');
+deviceConfirmation ||= evidence.rows.some((row) => row.name === DEVICE_ROW);
+const confirms = { ...CONFIRMS, ...(deviceConfirmation ? { [DEVICE_CONFIRMATION]: DEVICE_ROW } : {}) };
+const wanted = new Map();
+const ledgers = [];
+for (const [name, sourceName] of Object.entries(confirms)) {
+  const row = evidence.rows.find((each) => each.name === sourceName);
+  if (!row) throw new Error(`The transaction archive lacks ${sourceName}.`);
+  if (wanted.has(row.hash)) throw new Error('Each confirmation must name a separate redemption.');
+  const archived = JSON.parse(fs.readFileSync(path.join(evidenceDirectory, `${sourceName}.json`), 'utf8'));
+  if (!Number.isInteger(archived.horizon?.ledger) || archived.horizon.ledger < 1
+      || archived.horizon.successful !== true || archived.hash !== row.hash) {
+    throw new Error(`${sourceName} lacks a matching successful ledger archive.`);
+  }
+  ledgers.push(archived.horizon.ledger);
+  wanted.set(row.hash, { name, sourceName });
+}
+const from = Math.max(1, Math.min(...ledgers) - LEDGERS_BEFORE);
+fs.mkdirSync(path.dirname(outputDirectory), { recursive: true });
+fs.mkdirSync(outputDirectory);
+const captureDirectory = path.join(outputDirectory, 'captures');
+const manifest = {
+  network: evidence.network, contractId: evidence.contractId, producedAt: new Date().toISOString(),
+  producedBy: 'scripts/run-confirmation.mjs',
+  producedArgs: deviceConfirmation ? ['--device-confirmation'] : [],
+  sourceEvidence: path.relative(outputDirectory, evidenceDirectory),
+  scope: deviceConfirmation ? 'transactions-and-device-confirmations' : 'transaction-confirmations',
+  complete: false, missing: Object.keys(confirms), rows: [],
+};
+writeManifest(outputDirectory, manifest);
+console.log(`archive ${outputDirectory}`);
+console.log(`confirming ${wanted.size} redemptions from ledger ${from}`);
 
-const CAPTURE_DIR = path.join(CONFIRM_CHECK_DIR, 'captures');
-const STATE_FILE = path.join(CONFIRM_CHECK_DIR, 'listener.json');
+function startReceiver() {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [
+      'scripts/webhook-receiver.mjs', '--port', String(PORT), '--dir', captureDirectory,
+    ], { cwd: ROOT });
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error('The receiver did not start.'));
+    }, RECEIVER_TIMEOUT_MS);
+    let output = '';
+    child.stderr.resume();
+    child.once('error', (error) => { clearTimeout(timeout); reject(error); });
+    child.once('close', () => { clearTimeout(timeout); reject(new Error('The receiver stopped.')); });
+    child.stdout.on('data', (chunk) => {
+      output += chunk;
+      if (output.includes(`the receiver holds 127.0.0.1:${PORT}`)) {
+        clearTimeout(timeout);
+        resolve(child);
+      }
+    });
+  });
+}
 
-function run(command, args, env) {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: ROOT, env: { ...process.env, ...env } });
+function listen() {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [LISTENER], {
+      cwd: ROOT,
+      env: {
+        ...process.env, CONTRACT_ID: evidence.contractId, NETWORK_PASSPHRASE: evidence.network,
+        WEBHOOK_URL: `http://127.0.0.1:${PORT}/redemption`,
+        LISTENER_STATE_FILE: path.join(outputDirectory, 'listener.json'), LISTENER_START_LEDGER: String(from),
+      },
+    });
     let output = '';
     child.stdout.on('data', (chunk) => { output += chunk; });
     child.stderr.on('data', (chunk) => { output += chunk; });
-    child.on('close', (code) => resolve({ code, output }));
+    child.once('error', reject);
+    child.once('close', (code) => {
+      if (code !== 0) reject(new Error(`The listener failed.\n${output.split('\n').slice(-6).join('\n')}`));
+      else resolve();
+    });
   });
 }
 
-async function startReceiver() {
-  const child = spawn('node', [
-    'scripts/webhook-receiver.mjs', '--port', String(PORT), '--dir', CAPTURE_DIR,
-  ], { cwd: ROOT });
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    try {
-      await fetch(`http://127.0.0.1:${PORT}/ready`);
-      return child;
-    } catch {
-      await new Promise((resolve) => { setTimeout(resolve, 100); });
-    }
-  }
-  child.kill('SIGTERM');
-  throw new Error('the receiver never answered');
-}
-
-/** Every message that the receiver captured, read back with its envelope. */
-function captured() {
-  if (!fs.existsSync(CAPTURE_DIR)) return [];
-  return fs.readdirSync(CAPTURE_DIR)
-    .filter((name) => name.startsWith('webhook-'))
-    .map((name) => JSON.parse(fs.readFileSync(path.join(CAPTURE_DIR, name), 'utf8')))
-    .map((delivery) => {
-      try {
-        return { delivery, message: JSON.parse(delivery.body) };
-      } catch {
-        return { delivery, message: null };
-      }
-    })
-    .filter((each) => each.message !== null && typeof each.message.tx_hash === 'string');
-}
-
-loadEnv();
-
-if (!fs.existsSync(path.join(EVIDENCE_DIR, 'manifest.json'))) {
-  console.error('the evidence set holds no manifest, so there is no redemption to confirm');
-  console.error('run: node scripts/run-evidence.mjs');
-  process.exit(1);
-}
-const evidence = readManifest(EVIDENCE_DIR);
-const wanted = new Map();
-for (const [name, confirms] of Object.entries(CONFIRMS)) {
-  const row = evidence.rows.find((each) => each.name === confirms);
-  if (row !== undefined) wanted.set(row.hash, { name, confirms });
-}
-if (wanted.size === 0) {
-  console.error('the evidence set holds none of the redemptions that this command confirms');
-  process.exit(1);
-}
-
-// Read from a little before the earliest redemption in the set. One request
-// scans about ten thousand ledgers, so a window this narrow reaches every row.
-const ledgers = [];
-for (const hash of wanted.keys()) {
-  const archived = path.join(EVIDENCE_DIR, `${evidence.rows.find((r) => r.hash === hash).name}.json`);
-  const row = JSON.parse(fs.readFileSync(archived, 'utf8'));
-  if (typeof row.horizon?.ledger === 'number') ledgers.push(row.horizon.ledger);
-}
-const from = Math.min(...ledgers) - LEDGERS_BEFORE;
-
-fs.rmSync(CONFIRM_CHECK_DIR, { recursive: true, force: true });
-fs.mkdirSync(CAPTURE_DIR, { recursive: true });
-
-console.log(`confirming ${wanted.size} redemptions`);
-console.log(`reading the chain from ledger ${from}\n`);
-
-const receiver = await startReceiver();
-let listener;
 try {
-  listener = await run('node', [LISTENER], {
-    WEBHOOK_URL: `http://127.0.0.1:${PORT}/redemption`,
-    LISTENER_STATE_FILE: STATE_FILE,
-    LISTENER_START_LEDGER: String(from),
-  });
+  const receiver = await startReceiver();
+  try {
+    await listen();
+  } finally {
+    await new Promise((resolve) => {
+      if (receiver.exitCode !== null || receiver.signalCode !== null) resolve();
+      else { receiver.once('close', resolve); receiver.kill('SIGTERM'); }
+    });
+  }
+  for (const file of fs.readdirSync(captureDirectory).filter((name) => name.startsWith('webhook-'))) {
+    const delivery = JSON.parse(fs.readFileSync(path.join(captureDirectory, file), 'utf8'));
+    let message;
+    try { message = JSON.parse(delivery.body); } catch { continue; }
+    const match = wanted.get(message?.tx_hash);
+    if (!match || manifest.rows.some((row) => row.name === match.name)) continue;
+    manifest.rows.push({
+      name: match.name, hash: message.tx_hash, producer: 'script', delivery,
+      note: `The receiver captured a webhook for ${match.sourceName}. The archive checks its content against the transaction, without proof of sender identity.`,
+    });
+  }
+  manifest.rows.sort((left, right) => left.name.localeCompare(right.name));
+  manifest.missing = Object.keys(confirms).filter((name) => !manifest.rows.some((row) => row.name === name));
+  writeManifest(outputDirectory, manifest);
+  for (const row of manifest.rows) {
+    const archived = await archiveRow(outputDirectory, row, manifest.contractId, ENDPOINTS);
+    if (!archived.rpc.envelopeXdr || !archived.rpc.resultXdr || !archived.rpc.resultMetaXdr
+        || archived.horizon?.successful !== true) throw new Error(`${row.name} lacks complete successful transaction evidence.`);
+  }
+  const checked = deriveDeliveryClaims(outputDirectory, manifest);
+  manifest.problems = checked.problems;
+  if (manifest.missing.length > 0) throw new Error(`Missing deliveries: ${manifest.missing.join(', ')}`);
+  if (checked.problems.length > 0) throw new Error(checked.problems.join('\n'));
+  manifest.complete = true;
+  console.log(`${manifest.rows.length} deliveries, ${checked.checked} comparisons against the chain`);
+} catch (error) {
+  manifest.error = error instanceof Error ? error.message : String(error);
+  console.error(manifest.error);
+  process.exitCode = 1;
 } finally {
-  receiver.kill('SIGTERM');
-  await new Promise((resolve) => { setTimeout(resolve, 300); });
+  writeManifest(outputDirectory, manifest);
 }
-
-if (listener.code !== 0) {
-  console.error('the listener did not finish, so this command archives no message');
-  console.error(listener.output.split('\n').slice(-6).join('\n'));
-  process.exit(1);
-}
-
-const messages = captured();
-console.log(`the listener delivered ${messages.length} messages\n`);
-
-const rows = [];
-for (const { delivery, message } of messages) {
-  const match = wanted.get(message.tx_hash);
-  if (match === undefined) continue;
-  rows.push({
-    name: match.name,
-    hash: message.tx_hash,
-    note: `The listener read this redemption from the chain and posted it. The `
-      + `merchant screen confirms from this feed rather than from the reply to `
-      + `its own submission. It reports the evidence row ${match.confirms}.`,
-    producer: 'script',
-    delivery,
-  });
-  console.log(`${match.name.padEnd(26)} ${message.tx_hash}`);
-}
-
-const missing = PRODUCED_ROWS.filter((name) => !rows.some((row) => row.name === name));
-for (const name of missing) {
-  console.log(`${name.padEnd(26)} NOT DELIVERED, so no row is written for it`);
-}
-
-if (rows.length === 0) {
-  console.error('\nno message reported a redemption that this command confirms');
-  process.exit(1);
-}
-
-rows.sort((left, right) => left.name.localeCompare(right.name));
-const manifest = {
-  network: process.env.NETWORK_PASSPHRASE ?? Networks.TESTNET,
-  contractId: evidence.contractId,
-  producedAt: new Date().toISOString(),
-  producedBy: 'scripts/run-confirmation.mjs',
-  rows,
-};
-writeManifest(CONFIRM_CHECK_DIR, manifest);
-console.log('\narchiving');
-for (const row of rows) await archiveRow(CONFIRM_CHECK_DIR, row, manifest.contractId, ENDPOINTS);
-
-const checked = deriveDeliveryClaims(CONFIRM_CHECK_DIR, manifest);
-console.log(`\n${checked.checked} comparisons against the chain`);
-for (const problem of checked.problems) console.log(`  PROBLEM ${problem}`);
-if (checked.problems.length > 0) process.exitCode = 1;
-else console.log(`every message agrees with the transaction that it reports`);

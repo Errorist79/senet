@@ -68,7 +68,11 @@ export async function payRoute(
   const hostFunction = xdr.HostFunction.hostFunctionTypeInvokeContract(
     entry.rootInvocation().function().contractFn(),
   );
-  const result = await context.feePayer.invoke(hostFunction, [entry]);
+  const result = await context.feePayer.invoke(
+    hostFunction,
+    [entry],
+    await context.feePayer.payerCeiling(from),
+  );
   return { ...result, from, to, amountStroops: amount.toString() };
 }
 

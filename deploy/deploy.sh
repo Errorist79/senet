@@ -22,7 +22,8 @@
 #   /opt/senet/state              the listener's cursor. No deployment touches it.
 #
 # The order of the three steps is the point, and each one depends on the one
-# before it.
+# before it. The deployment installs the extension timer between the listener
+# and the application, and nothing else depends on that timer.
 #
 # The service goes first. The application reads its chain settings from
 # `/api/config` at start. An application that arrived first would meet a
@@ -44,6 +45,7 @@ SOURCE=${1:-$(pwd)}
 TARGET=/opt/senet
 UNIT=senet-api.service
 LISTENER_UNIT=senet-listener.service
+EXTEND_UNIT=senet-extend-ttl
 KEEP=3
 
 if [ ! -f "$SOURCE/package.json" ]; then
@@ -94,6 +96,16 @@ if [ ! -f "$RELEASE/app/dist/index.html" ]; then
   echo "the build produced no application, so nothing is swapped" >&2
   exit 1
 fi
+
+# The extension timer pays from an operator account. Its key is a testnet key
+# that exists only on this host. The deployment creates it once, and nothing
+# prints it. Friendbot funds the account on the first run that needs funds.
+if [ ! -f "$TARGET/operator.env" ]; then
+  (umask 077 && node -e "const { Keypair } = require('@stellar/stellar-sdk');
+process.stdout.write('OPERATOR_SECRET=' + Keypair.random().secret() + '\n');" > "$TARGET/operator.env")
+  echo "    created the operator key in $TARGET/operator.env"
+fi
+chmod 600 "$TARGET/operator.env"
 
 # Publish the commit that this release carries. A content search cannot tell a
 # release that lacks a change from a check that looks for the wrong string.
@@ -192,6 +204,21 @@ if ! systemctl is-active --quiet "$LISTENER_UNIT"; then
   exit 1
 fi
 echo "    the listener runs from $STAMP"
+
+echo "==> the extension timer"
+install -m 0644 "$RELEASE/deploy/$EXTEND_UNIT.service" "/etc/systemd/system/$EXTEND_UNIT.service"
+install -m 0644 "$RELEASE/deploy/$EXTEND_UNIT.timer" "/etc/systemd/system/$EXTEND_UNIT.timer"
+systemctl daemon-reload
+systemctl enable --now "$EXTEND_UNIT.timer" >/dev/null
+# One run now. A release that breaks the script then fails here, and not an
+# hour later where nobody watches.
+systemctl reset-failed "$EXTEND_UNIT.service" 2>/dev/null || true
+if ! systemctl start "$EXTEND_UNIT.service"; then
+  echo "the extension run failed, so the application stays on the older release" >&2
+  echo "read: journalctl -u $EXTEND_UNIT -n 50" >&2
+  exit 1
+fi
+echo "    the extension timer runs from $STAMP"
 
 echo "==> the application third"
 swap "$RELEASE/app/dist" "$TARGET/live"

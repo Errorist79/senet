@@ -3,6 +3,7 @@ import { startAccountScreen } from './account.js';
 import { showBuildFact, showDeviceFact, showLedgerFact, showServiceFact } from './banner.js';
 import { LEDGER_REFRESH_MS } from './config.js';
 import { element } from './dom.js';
+import type { ScreenHooks } from './dom.js';
 import { startMerchantScreen } from './merchant.js';
 import { startPayeeScreen } from './payee.js';
 import { startPayerScreen } from './payer.js';
@@ -27,25 +28,29 @@ function isScreen(value: string): value is ScreenName {
 }
 
 /**
- * What a screen does when it becomes visible again.
+ * What a screen does when it becomes visible again, and when it hides.
  *
  * A screen draws from what the device holds, and another screen can change
  * that. A destination drawn once at start says that this device holds nothing
  * long after it holds an account. A screen that reads the device therefore
  * says how to draw itself again.
+ *
+ * A screen that holds the camera says how to release it. Without that, a
+ * camera that a person opened kept running behind the next screen.
  */
-const refreshers = new Map<ScreenName, () => void>();
+const hooks = new Map<ScreenName, ScreenHooks>();
 
 /** Show one screen, and mark the button that leads to it. */
 function showScreen(name: ScreenName): void {
   for (const screen of SCREENS) {
     element(`screen-${screen}`, HTMLElement).hidden = screen !== name;
+    if (screen !== name) hooks.get(screen)?.leave();
   }
   for (const screen of SCREENS) {
     const button = element(`nav-${screen}`, HTMLButtonElement);
     button.setAttribute('aria-current', screen === name ? 'page' : 'false');
   }
-  refreshers.get(name)?.();
+  hooks.get(name)?.refresh();
   window.location.hash = name;
 }
 
@@ -147,13 +152,13 @@ async function start(): Promise<void> {
   await loadChain();
   startAccountScreen();
   startPayerScreen();
-  refreshers.set('merchant', startMerchantScreen());
-  refreshers.set('payee', startPayeeScreen());
+  hooks.set('merchant', startMerchantScreen());
+  hooks.set('payee', startPayeeScreen());
   showDeviceFact();
 
   // The first screen appeared before a screen registered its own refresh.
   const opened = window.location.hash.replace('#', '');
-  if (isScreen(opened)) refreshers.get(opened)?.();
+  if (isScreen(opened)) hooks.get(opened)?.refresh();
 
   await readLedger();
   window.setInterval(() => void readLedger(), LEDGER_REFRESH_MS);

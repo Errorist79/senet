@@ -1,0 +1,199 @@
+{
+  "name": "redemption-fees",
+  "network": "Test SDF Network ; September 2015",
+  "producedBy": "scripts/analyze-fees.mjs",
+  "feeUnit": "stroop",
+  "measurements": [
+    {
+      "name": "passkey-redeem-1",
+      "hash": "5909cdadb42f8ee88af3016ceb0edc352791185da88a7865bf35a7b930f54510",
+      "ledger": 4442216,
+      "createdAt": "2026-09-01T03:51:07Z",
+      "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
+      "payer": "CBJAI2XNFJ36R25SIJZB36FZFO445RRGXCWF6SHPPIOVKTRDD7EE7LL5",
+      "recipient": "CBIQQY7OX7Z4KKPNQPTWU2QGORMA5ZZNPEGCOCYMGETEHCJNTML36MQN",
+      "signatureScheme": "secp256r1",
+      "credentialType": "sorobanCredentialsAddressV2",
+      "inputSha256": "f0a62a1fd9f797a3d0a20f2e62808e7419992cf40d738489caa95c8857e92ec4",
+      "declaredStroops": {
+        "total": "160781",
+        "inclusion": "10000",
+        "resource": "150781"
+      },
+      "chargedStroops": {
+        "total": "126033",
+        "inclusion": "100",
+        "nonRefundableResource": "24350",
+        "refundableResource": "101583",
+        "rent": "98438",
+        "eventsAndReturnValue": "3145"
+      },
+      "unusedStroops": {
+        "resource": "24848",
+        "inclusion": "9900"
+      },
+      "declaredResources": {
+        "instructions": 5582773,
+        "diskReadBytes": 0,
+        "writeBytes": 744,
+        "readOnlyEntries": 7,
+        "readWriteEntries": 4
+      },
+      "currentPolicy": {
+        "totalWithArchivedResourceStroops": "160781",
+        "capStroops": "18000000",
+        "capHeadroomStroops": "17839219",
+        "inclusionHeadroomStroops": "9900"
+      }
+    },
+    {
+      "name": "passkey-redeem-2",
+      "hash": "e2bdb88c472deefef4f88c929cd975d2d6b0ac9e00047cd8181ffa8a79a7a8bb",
+      "ledger": 4454315,
+      "createdAt": "2026-09-01T20:39:22Z",
+      "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
+      "payer": "CBJAI2XNFJ36R25SIJZB36FZFO445RRGXCWF6SHPPIOVKTRDD7EE7LL5",
+      "recipient": "CBIQQY7OX7Z4KKPNQPTWU2QGORMA5ZZNPEGCOCYMGETEHCJNTML36MQN",
+      "signatureScheme": "secp256r1",
+      "credentialType": "sorobanCredentialsAddressV2",
+      "inputSha256": "fcf1d62181c9a74cb36b456a01bbe9d80718d0609d29f9eea51f46759901b303",
+      "declaredStroops": {
+        "total": "50543",
+        "inclusion": "10000",
+        "resource": "40543"
+      },
+      "chargedStroops": {
+        "total": "30176",
+        "inclusion": "100",
+        "nonRefundableResource": "24368",
+        "refundableResource": "5708",
+        "rent": "2563",
+        "eventsAndReturnValue": "3145"
+      },
+      "unusedStroops": {
+        "resource": "10467",
+        "inclusion": "9900"
+      },
+      "declaredResources": {
+        "instructions": 5608431,
+        "diskReadBytes": 0,
+        "writeBytes": 744,
+        "readOnlyEntries": 7,
+        "readWriteEntries": 4
+      },
+      "currentPolicy": {
+        "totalWithArchivedResourceStroops": "50543",
+        "capStroops": "18000000",
+        "capHeadroomStroops": "17949457",
+        "inclusionHeadroomStroops": "9900"
+      }
+    },
+    {
+      "name": "passkey-redeem-3",
+      "hash": "6d010865a40c918adb0ac16b0bbec17ab4729eecfb0973e0eb25b1b7599f97b3",
+      "ledger": 4454342,
+      "createdAt": "2026-09-01T20:41:37Z",
+      "contractId": "CDPEBL7N5F6CZEB7DZ4DRI5I6XPBEZYLNIAYZDVML452E7VW33VBLJPN",
+      "payer": "CBJAI2XNFJ36R25SIJZB36FZFO445RRGXCWF6SHPPIOVKTRDD7EE7LL5",
+      "recipient": "CBIQQY7OX7Z4KKPNQPTWU2QGORMA5ZZNPEGCOCYMGETEHCJNTML36MQN",
+      "signatureScheme": "secp256r1",
+      "credentialType": "sorobanCredentialsAddressV2",
+      "inputSha256": "cc2b8249fa4a9b60ab179a0dd686e7437b0427a944a6e112d77b6631fc73e975",
+      "declaredStroops": {
+        "total": "50543",
+        "inclusion": "10000",
+        "resource": "40543"
+      },
+      "chargedStroops": {
+        "total": "30176",
+        "inclusion": "100",
+        "nonRefundableResource": "24368",
+        "refundableResource": "5708",
+        "rent": "2563",
+        "eventsAndReturnValue": "3145"
+      },
+      "unusedStroops": {
+        "resource": "10467",
+        "inclusion": "9900"
+      },
+      "declaredResources": {
+        "instructions": 5608431,
+        "diskReadBytes": 0,
+        "writeBytes": 744,
+        "readOnlyEntries": 7,
+        "readWriteEntries": 4
+      },
+      "currentPolicy": {
+        "totalWithArchivedResourceStroops": "50543",
+        "capStroops": "18000000",
+        "capHeadroomStroops": "17949457",
+        "inclusionHeadroomStroops": "9900"
+      }
+    },
+    {
+      "name": "1a-success",
+      "hash": "4ba566adfa5750985438bd5d0ba89ff9803f9b8665b2d2d2d1a71794b42b16ba",
+      "ledger": 4507697,
+      "createdAt": "2026-09-04T22:47:52Z",
+      "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+      "payer": "GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33",
+      "recipient": "GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52",
+      "signatureScheme": "ed25519",
+      "credentialType": "sorobanCredentialsAddressV2",
+      "inputSha256": "237064ac31dbcb468982cea4dec10e33f14e5b3f306fedc01a68e6d049995f56",
+      "declaredStroops": {
+        "total": "237742",
+        "inclusion": "200000",
+        "resource": "37742"
+      },
+      "chargedStroops": {
+        "total": "27364",
+        "inclusion": "100",
+        "nonRefundableResource": "21477",
+        "refundableResource": "5787",
+        "rent": "2564",
+        "eventsAndReturnValue": "3223"
+      },
+      "unusedStroops": {
+        "resource": "10478",
+        "inclusion": "199900"
+      },
+      "declaredResources": {
+        "instructions": 1432328,
+        "diskReadBytes": 288,
+        "writeBytes": 588,
+        "readOnlyEntries": 3,
+        "readWriteEntries": 4
+      },
+      "currentPolicy": {
+        "totalWithArchivedResourceStroops": "47742",
+        "capStroops": "1300000",
+        "capHeadroomStroops": "1252258",
+        "inclusionHeadroomStroops": "9900"
+      }
+    }
+  ],
+  "comparison": {
+    "passkeyReference": [
+      "passkey-redeem-2",
+      "passkey-redeem-3"
+    ],
+    "ed25519Reference": "1a-success",
+    "passkeyExtraChargedStroops": "2812",
+    "firstPasskeyExtraChargedStroops": "95857",
+    "firstPasskeyExtraRentStroops": "95875",
+    "firstPasskeyExtraNonRefundableStroops": "-18",
+    "firstPasskeyExtraEventsStroops": "0"
+  },
+  "servicePolicy": {
+    "inclusionBidStroops": "10000",
+    "keyRedeemCapStroops": "1300000",
+    "passkeyRequestCapStroops": "18000000",
+    "note": "The service adds the simulated resource fee to the inclusion bid. The cap of the payer kind limits the total declaration."
+  },
+  "limits": [
+    "These archived transactions use different contract instances and ledger states. Their fees do not isolate the cost of the signature.",
+    "The metadata records total rent. It does not assign that rent to a specific account entry.",
+    "The policy comparison uses archived resource declarations. It does not simulate these transactions against current ledger state."
+  ]
+}

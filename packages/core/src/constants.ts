@@ -9,28 +9,23 @@
  * The protocol's target ledger close time, in milliseconds.
  *
  * `ledgerTargetCloseTimeMilliseconds` is an on-chain configuration setting.
- * Consensus cannot close a ledger faster than this floor, so a real close
- * time is always 5 seconds or more.
+ * This target does not predict each observed interval between ledgers.
  */
 export const LEDGER_TARGET_CLOSE_MS = 5000;
 
 /**
  * The measured mean ledger close time on testnet, in seconds.
  *
- * The measurement covers 4.44 million ledgers over 257 days. The excess above
- * the 5 second floor is a uniform overhead of about 7 milliseconds per ledger,
- * not an occasional stall. A divisor of 5.007 holds the estimate error to 7
- * ledgers, which is 35 seconds, at every lifetime that this library offers.
+ * The estimate uses this historical mean. Actual close times and device clock
+ * errors can put the estimate ahead of or behind the current ledger.
  */
 export const LEDGER_MEAN_CLOSE_SECONDS = 5.007;
 
 /**
  * Ledgers added to an offline estimate as a safety margin.
  *
- * The margin is zero on purpose. A ledger can never close below the 5 second
- * floor, so an estimate can only run ahead of the real ledger. A positive
- * margin makes that overshoot worse, and overshoot is the failure that the
- * contract ceiling exists to catch.
+ * The margin is zero. A positive margin increases the chance that a voucher
+ * exceeds the contract's limit on its remaining life.
  */
 export const LEDGER_ESTIMATE_MARGIN_LEDGERS = 0;
 
@@ -52,7 +47,7 @@ export const DEFAULT_LIFETIME_LEDGERS = LIFETIMES['15m'];
  * The longest lifetime the deployed contract accepts, in ledgers.
  *
  * The contract stores its own `max_ttl_ledgers` and refuses a longer voucher
- * with error 8. This constant must equal the deployed value, so that the
+ * with `TtlTooLong`, code 7. This constant must equal the deployed value, so that the
  * library refuses the voucher before the payer signs it.
  */
 export const CONTRACT_MAX_TTL_LEDGERS = LIFETIMES['12h'];
@@ -130,7 +125,7 @@ export const PAYLOAD_VERSION = 1;
  * SHA-256 hash of the network passphrase. The set of named Stellar networks is
  * small, so a person can enumerate four-byte identifiers and check that no two
  * collide. The identifier is a check at scan time, not a security boundary.
- * The signed preimage already carries the whole network passphrase. A voucher
+ * The signed preimage already carries the full network ID. A voucher
  * that reaches the wrong network therefore fails on chain, even after a
  * collision.
  */

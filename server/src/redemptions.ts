@@ -132,12 +132,13 @@ export function addRedemption(
   return { held: next.redemptions, added: true };
 }
 
-/** What the store holds for one voucher, whether or not anybody redeemed it. */
+/** Read the event for one voucher in the specified transaction. */
 export function findRedemption(
   path: string,
   voucherId: string,
+  txHash: string,
 ): RedemptionMessage | null {
-  return readStore(path).find((one) => one.voucher_id === voucherId) ?? null;
+  return readStore(path).find((one) => one.voucher_id === voucherId && one.tx_hash === txHash) ?? null;
 }
 
 /**

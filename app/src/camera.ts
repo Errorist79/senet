@@ -5,15 +5,17 @@ import type { Scanned } from './qr.js';
 /**
  * The camera, and the loop that reads frames from it.
  *
- * The camera is the merchant's input device, and it is the one part of the
- * application that a person can refuse. Every failure here is something a
- * merchant must be able to act on, so each one carries its own message.
+ * Two screens read a code that another phone shows. The merchant screen reads
+ * a voucher, and the payee screen reads a payment request. The camera is the
+ * one part of the application that a person can refuse. Every failure here is
+ * something a person must be able to act on, so each one carries its own
+ * message.
  */
 
 /** Why the camera did not open. */
 export type CameraProblem = 'refused' | 'missing' | 'unsupported' | 'failed';
 
-/** A camera that did not open, with the reason a merchant can act on. */
+/** A camera that did not open, with the reason a person can act on. */
 export class CameraError extends Error {
   constructor(readonly problem: CameraProblem, message: string) {
     super(message);
@@ -22,11 +24,11 @@ export class CameraError extends Error {
 }
 
 /** A scan in progress. Stop it to release the camera. */
-export interface Scan {
+interface Scan {
   stop: () => void;
 }
 
-/** Turn a caught value into the reason that a merchant reads. */
+/** Turn a caught value into the reason that a person reads. */
 function cameraProblem(caught: unknown): CameraError {
   const name = caught instanceof Error ? caught.name : '';
   if (name === 'NotAllowedError' || name === 'SecurityError') {
@@ -41,12 +43,15 @@ function cameraProblem(caught: unknown): CameraError {
   return new CameraError('failed', 'The camera did not start. Close other apps that use it.');
 }
 
-/** What the scanner asks for. A merchant points a rear camera at a screen. */
+/** What the scanner asks for. A person points a rear camera at a screen. */
 const REAR_CAMERA: MediaTrackConstraints = {
   facingMode: 'environment',
   width: { ideal: SCAN_FRAME_WIDTH },
   height: { ideal: SCAN_FRAME_HEIGHT },
 };
+
+/** What a scan button says while its camera runs. */
+const STOP_LABEL = 'Stop the camera';
 
 /**
  * Copy the middle square of what the camera shows, and give back its pixels.
@@ -93,8 +98,8 @@ function middleSquare(
 /**
  * Open one camera and show it.
  *
- * Every failure here reaches a merchant as words that they can act on, so
- * every caller comes through this one place.
+ * Every failure here reaches a person as words that they can act on, so every
+ * caller comes through this one place.
  */
 async function openCamera(
   video: HTMLVideoElement,
@@ -121,10 +126,10 @@ async function openCamera(
 /**
  * Open the camera and read frames until a symbol appears.
  *
- * A merchant points the rear camera at a payer's screen, so the request asks
- * for that one. A device with no rear camera gives whatever it has.
+ * A person points the rear camera at another phone's screen, so the request
+ * asks for that one. A device with no rear camera gives whatever it has.
  */
-export async function scanForSymbol(
+async function scanForSymbol(
   video: HTMLVideoElement,
   onFound: (scanned: Scanned) => void,
 ): Promise<Scan> {
@@ -151,8 +156,8 @@ export async function scanForSymbol(
     const frame = middleSquare(video, canvas, context);
     if (frame !== null) {
       const found = await decodeFrame(frame);
-      // A merchant can stop the scan while a frame is still in the decoder.
-      // Without this the loop would report a voucher after the camera closed.
+      // A person can stop the scan while a frame is still in the decoder.
+      // Without this the loop would report a code after the camera closed.
       if (!running) return;
       if (found !== null) {
         stop();
@@ -165,4 +170,69 @@ export async function scanForSymbol(
 
   void readOneFrame();
   return { stop };
+}
+
+/** What a screen does with the scans that one button starts. */
+export interface ScanActions {
+  /** The camera is about to open, so the screen says what to aim at. */
+  readonly onStart: () => void;
+  /** A frame held a symbol. The camera is already closed. */
+  readonly onFound: (scanned: Scanned) => void;
+  /** The camera or the decoder did not start. The camera is already closed. */
+  readonly onFailure: (caught: unknown) => void;
+}
+
+/**
+ * Wire one scan button to one preview, and give back the way to stop.
+ *
+ * The button opens the rear camera, and the same button stops it. A read and
+ * a failure both close the camera before the screen hears of them. A screen
+ * calls the returned function when a person leaves it.
+ *
+ * A camera takes time to open, and a person can press stop or leave in that
+ * time. Each start therefore keeps its own record, and only the latest start
+ * may act. A camera that opens after its start ended closes at once, and its
+ * frames reach nobody.
+ */
+export function wireScanButton(
+  button: HTMLButtonElement,
+  video: HTMLVideoElement,
+  actions: ScanActions,
+): () => void {
+  const idleLabel = button.textContent;
+  let current: { scan: Scan | null } | null = null;
+
+  const stop = (): void => {
+    current?.scan?.stop();
+    current = null;
+    video.hidden = true;
+    button.textContent = idleLabel;
+  };
+
+  const start = async (): Promise<void> => {
+    const attempt: { scan: Scan | null } = { scan: null };
+    current = attempt;
+    video.hidden = false;
+    button.textContent = STOP_LABEL;
+    actions.onStart();
+    try {
+      const scan = await scanForSymbol(video, (found) => {
+        if (current !== attempt) return;
+        stop();
+        actions.onFound(found);
+      });
+      if (current === attempt) attempt.scan = scan;
+      else scan.stop();
+    } catch (caught) {
+      if (current !== attempt) return;
+      stop();
+      actions.onFailure(caught);
+    }
+  };
+
+  button.addEventListener('click', () => {
+    if (current === null) void start();
+    else stop();
+  });
+  return stop;
 }

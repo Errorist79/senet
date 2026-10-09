@@ -5,6 +5,19 @@
  * fails at start with a clear message, and not later with a blank screen.
  */
 
+/**
+ * What a screen does when a person reaches it, and when they leave it.
+ *
+ * A screen draws from what the device holds, and another screen can change
+ * that, so a screen draws itself again when a person reaches it. A screen that
+ * holds the camera releases it when a person leaves, because nobody aims a
+ * camera behind a hidden screen.
+ */
+export interface ScreenHooks {
+  readonly refresh: () => void;
+  readonly leave: () => void;
+}
+
 /** The element with `id`, when it is of the kind that the caller needs. */
 export function element<T extends Element>(
   id: string,
@@ -48,6 +61,25 @@ export function detail(label: string, value: string, full = value): HTMLElement 
 /** Replace everything inside a node. */
 export function fill(node: Element, ...children: readonly Node[]): void {
   node.replaceChildren(...children);
+}
+
+/** Stroops in one XLM. */
+export const STROOPS_PER_XLM = 10_000_000n;
+
+/**
+ * An amount in XLM, as stroops.
+ *
+ * A person types a decimal amount, or a payment request carries one, and the
+ * ledger counts stroops. The reader multiplies rather than parsing a float,
+ * because a float loses stroops.
+ */
+export function toStroops(typed: string): bigint {
+  if (!/^\d+(\.\d{1,7})?$/.test(typed.trim())) {
+    throw new Error('the amount must be a number with up to seven decimal places');
+  }
+  const [whole, fraction] = typed.trim().split('.');
+  const places = (fraction ?? '').padEnd(7, '0');
+  return BigInt(whole ?? '0') * STROOPS_PER_XLM + BigInt(places);
 }
 
 /** Stroops as an XLM amount with seven places. */

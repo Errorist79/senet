@@ -1,3 +1,4 @@
+import type { VoucherConfig } from '@senet/core';
 import { STORAGE } from './config.js';
 
 /**
@@ -47,6 +48,11 @@ export interface StoredChain {
   readonly tokenId: string;
   readonly rpcUrl: string;
   readonly walletWasmHash: string;
+}
+
+/** The chain identities that the library needs. */
+export function voucherConfig(chain: StoredChain): VoucherConfig {
+  return { network: chain.network, contractId: chain.contractId, tokenId: chain.tokenId };
 }
 
 /** Read one stored value, or nothing when it is absent or no longer fits. */

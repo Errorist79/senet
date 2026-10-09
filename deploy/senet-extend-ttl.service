@@ -1,0 +1,27 @@
+# Extend the shared ledger entries before a user request has to.
+#
+# Install it at /etc/systemd/system/senet-extend-ttl.service. The timer of the
+# same name starts it every hour.
+#
+# The voucher contract and every passkey wallet extend shared code during a
+# user request. That extension costs more than any fee ceiling of the service,
+# so the request fails. `deploy/extend-ttl.mjs` extends the code first, and
+# `deploy/ttl-policy.mjs` says when.
+#
+# The operator account pays. Its secret lives in /opt/senet/operator.env, which
+# the deployment creates once and never prints. That file holds a testnet key
+# only.
+
+[Unit]
+Description=Senet shared ledger entry extension
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/senet/service
+ExecStart=/usr/bin/node deploy/extend-ttl.mjs
+Environment=ENV_FILE=/opt/senet/.env
+EnvironmentFile=/opt/senet/operator.env
+StandardOutput=journal
+StandardError=journal

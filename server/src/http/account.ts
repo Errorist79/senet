@@ -1,6 +1,7 @@
 import { xdr } from '@stellar/stellar-sdk';
 import type { SubmitResult } from '../feepayer.js';
 import { readBalance, waitForFunds } from '../balance.js';
+import { MAX_DEPLOY_FEE_STROOPS } from '../constants.js';
 import { friendbotFund } from '../horizon.js';
 import type { RouteContext } from './router.js';
 import { badRequest, requireString } from './transport.js';
@@ -19,6 +20,16 @@ export interface FundReply {
   readonly balanceStroops: string | null;
   /** How long the service waited for the funds, in milliseconds. */
   readonly waitedMs: number;
+}
+
+/** Whether a host function deploys the passkey wallet code, and does nothing else. */
+export function isWalletDeployment(hostFunction: xdr.HostFunction, walletWasmHash: string): boolean {
+  if (hostFunction.switch().name !== 'hostFunctionTypeCreateContractV2') return false;
+  const executable = hostFunction.createContractV2().executable();
+  return (
+    executable.switch().name === 'contractExecutableWasm' &&
+    executable.wasmHash().toString('hex') === walletWasmHash.toLowerCase()
+  );
 }
 
 /**
@@ -42,6 +53,12 @@ export async function deployRoute(
   } catch {
     throw badRequest('MALFORMED_HOST_FUNCTION', 'hostFunction is not base64 XDR');
   }
+  // The route pays for a wallet deployment and for nothing else. A caller who
+  // could name any host function could make the service pay for work of the
+  // caller's choice, up to the deploy ceiling.
+  if (!isWalletDeployment(hostFunction, context.config.walletWasmHash)) {
+    throw badRequest('NOT_A_WALLET_DEPLOYMENT', 'hostFunction must deploy the passkey wallet code');
+  }
 
   const entries = body['auth'];
   if (!Array.isArray(entries)) {
@@ -58,7 +75,10 @@ export async function deployRoute(
       throw badRequest('MALFORMED_ENTRY', 'every auth entry must be base64 XDR');
     }
   }
-  return { ...(await context.feePayer.invoke(hostFunction, auth)), contractId };
+  return {
+    ...(await context.feePayer.invoke(hostFunction, auth, MAX_DEPLOY_FEE_STROOPS)),
+    contractId,
+  };
 }
 
 /**

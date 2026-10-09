@@ -10,17 +10,28 @@
  * The first is what a written path runs, so every step of that path is a
  * command that ends. The second is what the service unit runs.
  *
- * A cursor that aged out ends the process with status 78 and does not restart
- * it. The network keeps about seven days of history. A cursor older than that
- * names a ledger that nobody holds, and every redemption in between is
- * unreadable. A listener that jumped to the present would drop those
- * redemptions and look healthy, which is the worst shape of this failure. It
- * is an incident, and it exits like one.
+ * A failed poll ends the process, and the exit status tells the service
+ * manager what to do next:
+ *
+ * - Status 78 means that the position aged out. The service manager does not
+ *   restart the listener. The network keeps about seven days of history, and
+ *   every redemption between the position and that window is unreadable. A
+ *   listener that jumped to the present would drop those redemptions and look
+ *   healthy, which is the worst shape of this failure. It is an incident, and
+ *   it exits like one.
+ * - Status 1 means any other failure. The service manager starts the listener
+ *   again, and the listener resumes from its stored position. A restart
+ *   therefore repeats no delivered redemption and skips none.
+ *
+ * The listener chooses between the two by a measurement of the ledger range,
+ * and not by the code of the refusal. A wrong choice of status 1 costs a loop
+ * of restarts, which the checks on the stored position report. A wrong choice
+ * of status 78 stops the merchant feed until a person acts.
  */
 import { rpc } from '@stellar/stellar-sdk';
 import {
   EXIT_CURSOR_AGED_OUT,
-  isCursorTooOld,
+  findAgedOut,
   isLoopbackUrl,
   loadEnvFile,
   postToWebhook,
@@ -29,7 +40,7 @@ import {
   readPosition,
   runListener,
 } from '../src/index.js';
-import type { RunUntil } from '../src/index.js';
+import type { RunOutcome, RunUntil } from '../src/index.js';
 
 async function main(): Promise<void> {
   loadEnvFile();
@@ -50,16 +61,32 @@ async function main(): Promise<void> {
   console.log(`from       ${held === null ? `ledger ${firstLedger}` : `cursor ${held.cursor}`}`);
   console.log(`mode       ${until}`);
 
-  const outcome = await runListener(
-    {
-      server,
-      contractId: config.voucher.contractId,
-      statePath: config.listenerStatePath,
-      deliver: postToWebhook(listener.webhookUrl),
-    },
-    until,
-    firstLedger,
-  );
+  let outcome: RunOutcome;
+  try {
+    outcome = await runListener(
+      {
+        server,
+        contractId: config.voucher.contractId,
+        statePath: config.listenerStatePath,
+        deliver: postToWebhook(listener.webhookUrl),
+      },
+      until,
+      firstLedger,
+    );
+  } catch (caught) {
+    const agedOut = await findAgedOut(server, config.listenerStatePath, firstLedger);
+    // Anything that the range does not prove leaves with status 1, and the
+    // service manager starts the listener again.
+    if (agedOut === null) throw caught;
+    console.error(caught);
+    console.error(
+      `the listener reads from ledger ${agedOut.ledger}, and the network keeps ` +
+        `nothing older than ledger ${agedOut.oldestKept}. Every redemption ` +
+        'between those two ledgers is unreadable, so this listener stops rather ' +
+        'than skip them. A person decides what to do.',
+    );
+    process.exit(EXIT_CURSOR_AGED_OUT);
+  }
 
   console.log(`polls      ${outcome.polls}`);
   console.log(`delivered  ${outcome.delivered}`);
@@ -73,16 +100,4 @@ async function main(): Promise<void> {
   console.log('caught up  the feed holds nothing newer');
 }
 
-try {
-  await main();
-} catch (caught) {
-  if (isCursorTooOld(caught)) {
-    console.error(
-      'the stored cursor names a ledger that the network no longer keeps. ' +
-        'Every redemption between that ledger and now is unreadable, so this ' +
-        'listener stops rather than skip them. A person decides what to do.',
-    );
-    process.exit(EXIT_CURSOR_AGED_OUT);
-  }
-  throw caught;
-}
+await main();

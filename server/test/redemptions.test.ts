@@ -87,8 +87,20 @@ test('a lookup finds the right voucher among others', () => {
   addRedemption(path, message('e1', '111'));
   addRedemption(path, message('e2', '222'));
   addRedemption(path, message('e3', '333'));
-  assert.equal(findRedemption(path, '222')?.event_id, 'e2');
-  assert.equal(findRedemption(path, '999'), null);
+  assert.equal(findRedemption(path, '222', 'hash-of-e2')?.event_id, 'e2');
+  assert.equal(findRedemption(path, '999', 'hash-of-e2'), null);
+});
+
+test('a repeated voucher identifier confirms only its own transaction', () => {
+  const path = storePath();
+  const first = message('e1', '111');
+  const second = { ...message('e2', '111'), recipient: PAYER };
+  addRedemption(path, first);
+  assert.equal(findRedemption(path, '111', second.tx_hash), null);
+  addRedemption(path, second);
+  assert.deepEqual(findRedemption(path, '111', second.tx_hash), second);
+  assert.deepEqual(findRedemption(path, '111', first.tx_hash), first);
+  assert.equal(readStore(path).length, 2);
 });
 
 test('the same event twice stores one record and answers the same way', () => {
@@ -97,14 +109,14 @@ test('the same event twice stores one record and answers the same way', () => {
   const again = addRedemption(path, message('e1', '111'));
   assert.equal(again.added, false);
   assert.equal(readStore(path).length, 1);
-  assert.equal(findRedemption(path, '111')?.event_id, 'e1');
+  assert.equal(findRedemption(path, '111', 'hash-of-e1')?.event_id, 'e1');
 });
 
 test('a store survives a restart, because it is a file', () => {
   const path = storePath();
   addRedemption(path, message('e1', '111'));
   // No memory carries a value between these two calls, which is the point.
-  assert.equal(findRedemption(path, '111')?.tx_hash, 'hash-of-e1');
+  assert.equal(findRedemption(path, '111', 'hash-of-e1')?.tx_hash, 'hash-of-e1');
 });
 
 test('a truncated store reads as empty rather than as a wrong answer', () => {

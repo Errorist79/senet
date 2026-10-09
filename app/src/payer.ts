@@ -12,15 +12,32 @@ import {
   remainingLedgers,
   signVoucher,
 } from '@senet/core';
-import type { LifetimeName, Voucher, VoucherConfig } from '@senet/core';
+import type { LifetimeName, Voucher } from '@senet/core';
 import { ServiceError, submitRedeem } from './api.js';
-import { detail, element, fill, lifeLeft, make, short, xlm } from './dom.js';
+import {
+  STROOPS_PER_XLM,
+  detail,
+  element,
+  fill,
+  lifeLeft,
+  make,
+  short,
+  toStroops,
+  xlm,
+} from './dom.js';
 import { encodeBytes, drawToCanvas } from './qr.js';
 import { CODE_SIZE } from './config.js';
 import { passkeySigner } from './passkey.js';
 import { redeemDetails } from './receipt.js';
-import { getAccount, getChain, getLedger, getVouchers, setVouchers } from './store.js';
-import type { StoredChain, StoredVoucher } from './store.js';
+import {
+  getAccount,
+  getChain,
+  getLedger,
+  getVouchers,
+  setVouchers,
+  voucherConfig,
+} from './store.js';
+import type { StoredVoucher } from './store.js';
 
 /**
  * The payer screen.
@@ -32,9 +49,6 @@ import type { StoredChain, StoredVoucher } from './store.js';
  * That is the whole point of this screen. A payer with no network can still
  * pay, so nothing on this path may reach for one.
  */
-
-/** Stroops in one XLM, for the amount that a person types. */
-const STROOPS_PER_XLM = 10_000_000n;
 
 /** The lifetimes that the screen offers, in the order that it shows them. */
 const LIFETIME_ORDER: readonly LifetimeName[] = ['5m', '15m', '1h', '12h'];
@@ -63,26 +77,6 @@ function reason(caught: unknown): { code: string; message: string } {
     return { code: 'REFUSED', message: 'You did not confirm the passkey, so nothing happened.' };
   }
   return { code: 'APPLICATION_FAILED', message: 'The application could not finish that step.' };
-}
-
-/**
- * An amount in XLM, as stroops.
- *
- * A person types a decimal amount, and the ledger counts stroops. The reader
- * multiplies rather than parsing a float, because a float loses stroops.
- */
-function toStroops(typed: string): bigint {
-  if (!/^\d+(\.\d{1,7})?$/.test(typed.trim())) {
-    throw new Error('the amount must be a number with up to seven decimal places');
-  }
-  const [whole, fraction] = typed.trim().split('.');
-  const places = (fraction ?? '').padEnd(7, '0');
-  return BigInt(whole ?? '0') * STROOPS_PER_XLM + BigInt(places);
-}
-
-/** The chain identities that the library needs. */
-function voucherConfig(chain: StoredChain): VoucherConfig {
-  return { network: chain.network, contractId: chain.contractId, tokenId: chain.tokenId };
 }
 
 /** Wire the payer screen to the document. */

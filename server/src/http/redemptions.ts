@@ -73,11 +73,12 @@ export async function acceptRedemptionRoute(
   return { stored: true, repeat: !added, redemption: fromChain };
 }
 
-/** What the store holds for one voucher. */
+/** Read one voucher's event in the requested transaction. */
 export function feedRoute(context: RouteContext, url: URL): FeedReply {
   const voucherId = requireParameter(url, 'voucherId');
+  const txHash = requireParameter(url, 'txHash');
   return {
     voucherId,
-    redemption: findRedemption(context.config.redemptionStorePath, voucherId),
+    redemption: findRedemption(context.config.redemptionStorePath, voucherId, txHash),
   };
 }

@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Address, Networks, StrKey, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { parseUri, requestNetwork, verifyUri } from '@senet/core';
 import {
   TESTNET_HORIZON_URL, TESTNET_RPC_URL, archiveRow, readArchivedRow, readManifest, writeManifest,
 } from '@senet/evidence';
@@ -109,7 +110,7 @@ export async function refusalReasons(hash) {
  * `public_key` and `signature`. A smart account signs with a list of one map
  * whose key names the curve, and a passkey names `Secp256r1` there.
  */
-function signatureScheme(signature) {
+export function signatureScheme(signature) {
   let decoded;
   try {
     decoded = scValToNative(signature);
@@ -285,7 +286,6 @@ export function deriveLoadClaims(dir, manifest) {
 /** Seven decimal places separate one XLM from one stroop. */
 const STROOPS_IN_ONE_XLM = 10_000_000n;
 
-/** The amount that a screen shows for a figure that the chain holds in stroops. */
 /**
  * Read a decimal amount as stroops.
  *
@@ -299,6 +299,7 @@ function xlmAsStroops(amount) {
   return BigInt(whole) * STROOPS_IN_ONE_XLM + BigInt(fraction.padEnd(7, '0'));
 }
 
+/** The amount that a screen shows for a figure that the chain holds in stroops. */
 function stroopsAsXlm(stroops) {
   if (stroops === null || stroops === undefined) return null;
   const value = BigInt(stroops);
@@ -574,25 +575,37 @@ export function paymentFromEnvelope(envelopeXdr) {
  *
  * The request is the artifact and the payment is the fact. This check asks
  * whether the two agree, and whether the stored key really signed the request.
+ * The library reads the request, so this check and a wallet parse the same
+ * text the same way. `network` is the network that the payment ran on.
  *
  * The signature check needs no network. The request and the key are both in the
  * row, so this still answers after the domain changes its key or stops
  * answering at all. Whether the domain still publishes that key is a different
  * question, it decays, and `tomlUrl` is where a reader goes to ask it.
  */
-export function compareRequestToChain(request, payment, horizon, verify) {
+export function compareRequestToChain(request, payment, horizon, network) {
   const problems = [];
   let checked = 0;
 
   checked += 1;
-  const verified = verify(request.uri, request.signingKey);
+  let parsed;
+  try {
+    parsed = parseUri(request.uri);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    problems.push(`the row holds no request that the library can read: ${detail}`);
+    return { checked, problems };
+  }
+  const fields = parsed.fields;
+
+  checked += 1;
+  const verified = verifyUri(request.uri, request.signingKey);
   if (!verified.verified) {
     problems.push(`the stored key does not verify the request: ${verified.reason}`);
   }
 
   checked += 1;
-  const parsed = new URL(request.uri.replace('web+stellar:', 'https://sep7/'));
-  const declared = parsed.searchParams.get('origin_domain');
+  const declared = fields['origin_domain'];
   if (declared !== request.originDomain) {
     problems.push(`the request names origin_domain ${declared}, and the row says ${request.originDomain}`);
   }
@@ -602,18 +615,27 @@ export function compareRequestToChain(request, payment, horizon, verify) {
     problems.push(`the key came from ${request.tomlUrl}, which is not the domain the request names`);
   }
 
+  // A wallet reads the network out of the request, and a request without one
+  // is for the public network. A payment on any other network answers a
+  // request that nobody made.
+  checked += 1;
+  const asked = requestNetwork(parsed);
+  if (asked !== network) {
+    problems.push(`the request is for the network "${asked}", and the payment ran on "${network}"`);
+  }
+
   if (payment !== null) {
     checked += 1;
     if (payment.destination === null) {
       problems.push(`the payment names a ${payment.muxedKind} destination, which this row cannot read`);
     }
-    const wanted = parsed.searchParams.get('destination');
+    const wanted = fields['destination'];
     if (payment.destination !== null && wanted !== payment.destination) {
       problems.push(`the request asks for ${wanted}, and the payment went to ${payment.destination}`);
     }
 
-    const askedAmount = parsed.searchParams.get('amount');
-    if (askedAmount !== null) {
+    const askedAmount = fields['amount'];
+    if (askedAmount !== undefined) {
       checked += 1;
       // Compare in stroops rather than in decimal text. An amount carries seven
       // decimal places, and a comparison through a floating point number loses
@@ -633,11 +655,11 @@ export function compareRequestToChain(request, payment, horizon, verify) {
     // amount could match while the payment carried a different asset entirely,
     // which is a payment that answers nothing.
     checked += 1;
-    const askedCode = parsed.searchParams.get('asset_code');
-    if (askedCode === null && payment.assetType !== 'assetTypeNative') {
+    const askedCode = fields['asset_code'];
+    if (askedCode === undefined && payment.assetType !== 'assetTypeNative') {
       problems.push(`the request asks for the native asset and the payment carried ${payment.assetType}`);
     }
-    if (askedCode !== null && payment.assetType === 'assetTypeNative') {
+    if (askedCode !== undefined && payment.assetType === 'assetTypeNative') {
       problems.push(`the request asks for ${askedCode} and the payment carried the native asset`);
     }
   } else {
@@ -649,6 +671,27 @@ export function compareRequestToChain(request, payment, horizon, verify) {
     if (horizon.successful !== true) problems.push('the payment did not succeed');
   }
 
+  return { checked, problems };
+}
+
+/**
+ * Compare every archived request with the payment that answered it.
+ *
+ * It reads the archive alone, as the delivery comparison does. The manifest
+ * names the network that the run paid on, and the archived envelope holds the
+ * payment.
+ */
+export function deriveRequestClaims(dir, manifest) {
+  const problems = [];
+  let checked = 0;
+  for (const row of manifest.rows) {
+    if (row.request === undefined) continue;
+    const archived = readArchivedRow(dir, row.name);
+    const payment = paymentFromEnvelope(archived.rpc.envelopeXdr);
+    const found = compareRequestToChain(row.request, payment, archived.horizon, manifest.network);
+    checked += found.checked;
+    for (const problem of found.problems) problems.push(`${row.name}: ${problem}`);
+  }
   return { checked, problems };
 }
 
