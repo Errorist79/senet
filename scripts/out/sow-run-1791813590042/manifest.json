@@ -1,0 +1,90 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+  "producedAt": "2026-10-12T13:59:51.397Z",
+  "producedBy": "scripts/run-evidence.mjs",
+  "producedArgs": [],
+  "scope": "full-transactions",
+  "complete": true,
+  "rows": [
+    {
+      "name": "passkey-fresh",
+      "hash": "1d6800aeee228e06f56f9e174e722eb5ff2042ce16d37f7b9b65636cfa51502c",
+      "producer": "device",
+      "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+      "note": "A person supplied this passkey redemption hash. The transaction does not prove which phones created or scanned the code."
+    },
+    {
+      "name": "1a-success",
+      "hash": "6d7635be99152a2140abd160ad051896109ef228d8f341a6581fc28f58f7866a",
+      "note": "One account signs the entry and a second account submits it. The party that submits selects the recipient after the signature exists.",
+      "producer": "script"
+    },
+    {
+      "name": "1b-double-spend-failed",
+      "hash": "5e4f6c9ef1481362a93553d6e8e7dcddfbf009dc381e2875886e76a9e94f3c6e",
+      "note": "The network refuses a second submission of the same signed entry, because it consumed the nonce.",
+      "producer": "script"
+    },
+    {
+      "name": "1c-expired-host-signature-failed",
+      "hash": "e831d98d27e2e4cb4f56c0a53417a63214f33b02ce2ae616896dc1916e45b936",
+      "note": "The network refuses an entry whose signature expiration ledger is in the past.",
+      "producer": "script"
+    },
+    {
+      "name": "8-void-success",
+      "hash": "08b7f216b98e6e1f444dddf312236c15b60e08c14f578723ce9e57644d1ec47d",
+      "note": "The payer voids the voucher and redeems it to their own address. The redemption spends the nonce, and the balance does not change.",
+      "producer": "script"
+    },
+    {
+      "name": "8-after-void-failed",
+      "hash": "bd47b9a0a3933a89e2f58f183fec78dc308534fe646f0e59f55bf3c87f433050",
+      "note": "The network refuses a redemption of a voucher that the payer voided.",
+      "producer": "script"
+    },
+    {
+      "name": "task3-handbuilt",
+      "hash": "d1188158079650791c70a11bb7f06f57b96d638d2cb488f8a56d091159cfcdf4",
+      "note": "A client that never called simulation built this voucher. The redemption succeeds.",
+      "producer": "script"
+    },
+    {
+      "name": "lifetime-5m",
+      "hash": "dd1a9e4f1978c08e0242b65e153e4a202065cd84c06bb9583182cee7f9239e75",
+      "note": "A voucher with a lifetime of 60 ledgers, about 5 minutes.",
+      "producer": "script"
+    },
+    {
+      "name": "lifetime-15m",
+      "hash": "cba3b99e3cab40410ba13dd18c7de9668ede397b624a9373e52c8bea9ccfefc3",
+      "note": "A voucher with a lifetime of 180 ledgers, about 15 minutes. This lifetime is the default.",
+      "producer": "script"
+    },
+    {
+      "name": "lifetime-1h",
+      "hash": "e7eadbd3e733e8d5fe72b75a730ba62950395d410b1aa7ee7d44d1a76df6fe42",
+      "note": "A voucher with a lifetime of 720 ledgers, about 1 hour.",
+      "producer": "script"
+    },
+    {
+      "name": "lifetime-12h",
+      "hash": "e89a57136407fde4764653f3207205e1ca9fc6899f3821968414d96a9c83d734",
+      "note": "A voucher with a lifetime of 8,640 ledgers, about 12 hours. This lifetime equals the cap of the contract.",
+      "producer": "script"
+    },
+    {
+      "name": "sep7-payment",
+      "hash": "08d514ce9098c2e2d7d0ee0da39a0dba8dcda42e573578bdee0852e42d516142",
+      "note": "A merchant published a signed request and a payer answered it. This is the payee-presented direction, which the voucher rows reverse.",
+      "producer": "script",
+      "request": {
+        "uri": "web+stellar:pay?destination=GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52&amount=0.5000000&network_passphrase=Test+SDF+Network+%3B+September+2015&origin_domain=senet.hoodrun.io&signature=ihba1O9f85BGJYaoQA9o3t%2BEhhI72hx7yc8iVrpt3x%2F2GegReCs6O%2FgLciBIYnR0%2F%2F3qiQ9teKVN9gX6837NBA%3D%3D",
+        "originDomain": "senet.hoodrun.io",
+        "signingKey": "GBJLKISD3BJG7CTDFB4XSJ7AZT5RVKR4YC22ODE4POXIUHMIFI6WRJG5",
+        "tomlUrl": "https://senet.hoodrun.io/.well-known/stellar.toml"
+      }
+    }
+  ]
+}
