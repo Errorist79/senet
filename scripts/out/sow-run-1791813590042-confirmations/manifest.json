@@ -1,0 +1,184 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "contractId": "CADGZVNCAFRHJ44P33RODTVXGXCX5EMVCYFHYFMGWNFYVILC556XGWBY",
+  "producedAt": "2026-10-12T14:00:53.801Z",
+  "producedBy": "scripts/run-confirmation.mjs",
+  "producedArgs": [
+    "--device-confirmation"
+  ],
+  "sourceEvidence": "../sow-run-1791813590042",
+  "scope": "transactions-and-device-confirmations",
+  "complete": true,
+  "missing": [],
+  "rows": [
+    {
+      "name": "confirm-1a-success",
+      "hash": "6d7635be99152a2140abd160ad051896109ef228d8f341a6581fc28f58f7866a",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-10-12T14:00:54.263Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "393"
+        },
+        "bodySha256": "7ed19c4be8e19c894d25e5d061c4ce7f55f0a5927e183d348a1f9fab2ef63f63",
+        "body": "{\"voucher_id\":\"8972588101534638999\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":5158182,\"tx_hash\":\"6d7635be99152a2140abd160ad051896109ef228d8f341a6581fc28f58f7866a\",\"ledger\":5158003,\"ledger_closed_at\":\"2026-10-12T14:00:02Z\",\"event_id\":\"0022153454197760000-0000000002\"}"
+      },
+      "note": "The receiver captured a webhook for 1a-success. The archive checks its content against the transaction, without proof of sender identity."
+    },
+    {
+      "name": "confirm-8-void-success",
+      "hash": "08b7f216b98e6e1f444dddf312236c15b60e08c14f578723ce9e57644d1ec47d",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-10-12T14:00:54.266Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "393"
+        },
+        "bodySha256": "76e90d82bce868b6d05c5b01563f7961f5b50b739e2d2b2e249065e6a9a611f0",
+        "body": "{\"voucher_id\":\"8561208317199146806\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"amount\":\"5000000\",\"expire_at\":5158185,\"tx_hash\":\"08b7f216b98e6e1f444dddf312236c15b60e08c14f578723ce9e57644d1ec47d\",\"ledger\":5158006,\"ledger_closed_at\":\"2026-10-12T14:00:17Z\",\"event_id\":\"0022153467082694656-0000000002\"}"
+      },
+      "note": "The receiver captured a webhook for 8-void-success. The archive checks its content against the transaction, without proof of sender identity."
+    },
+    {
+      "name": "confirm-lifetime-12h",
+      "hash": "e89a57136407fde4764653f3207205e1ca9fc6899f3821968414d96a9c83d734",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-10-12T14:00:54.273Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "393"
+        },
+        "bodySha256": "022317f8feacf11d2449aef516db3782663a8a30832d79f8f1e6dc025498336f",
+        "body": "{\"voucher_id\":\"9659530947311915579\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":5166651,\"tx_hash\":\"e89a57136407fde4764653f3207205e1ca9fc6899f3821968414d96a9c83d734\",\"ledger\":5158012,\"ledger_closed_at\":\"2026-10-12T14:00:47Z\",\"event_id\":\"0022153492852477952-0000000002\"}"
+      },
+      "note": "The receiver captured a webhook for lifetime-12h. The archive checks its content against the transaction, without proof of sender identity."
+    },
+    {
+      "name": "confirm-lifetime-15m",
+      "hash": "cba3b99e3cab40410ba13dd18c7de9668ede397b624a9373e52c8bea9ccfefc3",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-10-12T14:00:54.271Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "392"
+        },
+        "bodySha256": "8a26e7b4e8671fa3f258d2304a5f658ed61f8db5d98a5963b802eed80d04711f",
+        "body": "{\"voucher_id\":\"831162341703240543\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":5158189,\"tx_hash\":\"cba3b99e3cab40410ba13dd18c7de9668ede397b624a9373e52c8bea9ccfefc3\",\"ledger\":5158010,\"ledger_closed_at\":\"2026-10-12T14:00:37Z\",\"event_id\":\"0022153484262547456-0000000002\"}"
+      },
+      "note": "The receiver captured a webhook for lifetime-15m. The archive checks its content against the transaction, without proof of sender identity."
+    },
+    {
+      "name": "confirm-lifetime-1h",
+      "hash": "e7eadbd3e733e8d5fe72b75a730ba62950395d410b1aa7ee7d44d1a76df6fe42",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-10-12T14:00:54.272Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "394"
+        },
+        "bodySha256": "7f06a8705e768df16cff0c8a017868520401c0a075e58681abfd17fc3c197266",
+        "body": "{\"voucher_id\":\"13081821428119035174\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":5158730,\"tx_hash\":\"e7eadbd3e733e8d5fe72b75a730ba62950395d410b1aa7ee7d44d1a76df6fe42\",\"ledger\":5158011,\"ledger_closed_at\":\"2026-10-12T14:00:42Z\",\"event_id\":\"0022153488557481984-0000000002\"}"
+      },
+      "note": "The receiver captured a webhook for lifetime-1h. The archive checks its content against the transaction, without proof of sender identity."
+    },
+    {
+      "name": "confirm-lifetime-5m",
+      "hash": "dd1a9e4f1978c08e0242b65e153e4a202065cd84c06bb9583182cee7f9239e75",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-10-12T14:00:54.269Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "393"
+        },
+        "bodySha256": "8f7b677ef3cf0e3daa85966cc69d3d75203e77e6661beda8446f62f892bec428",
+        "body": "{\"voucher_id\":\"3655092774180153202\",\"payer\":\"GBC73U2JWFL55WGOSGLWQPM3RXP6RONXXKX4LLEKN53R3TAXQPVLKY33\",\"recipient\":\"GAL3ZRCTY4VQ6ZJFYVKWESJHGO7XSMBGZPQOY734TDWZKGFUB6FSQJ52\",\"amount\":\"5000000\",\"expire_at\":5158068,\"tx_hash\":\"dd1a9e4f1978c08e0242b65e153e4a202065cd84c06bb9583182cee7f9239e75\",\"ledger\":5158009,\"ledger_closed_at\":\"2026-10-12T14:00:32Z\",\"event_id\":\"0022153479967547392-0000000002\"}"
+      },
+      "note": "The receiver captured a webhook for lifetime-5m. The archive checks its content against the transaction, without proof of sender identity."
+    },
+    {
+      "name": "confirm-passkey-fresh",
+      "hash": "1d6800aeee228e06f56f9e174e722eb5ff2042ce16d37f7b9b65636cfa51502c",
+      "producer": "script",
+      "delivery": {
+        "receivedAt": "2026-10-12T14:00:54.258Z",
+        "method": "POST",
+        "path": "/redemption",
+        "headers": {
+          "host": "127.0.0.1:8894",
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "395"
+        },
+        "bodySha256": "df58554793d2198a6687220e886001e0ea5d4cfeb20107f6c51d99025685e29c",
+        "body": "{\"voucher_id\":\"7114740001918528928\",\"payer\":\"CAG77H6V5TDH4SK3WMRZJK3EN6WREHQTJ75SXZ7GP3GNKKMM447OI6TI\",\"recipient\":\"CABTEPR765OVJNTPE4COZJKMPGDEP664RJNDY4G5EL5YFBVJAFLAYAVY\",\"amount\":\"150000000\",\"expire_at\":5162326,\"tx_hash\":\"1d6800aeee228e06f56f9e174e722eb5ff2042ce16d37f7b9b65636cfa51502c\",\"ledger\":5153698,\"ledger_closed_at\":\"2026-10-12T08:01:17Z\",\"event_id\":\"0022134964363513856-0000000002\"}"
+      },
+      "note": "The receiver captured a webhook for passkey-fresh. The archive checks its content against the transaction, without proof of sender identity."
+    }
+  ],
+  "problems": []
+}

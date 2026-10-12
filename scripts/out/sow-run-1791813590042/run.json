@@ -1,0 +1,12 @@
+{
+  "producedBy": "scripts/run-sow-evidence.mjs",
+  "producedAt": "2026-10-12T13:59:50.042Z",
+  "scope": "transactions-device-replay-and-confirmations",
+  "complete": true,
+  "archives": {
+    "transactions": ".",
+    "confirmations": "../sow-run-1791813590042-confirmations",
+    "replay": "../sow-run-1791813590042-device-replay"
+  },
+  "humanEvidence": "Phone actions, merchant screen, phone void, and video require separate capture."
+}

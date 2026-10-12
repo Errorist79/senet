@@ -458,7 +458,8 @@ The transaction batch produces eleven script rows, with eight successes and thre
 It also archives the supplied device redemption and its refused replay.
 `node scripts/run-evidence.mjs --list` names the eleven generated transaction rows.
 Add `--vouchers-only` to that list command to see its ten rows.
-The two-phone video, phone void, screenshots, and merchant screen confirmation remain separate evidence that a person must capture.
+The command does not produce the two-phone video, the phone void, the screenshots or the merchant screen confirmation.
+A person captures that evidence on two phones.
 
 To capture webhooks again for an existing complete transaction archive, choose a new output directory:
 
